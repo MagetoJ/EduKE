@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BookOpen, FileText, Award, Download } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -102,12 +102,99 @@ const mockExams = [
   }
 ]
 
+const CURRICULUM_LEVELS: Record<string, string[]> = {
+  cbc: [
+    'PP1',
+    'PP2',
+    'Grade 1',
+    'Grade 2',
+    'Grade 3',
+    'Grade 4',
+    'Grade 5',
+    'Grade 6',
+    'Grade 7',
+    'Grade 8',
+    'Grade 9',
+    'Grade 10',
+    'Grade 11',
+    'Grade 12'
+  ],
+  '844': [
+    'Grade 1',
+    'Grade 2',
+    'Grade 3',
+    'Grade 4',
+    'Grade 5',
+    'Grade 6',
+    'Grade 7',
+    'Grade 8',
+    'Form 1',
+    'Form 2',
+    'Form 3',
+    'Form 4'
+  ],
+  british: [
+    'Year 1',
+    'Year 2',
+    'Year 3',
+    'Year 4',
+    'Year 5',
+    'Year 6',
+    'Year 7',
+    'Year 8',
+    'Year 9',
+    'Year 10',
+    'Year 11',
+    'Year 12',
+    'Year 13'
+  ],
+  american: [
+    'Kindergarten',
+    'Grade 1',
+    'Grade 2',
+    'Grade 3',
+    'Grade 4',
+    'Grade 5',
+    'Grade 6',
+    'Grade 7',
+    'Grade 8',
+    'Grade 9',
+    'Grade 10',
+    'Grade 11',
+    'Grade 12'
+  ],
+  ib: [
+    'PYP 1',
+    'PYP 2',
+    'PYP 3',
+    'PYP 4',
+    'PYP 5',
+    'MYP 1',
+    'MYP 2',
+    'MYP 3',
+    'MYP 4',
+    'MYP 5',
+    'DP 1',
+    'DP 2'
+  ]
+}
+
 export default function Academics() {
   const { user } = useAuth()
+  const [gradeLevels, setGradeLevels] = useState<string[]>(CURRICULUM_LEVELS.cbc)
   const [activeTab, setActiveTab] = useState('courses')
   const [isAssignmentDialogOpen, setIsAssignmentDialogOpen] = useState(false)
   const [isExamDialogOpen, setIsExamDialogOpen] = useState(false)
   const [isCourseDialogOpen, setIsCourseDialogOpen] = useState(false)
+
+  useEffect(() => {
+    if (user?.schoolCurriculum) {
+      const levels = CURRICULUM_LEVELS[user.schoolCurriculum] ?? CURRICULUM_LEVELS.cbc
+      setGradeLevels(levels)
+    } else {
+      setGradeLevels(CURRICULUM_LEVELS.cbc)
+    }
+  }, [user?.schoolCurriculum])
 
   const canManage = user?.role === 'admin' || user?.role === 'teacher'
 
@@ -171,10 +258,11 @@ export default function Academics() {
                               <SelectValue placeholder="Select grade" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="grade-9">Grade 9</SelectItem>
-                              <SelectItem value="grade-10">Grade 10</SelectItem>
-                              <SelectItem value="grade-11">Grade 11</SelectItem>
-                              <SelectItem value="grade-12">Grade 12</SelectItem>
+                              {gradeLevels.map(grade => (
+                                <SelectItem key={grade} value={grade}>
+                                  {grade}
+                                </SelectItem>
+                              ))}
                             </SelectContent>
                           </Select>
                         </div>

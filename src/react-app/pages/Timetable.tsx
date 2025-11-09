@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Calendar, Clock, MapPin, User, Plus } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
@@ -47,10 +47,109 @@ const mockTimetable = {
 const weekDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
 const timeSlots = ['8:00-9:00', '9:00-10:00', '10:30-11:30', '11:30-12:30', '1:30-2:30']
 
+const CURRICULUM_LEVELS: Record<string, string[]> = {
+  cbc: [
+    'PP1',
+    'PP2',
+    'Grade 1',
+    'Grade 2',
+    'Grade 3',
+    'Grade 4',
+    'Grade 5',
+    'Grade 6',
+    'Grade 7',
+    'Grade 8',
+    'Grade 9',
+    'Grade 10',
+    'Grade 11',
+    'Grade 12'
+  ],
+  '844': [
+    'Grade 1',
+    'Grade 2',
+    'Grade 3',
+    'Grade 4',
+    'Grade 5',
+    'Grade 6',
+    'Grade 7',
+    'Grade 8',
+    'Form 1',
+    'Form 2',
+    'Form 3',
+    'Form 4'
+  ],
+  british: [
+    'Year 1',
+    'Year 2',
+    'Year 3',
+    'Year 4',
+    'Year 5',
+    'Year 6',
+    'Year 7',
+    'Year 8',
+    'Year 9',
+    'Year 10',
+    'Year 11',
+    'Year 12',
+    'Year 13'
+  ],
+  american: [
+    'Kindergarten',
+    'Grade 1',
+    'Grade 2',
+    'Grade 3',
+    'Grade 4',
+    'Grade 5',
+    'Grade 6',
+    'Grade 7',
+    'Grade 8',
+    'Grade 9',
+    'Grade 10',
+    'Grade 11',
+    'Grade 12'
+  ],
+  ib: [
+    'PYP 1',
+    'PYP 2',
+    'PYP 3',
+    'PYP 4',
+    'PYP 5',
+    'MYP 1',
+    'MYP 2',
+    'MYP 3',
+    'MYP 4',
+    'MYP 5',
+    'DP 1',
+    'DP 2'
+  ]
+}
+
 export default function Timetable() {
   const { user } = useAuth()
-  const [selectedGrade, setSelectedGrade] = useState('grade-10')
+  const [gradeOptions, setGradeOptions] = useState<string[]>(CURRICULUM_LEVELS.cbc)
+  const [selectedGrade, setSelectedGrade] = useState(CURRICULUM_LEVELS.cbc[0] ?? '')
   const [selectedClass, setSelectedClass] = useState('10A')
+
+  useEffect(() => {
+    if (user?.schoolCurriculum) {
+      const levels = CURRICULUM_LEVELS[user.schoolCurriculum] ?? CURRICULUM_LEVELS.cbc
+      setGradeOptions(levels)
+    } else {
+      setGradeOptions(CURRICULUM_LEVELS.cbc)
+    }
+  }, [user?.schoolCurriculum])
+
+  useEffect(() => {
+    if (gradeOptions.length === 0) {
+      if (selectedGrade !== '') {
+        setSelectedGrade('')
+      }
+      return
+    }
+    if (!gradeOptions.includes(selectedGrade)) {
+      setSelectedGrade(gradeOptions[0])
+    }
+  }, [gradeOptions, selectedGrade])
 
   const canManage = user?.role === 'admin'
 
@@ -83,13 +182,14 @@ export default function Timetable() {
             <>
               <Select value={selectedGrade} onValueChange={setSelectedGrade}>
                 <SelectTrigger className="w-32">
-                  <SelectValue />
+                  <SelectValue placeholder="Select grade" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="grade-9">Grade 9</SelectItem>
-                  <SelectItem value="grade-10">Grade 10</SelectItem>
-                  <SelectItem value="grade-11">Grade 11</SelectItem>
-                  <SelectItem value="grade-12">Grade 12</SelectItem>
+                  {gradeOptions.map(grade => (
+                    <SelectItem key={grade} value={grade}>
+                      {grade}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
 

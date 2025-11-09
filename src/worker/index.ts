@@ -4,6 +4,112 @@ const app = new Hono<{ Bindings: Env }>();
 
 const PROMOTION_THRESHOLD = 60;
 
+const DEFAULT_CURRICULUM = "cbc";
+
+const CURRICULUM_LEVELS: Record<string, string[]> = {
+  cbc: [
+    "PP1",
+    "PP2",
+    "Grade 1",
+    "Grade 2",
+    "Grade 3",
+    "Grade 4",
+    "Grade 5",
+    "Grade 6",
+    "Grade 7",
+    "Grade 8",
+    "Grade 9",
+    "Grade 10",
+    "Grade 11",
+    "Grade 12",
+  ],
+  "844": [
+    "Grade 1",
+    "Grade 2",
+    "Grade 3",
+    "Grade 4",
+    "Grade 5",
+    "Grade 6",
+    "Grade 7",
+    "Grade 8",
+    "Form 1",
+    "Form 2",
+    "Form 3",
+    "Form 4",
+  ],
+  british: [
+    "Year 1",
+    "Year 2",
+    "Year 3",
+    "Year 4",
+    "Year 5",
+    "Year 6",
+    "Year 7",
+    "Year 8",
+    "Year 9",
+    "Year 10",
+    "Year 11",
+    "Year 12",
+    "Year 13",
+  ],
+  american: [
+    "Kindergarten",
+    "Grade 1",
+    "Grade 2",
+    "Grade 3",
+    "Grade 4",
+    "Grade 5",
+    "Grade 6",
+    "Grade 7",
+    "Grade 8",
+    "Grade 9",
+    "Grade 10",
+    "Grade 11",
+    "Grade 12",
+  ],
+  ib: [
+    "PYP 1",
+    "PYP 2",
+    "PYP 3",
+    "PYP 4",
+    "PYP 5",
+    "MYP 1",
+    "MYP 2",
+    "MYP 3",
+    "MYP 4",
+    "MYP 5",
+    "DP 1",
+    "DP 2",
+  ],
+};
+
+type PromotionStatus = "Promoted" | "Graduated";
+
+const getCurriculumLevels = (curriculum?: string | null) => {
+  if (typeof curriculum !== "string" || !CURRICULUM_LEVELS[curriculum]) {
+    return CURRICULUM_LEVELS[DEFAULT_CURRICULUM];
+  }
+  return CURRICULUM_LEVELS[curriculum];
+};
+
+const getNextGrade = (
+  curriculum: string,
+  currentGrade: string | null
+): { nextGrade: string | null; status: PromotionStatus } => {
+  const levels = getCurriculumLevels(curriculum);
+  if (!currentGrade) {
+    return { nextGrade: null, status: "Promoted" };
+  }
+  const index = levels.indexOf(currentGrade);
+  if (index === -1) {
+    return { nextGrade: null, status: "Promoted" };
+  }
+  if (index === levels.length - 1) {
+    return { nextGrade: null, status: "Graduated" };
+  }
+  return { nextGrade: levels[index + 1], status: "Promoted" };
+};
+
 const ensureAcademicYearTable = async (db: any) => {
   await db
     .prepare(
@@ -35,18 +141,6 @@ const ensureStudentColumns = async (db: any) => {
       throw error;
     }
   }
-};
-
-const parseGradeNumber = (grade?: string | null) => {
-  if (!grade) {
-    return null;
-  }
-  const match = grade.match(/(\d+)/);
-  if (!match) {
-    return null;
-  }
-  const value = Number.parseInt(match[1], 10);
-  return Number.isNaN(value) ? null : value;
 };
 
 // API Routes
@@ -667,6 +761,16 @@ const runStudentPromotion = async (db: any, schoolId: number, startDate: string,
     updatedStudents: [] as Array<{ id: number; grade?: string; status?: string }>
   };
 
+  const schoolRow = await db
+    .prepare('SELECT curriculum FROM schools WHERE id = ?')
+    .bind(schoolId)
+    .first();
+
+  const schoolCurriculum =
+    typeof schoolRow?.curriculum === 'string'
+      ? schoolRow.curriculum
+      : DEFAULT_CURRICULUM;
+
   const studentsQuery = await db
     .prepare('SELECT id, grade, status FROM students WHERE school_id = ?')
     .bind(schoolId)
@@ -681,7 +785,6 @@ const runStudentPromotion = async (db: any, schoolId: number, startDate: string,
     }
 
     const currentGrade = typeof student.grade === 'string' ? student.grade : null;
-    const gradeNumber = parseGradeNumber(currentGrade);
 
     let averageGrade: number | null = null;
     try {
@@ -697,18 +800,19 @@ const runStudentPromotion = async (db: any, schoolId: number, startDate: string,
       console.error('Failed to aggregate performance for student:', studentId, performanceError);
     }
 
-    if (gradeNumber !== null && gradeNumber >= 12) {
+    const { nextGrade, status } = getNextGrade(schoolCurriculum, currentGrade);
+
+    if (status === 'Graduated') {
       await db.prepare('UPDATE students SET status = ? WHERE id = ?').bind('Graduated', studentId).run();
       summary.graduated += 1;
       summary.updatedStudents.push({ id: studentId, grade: currentGrade ?? undefined, status: 'Graduated' });
       continue;
     }
 
-    if (averageGrade !== null && gradeNumber !== null && averageGrade >= PROMOTION_THRESHOLD) {
-      const nextGradeLabel = `Grade ${gradeNumber + 1}`;
-      await db.prepare('UPDATE students SET grade = ?, status = ? WHERE id = ?').bind(nextGradeLabel, 'Promoted', studentId).run();
+    if (averageGrade !== null && nextGrade && averageGrade >= PROMOTION_THRESHOLD) {
+      await db.prepare('UPDATE students SET grade = ?, status = ? WHERE id = ?').bind(nextGrade, 'Promoted', studentId).run();
       summary.promoted += 1;
-      summary.updatedStudents.push({ id: studentId, grade: nextGradeLabel, status: 'Promoted' });
+      summary.updatedStudents.push({ id: studentId, grade: nextGrade, status: 'Promoted' });
       continue;
     }
 
