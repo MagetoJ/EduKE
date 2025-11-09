@@ -12,10 +12,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 
 // Mock student data
 const mockStudents = [
-  { id: '1', name: 'John Smith', email: 'john.smith@email.com', grade: 'Grade 10', class: '10A', status: 'Active', phone: '+1-555-0101', caregiver: 'Robert Smith', fees: '$1,200' },
-  { id: '2', name: 'Sarah Johnson', email: 'sarah.j@email.com', grade: 'Grade 11', class: '11B', status: 'Active', phone: '+1-555-0102', caregiver: 'Linda Johnson', fees: '$1,350' },
-  { id: '3', name: 'Michael Brown', email: 'michael.b@email.com', grade: 'Grade 9', class: '9A', status: 'Active', phone: '+1-555-0103', caregiver: 'David Brown', fees: '$1,100' },
-  { id: '4', name: 'Emma Davis', email: 'emma.d@email.com', grade: 'Grade 12', class: '12A', status: 'Active', phone: '+1-555-0104', caregiver: 'Jennifer Davis', fees: '$1,500' },
+  { id: '1', name: 'John Smith', email: 'john.smith@email.com', grade: 'Grade 10', class: '10A', status: 'Active', phone: '+1-555-0101', parentGuardian: 'Robert Smith', fees: '$1,200' },
+  { id: '2', name: 'Sarah Johnson', email: 'sarah.j@email.com', grade: 'Grade 11', class: '11B', status: 'Active', phone: '+1-555-0102', parentGuardian: 'Linda Johnson', fees: '$1,350' },
+  { id: '3', name: 'Michael Brown', email: 'michael.b@email.com', grade: 'Grade 9', class: '9A', status: 'Active', phone: '+1-555-0103', parentGuardian: 'David Brown', fees: '$1,100' },
+  { id: '4', name: 'Emma Davis', email: 'emma.d@email.com', grade: 'Grade 12', class: '12A', status: 'Active', phone: '+1-555-0104', parentGuardian: 'Jennifer Davis', fees: '$1,500' },
 ]
 
 const CURRICULUM_LEVELS: Record<string, string[]> = {
@@ -127,7 +127,7 @@ export default function Students() {
     grade: '',
     class: '',
     status: '',
-    caregiver: '',
+    parentGuardian: '',
     fees: ''
   })
   const [academicYear, setAcademicYear] = useState({
@@ -240,7 +240,7 @@ export default function Students() {
           class: 'A',
           status: 'Active',
           phone: formData.phone,
-          caregiver: formData.parent_name || 'Caregiver Name',
+          parentGuardian: formData.parent_name || 'Parent/Guardian Name',
           fees: '$0'
         }
         setStudents(prev => [...prev, newStudent])
@@ -276,7 +276,7 @@ export default function Students() {
       grade: student.grade,
       class: student.class,
       status: student.status,
-      caregiver: student.caregiver,
+      parentGuardian: student.parentGuardian,
       fees: student.fees
     })
     setEditingStudentId(student.id)
@@ -425,7 +425,7 @@ export default function Students() {
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="personal">Personal Info</TabsTrigger>
                 <TabsTrigger value="academic">Academic Info</TabsTrigger>
-                <TabsTrigger value="guardian">Caregiver Account</TabsTrigger>
+                <TabsTrigger value="guardian">Parent/Guardian Account</TabsTrigger>
               </TabsList>
               
               <TabsContent value="personal" className="space-y-4">
@@ -534,17 +534,17 @@ export default function Students() {
                       <SelectValue placeholder="Select relation" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="caregiver">Caregiver</SelectItem>
+                      <SelectItem value="parent">Parent</SelectItem>
                       <SelectItem value="guardian">Guardian</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="p-4 border rounded-lg space-y-4">
-                  <h4 className="font-medium">Link Existing Caregiver Account</h4>
+                  <h4 className="font-medium">Link Existing Parent/Guardian Account</h4>
                   <div className="space-y-2">
-                    <Label htmlFor="parentSearch">Search Caregiver by Email</Label>
-                    <Input id="parentSearch" placeholder="Enter caregiver's email" />
+                    <Label htmlFor="parentSearch">Search Parent/Guardian by Email</Label>
+                    <Input id="parentSearch" placeholder="Enter parent/guardian's email" />
                   </div>
                   <Button variant="outline" size="sm">Search & Link</Button>
                 </div>
@@ -560,22 +560,22 @@ export default function Students() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="parent_name">Caregiver Name</Label>
-                    <Input id="parent_name" placeholder="Enter caregiver name" value={formData.parent_name} onChange={handleInputChange} />
+                    <Label htmlFor="parent_name">Parent/Guardian Name</Label>
+                    <Input id="parent_name" placeholder="Enter parent/guardian name" value={formData.parent_name} onChange={handleInputChange} />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="parent_phone">Caregiver Phone</Label>
+                    <Label htmlFor="parent_phone">Parent/Guardian Phone</Label>
                     <Input id="parent_phone" placeholder="+1-555-0000" value={formData.parent_phone} onChange={handleInputChange} />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="parent_email">Caregiver Email</Label>
-                    <Input id="parent_email" type="email" placeholder="caregiver@email.com" value={formData.parent_email} onChange={handleInputChange} />
+                    <Label htmlFor="parent_email">Parent/Guardian Email</Label>
+                    <Input id="parent_email" type="email" placeholder="parent@email.com" value={formData.parent_email} onChange={handleInputChange} />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="parent_password">Caregiver Password</Label>
+                    <Label htmlFor="parent_password">Parent/Guardian Password</Label>
                     <Input id="parent_password" type="password" placeholder="Enter password" value={formData.parent_password} onChange={handleInputChange} />
                   </div>
                 </div>
@@ -648,8 +648,8 @@ export default function Students() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="caregiver">Caregiver</Label>
-                  <Input id="caregiver" value={editFormData.caregiver} onChange={handleEditInputChange} />
+                  <Label htmlFor="parentGuardian">Parent/Guardian</Label>
+                  <Input id="parentGuardian" value={editFormData.parentGuardian} onChange={handleEditInputChange} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="fees">Fees</Label>
@@ -776,8 +776,8 @@ export default function Students() {
                   </div>
                   
                   <div className="text-center">
-                    <p className="text-sm font-medium text-gray-900">{student.caregiver}</p>
-                    <p className="text-xs text-gray-500">Caregiver</p>
+                    <p className="text-sm font-medium text-gray-900">{student.parentGuardian}</p>
+                    <p className="text-xs text-gray-500">Parent/Guardian</p>
                   </div>
                   
                   <div className="text-center">
