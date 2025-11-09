@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import { Link } from 'react-router'
 import { Plus, Search, Filter, Pencil, User } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -754,7 +755,11 @@ export default function Students() {
                   </div>
                   
                   <div>
-                    <h3 className="font-semibold text-gray-900">{student.name}</h3>
+                    <h3 className="font-semibold text-gray-900">
+                      <Link to={`/dashboard/students/${student.id}`} className="hover:text-blue-600 transition-colors">
+                        {student.name}
+                      </Link>
+                    </h3>
                     <p className="text-sm text-gray-600">{student.email}</p>
                   </div>
                 </div>

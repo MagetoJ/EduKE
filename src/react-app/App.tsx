@@ -6,14 +6,19 @@ import Login from "./pages/Login";
 import RegisterSchool from "./pages/RegisterSchool";
 import Dashboard from "./pages/Dashboard";
 import Students from "./pages/Students";
+import { StudentProfile } from "./pages/StudentProfile";
 import Schools from "./pages/Schools";
 import { SchoolProfile } from "./pages/SchoolProfile";
 import { Reports } from "./pages/Reports";
 import { Settings } from "./pages/Settings";
 import Staff from "./pages/Staff";
+import { StaffProfile } from "./pages/StaffProfile";
 import Communications from "./pages/Communications";
 import Progress from "./pages/Progress";
 import Academics from "./pages/Academics";
+import { CourseDetail } from "./pages/CourseDetail";
+import { AssignmentDetail } from "./pages/AssignmentDetail";
+import { ExamDetail } from "./pages/ExamDetail";
 import Fees from "./pages/Fees";
 import Timetable from "./pages/Timetable";
 import Leave from "./pages/Leave";
@@ -66,13 +71,18 @@ function AppRoutes() {
       >
         <Route index element={<Dashboard />} />
         <Route path="students" element={<Students />} />
+        <Route path="students/:id" element={<StudentProfile />} />
         <Route path="schools" element={<Schools />} />
         <Route path="schools/:id" element={<SchoolProfile />} />
         <Route path="reports" element={<Reports />} />
         <Route path="staff" element={<Staff />} />
+        <Route path="staff/:id" element={<StaffProfile />} />
         <Route path="communications" element={<Communications />} />
         <Route path="progress" element={<Progress />} />
         <Route path="academics" element={<Academics />} />
+        <Route path="academics/courses/:id" element={<CourseDetail />} />
+        <Route path="academics/assignments/:id" element={<AssignmentDetail />} />
+        <Route path="academics/exams/:id" element={<ExamDetail />} />
         <Route path="fees" element={<Fees />} />
         <Route path="timetable" element={<Timetable />} />
         <Route path="leave" element={<Leave />} />

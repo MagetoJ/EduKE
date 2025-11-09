@@ -8,6 +8,7 @@ import { Label } from '../components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { useAuth } from '../contexts/AuthContext'
+import { useNavigate } from 'react-router'
 
 // Mock courses data
 const mockCourses = [
@@ -181,6 +182,7 @@ const CURRICULUM_LEVELS: Record<string, string[]> = {
 
 export default function Academics() {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [gradeLevels, setGradeLevels] = useState<string[]>(CURRICULUM_LEVELS.cbc)
   const [activeTab, setActiveTab] = useState('courses')
   const [isAssignmentDialogOpen, setIsAssignmentDialogOpen] = useState(false)
@@ -498,7 +500,7 @@ export default function Academics() {
                         <p className="text-xs text-gray-500">Schedule</p>
                       </div>
 
-                      <Button variant="outline" size="sm">
+                      <Button variant="outline" size="sm" onClick={() => navigate(`/dashboard/academics/courses/${course.id}`)}>
                         View Details
                       </Button>
                     </div>
@@ -545,7 +547,7 @@ export default function Academics() {
                         {assignment.status}
                       </span>
 
-                      <Button variant="outline" size="sm">
+                      <Button variant="outline" size="sm" onClick={() => navigate(`/dashboard/academics/assignments/${assignment.id}`)}>
                         View Submissions
                       </Button>
                     </div>

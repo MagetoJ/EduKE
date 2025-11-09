@@ -1,5 +1,6 @@
 import { type ChangeEvent, type FormEvent, useEffect, useState } from 'react'
 import { Plus, Search, Filter, UserCheck, Mail, Phone, Calendar, Clock, CheckCircle, XCircle, DollarSign, Pencil } from 'lucide-react'
+import { Link } from 'react-router'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
@@ -558,7 +559,11 @@ export default function Staff() {
                       />
                       
                       <div>
-                        <h3 className="font-semibold text-gray-900">{member.name}</h3>
+                        <h3 className="font-semibold text-gray-900">
+                          <Link to={`/dashboard/staff/${member.id}`} className="hover:text-blue-600 transition-colors">
+                            {member.name}
+                          </Link>
+                        </h3>
                         <p className="text-sm text-gray-600">{member.role} • {member.department}</p>
                       </div>
                     </div>

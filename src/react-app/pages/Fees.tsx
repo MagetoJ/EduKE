@@ -8,6 +8,7 @@ import { Label } from '../components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { useAuth } from '../contexts/AuthContext'
+import { useNavigate } from 'react-router'
 
 // Mock fee structures
 const mockFeeStructures = [
@@ -35,6 +36,7 @@ const mockFeeCollection = [
 
 export default function Fees() {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState(user?.role === 'admin' ? 'structure' : 'fees')
   const [isFeeStructureDialogOpen, setIsFeeStructureDialogOpen] = useState(false)
 
@@ -247,7 +249,7 @@ export default function Fees() {
                       <p className="text-xs text-gray-500">Last Payment</p>
                     </div>
 
-                    <Button variant="outline" size="sm">
+                    <Button variant="outline" size="sm" onClick={() => navigate(`/dashboard/students/${student.id}`)}>
                       View Details
                     </Button>
                   </div>
