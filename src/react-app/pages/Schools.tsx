@@ -1,10 +1,14 @@
 import { useState } from 'react'
 import { Plus, Search, School, Users, DollarSign, MapPin, Phone, Mail, MoreVertical } from 'lucide-react'
+import { useNavigate, Link } from 'react-router'
+import { useAuth } from '../contexts/AuthContext'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
 import { Label } from '../components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../components/ui/dropdown-menu'
 
 // Mock schools data
 const mockSchools = [
@@ -47,8 +51,84 @@ const mockSchools = [
 ]
 
 export default function Schools() {
-  const [schools] = useState(mockSchools)
+  const navigate = useNavigate()
+  const { selectSchool } = useAuth()
+
+  const [schools, setSchools] = useState(mockSchools)
   const [isAddSchoolDialogOpen, setIsAddSchoolDialogOpen] = useState(false)
+  const [isManageSchoolDialogOpen, setIsManageSchoolDialogOpen] = useState(false)
+  const [selectedSchool, setSelectedSchool] = useState<any>(null)
+  const [formData, setFormData] = useState({
+    name: '',
+    address: '',
+    phone: '',
+    email: '',
+    principal: '',
+    logo: ''
+  })
+  const [adminFormData, setAdminFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    password: '',
+    role: 'admin'
+  })
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { id, value } = e.target
+    setFormData(prev => ({ ...prev, [id]: value }))
+  }
+
+  const handleAdminInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { id, value } = e.target
+    setAdminFormData(prev => ({ ...prev, [id]: value }))
+  }
+
+  const handleManageClick = (school) => {
+    setSelectedSchool(school)
+    setIsManageSchoolDialogOpen(true)
+  }
+
+  const handleAdminSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      // For now, just log the admin data
+      console.log('Adding admin for school:', selectedSchool.name, adminFormData)
+      // In real app, would POST to /api/schools/:id/admins
+      setAdminFormData({ name: '', email: '', phone: '', password: '', role: 'admin' })
+      setIsManageSchoolDialogOpen(false)
+      setSelectedSchool(null)
+    } catch (error) {
+      console.error('Error adding admin:', error)
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      const response = await fetch('/api/schools', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      })
+      if (response.ok) {
+        // Add to local state for now
+        const newSchool = {
+          id: Date.now().toString(),
+          ...formData,
+          students: 0,
+          staff: 0,
+          revenue: '$0',
+          status: 'Active'
+        }
+        setSchools(prev => [...prev, newSchool])
+        setFormData({ name: '', address: '', phone: '', email: '', principal: '', logo: '' })
+        setIsAddSchoolDialogOpen(false)
+      }
+    } catch (error) {
+      console.error('Error adding school:', error)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -66,55 +146,116 @@ export default function Schools() {
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Add New School</DialogTitle>
-              <DialogDescription>
-                Add a new school to the EduKE network
-              </DialogDescription>
-            </DialogHeader>
-            
-            <div className="grid gap-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="schoolName">School Name</Label>
-                  <Input id="schoolName" placeholder="Enter school name" />
+            <form onSubmit={handleSubmit}>
+              <DialogHeader>
+                <DialogTitle>Add New School</DialogTitle>
+                <DialogDescription>
+                  Add a new school to the EduKE network
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="grid gap-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">School Name</Label>
+                    <Input id="name" placeholder="Enter school name" value={formData.name} onChange={handleInputChange} required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="principal">Principal Name</Label>
+                    <Input id="principal" placeholder="Enter principal name" value={formData.principal} onChange={handleInputChange} />
+                  </div>
                 </div>
+
                 <div className="space-y-2">
-                  <Label htmlFor="principalName">Principal Name</Label>
-                  <Input id="principalName" placeholder="Enter principal name" />
+                  <Label htmlFor="address">Address</Label>
+                  <Input id="address" placeholder="Enter full address" value={formData.address} onChange={handleInputChange} />
                 </div>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="address">Address</Label>
-                <Input id="address" placeholder="Enter full address" />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Phone Number</Label>
+                    <Input id="phone" placeholder="+1-555-0000" value={formData.phone} onChange={handleInputChange} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email Address</Label>
+                    <Input id="email" type="email" placeholder="contact@school.edu" value={formData.email} onChange={handleInputChange} />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="logo">School Logo URL</Label>
+                  <Input id="logo" placeholder="https://example.com/logo.png" value={formData.logo} onChange={handleInputChange} />
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsAddSchoolDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit">
+                  Add School
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={isManageSchoolDialogOpen} onOpenChange={setIsManageSchoolDialogOpen}>
+          <DialogContent className="max-w-2xl">
+            <form onSubmit={handleAdminSubmit}>
+              <DialogHeader>
+                <DialogTitle>Manage School Admin</DialogTitle>
+                <DialogDescription>
+                  Add or manage the administrator for {selectedSchool?.name}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="grid gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="phone">Phone Number</Label>
-                  <Input id="phone" placeholder="+1-555-0000" />
+                  <Label htmlFor="adminName">Admin Name</Label>
+                  <Input id="name" placeholder="Enter admin name" value={adminFormData.name} onChange={handleAdminInputChange} required />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email Address</Label>
-                  <Input id="email" type="email" placeholder="contact@school.edu" />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="adminEmail">Email Address</Label>
+                    <Input id="email" type="email" placeholder="admin@school.edu" value={adminFormData.email} onChange={handleAdminInputChange} required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="adminPhone">Phone Number</Label>
+                    <Input id="phone" placeholder="+1-555-0000" value={adminFormData.phone} onChange={handleAdminInputChange} />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="adminPassword">Password</Label>
+                    <Input id="password" type="password" placeholder="Enter password" value={adminFormData.password} onChange={handleAdminInputChange} required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="adminRole">Role</Label>
+                    <Select onValueChange={(value) => setAdminFormData(prev => ({ ...prev, role: value }))}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="admin">Admin</SelectItem>
+                        <SelectItem value="super_admin">Super Admin</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="logo">School Logo URL</Label>
-                <Input id="logo" placeholder="https://example.com/logo.png" />
-              </div>
-            </div>
-            
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsAddSchoolDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={() => setIsAddSchoolDialogOpen(false)}>
-                Add School
-              </Button>
-            </DialogFooter>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsManageSchoolDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit">
+                  Add Admin
+                </Button>
+              </DialogFooter>
+            </form>
           </DialogContent>
         </Dialog>
       </div>
@@ -197,12 +338,24 @@ export default function Schools() {
               </div>
 
               <div className="flex justify-end pt-4 space-x-2">
-                <Button variant="outline" size="sm">
-                  View Details
-                </Button>
-                <Button size="sm">
-                  Manage School
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      Actions
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem asChild>
+                      <Link to={`/dashboard/schools/${school.id}`}>View Details</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleManageClick(school)}>
+                      Manage Admin
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => console.log('Activate school:', school.name)}>
+                      {school.status === 'Active' ? 'Deactivate' : 'Activate'} School
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </CardContent>
           </Card>

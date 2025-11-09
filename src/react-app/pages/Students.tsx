@@ -17,9 +17,166 @@ const mockStudents = [
 ]
 
 export default function Students() {
-  const [students] = useState(mockStudents)
-  
+  const [students, setStudents] = useState(mockStudents)
+
   const [isEnrollmentDialogOpen, setIsEnrollmentDialogOpen] = useState(false)
+  const [formData, setFormData] = useState({
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
+    date_of_birth: '',
+    address: '',
+    grade: '',
+    enrollment_date: '',
+    password: '',
+    school_id: 1, // Default to first school
+    // Parent account
+    parent_name: '',
+    parent_email: '',
+    parent_phone: '',
+    parent_password: '',
+    // Teacher account
+    teacher_name: '',
+    teacher_email: '',
+    teacher_phone: '',
+    teacher_password: '',
+    teacher_class: '',
+    teacher_subject: ''
+  })
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { id, value } = e.target
+    setFormData(prev => ({ ...prev, [id]: value }))
+  }
+
+  const handleSelectChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }))
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      let parentId = null
+
+      // Create parent user account first if parent details provided
+      if (formData.parent_email && formData.parent_password) {
+        const parentResponse = await fetch('/api/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: formData.parent_name,
+            email: formData.parent_email,
+            password: formData.parent_password,
+            role: 'parent',
+            phone: formData.parent_phone,
+            school_id: formData.school_id
+          })
+        })
+
+        if (parentResponse.ok) {
+          const parentResult = await parentResponse.json()
+          parentId = parentResult.id
+        }
+      }
+
+      // Create the student record with parent_id
+      const studentResponse = await fetch('/api/students', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          first_name: formData.first_name,
+          last_name: formData.last_name,
+          email: formData.email,
+          phone: formData.phone,
+          date_of_birth: formData.date_of_birth,
+          address: formData.address,
+          grade: formData.grade,
+          enrollment_date: formData.enrollment_date,
+          school_id: formData.school_id,
+          parent_id: parentId
+        })
+      })
+
+      if (studentResponse.ok) {
+        const studentResult = await studentResponse.json()
+        const studentId = studentResult.id
+
+        // Create student user account
+        if (formData.password) {
+          await fetch('/api/users', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: `${formData.first_name} ${formData.last_name}`,
+              email: formData.email,
+              password: formData.password,
+              role: 'student',
+              phone: formData.phone,
+              school_id: formData.school_id
+            })
+          })
+        }
+
+        // Create teacher user account
+        if (formData.teacher_email && formData.teacher_password) {
+          await fetch('/api/users', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: formData.teacher_name,
+              email: formData.teacher_email,
+              password: formData.teacher_password,
+              role: 'teacher',
+              phone: formData.teacher_phone,
+              school_id: formData.school_id,
+              class_assigned: formData.teacher_class,
+              subject: formData.teacher_subject
+            })
+          })
+        }
+
+        // Add to local state
+        const newStudent = {
+          id: studentId.toString(),
+          name: `${formData.first_name} ${formData.last_name}`,
+          email: formData.email,
+          grade: formData.grade,
+          class: 'A', // Default
+          status: 'Active',
+          phone: formData.phone,
+          parent: formData.parent_name || 'Guardian Name',
+          fees: '$0'
+        }
+        setStudents(prev => [...prev, newStudent])
+        setFormData({
+          first_name: '',
+          last_name: '',
+          email: '',
+          phone: '',
+          date_of_birth: '',
+          address: '',
+          grade: '',
+          enrollment_date: '',
+          password: '',
+          school_id: 1,
+          parent_name: '',
+          parent_email: '',
+          parent_phone: '',
+          parent_password: '',
+          teacher_name: '',
+          teacher_email: '',
+          teacher_phone: '',
+          teacher_password: '',
+          teacher_class: '',
+          teacher_subject: ''
+        })
+        setIsEnrollmentDialogOpen(false)
+      }
+    } catch (error) {
+      console.error('Error enrolling student:', error)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -37,50 +194,52 @@ export default function Students() {
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Student Enrollment</DialogTitle>
-              <DialogDescription>
-                Add a new student to the school system
-              </DialogDescription>
-            </DialogHeader>
-            <Tabs defaultValue="personal" className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
+            <form onSubmit={handleSubmit}>
+              <DialogHeader>
+                <DialogTitle>Student Enrollment</DialogTitle>
+                <DialogDescription>
+                  Add a new student to the school system
+                </DialogDescription>
+              </DialogHeader>
+              <Tabs defaultValue="personal" className="w-full">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="personal">Personal Info</TabsTrigger>
                 <TabsTrigger value="academic">Academic Info</TabsTrigger>
-                <TabsTrigger value="guardian">Guardian Info</TabsTrigger>
+                <TabsTrigger value="guardian">Parent Account</TabsTrigger>
+                <TabsTrigger value="teacher">Teacher Account</TabsTrigger>
               </TabsList>
               
               <TabsContent value="personal" className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="firstName">First Name</Label>
-                    <Input id="firstName" placeholder="Enter first name" />
+                    <Label htmlFor="first_name">First Name</Label>
+                    <Input id="first_name" placeholder="Enter first name" value={formData.first_name} onChange={handleInputChange} required />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="lastName">Last Name</Label>
-                    <Input id="lastName" placeholder="Enter last name" />
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email Address</Label>
-                    <Input id="email" type="email" placeholder="student@email.com" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Phone Number</Label>
-                    <Input id="phone" placeholder="+1-555-0000" />
+                    <Label htmlFor="last_name">Last Name</Label>
+                    <Input id="last_name" placeholder="Enter last name" value={formData.last_name} onChange={handleInputChange} required />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="dateOfBirth">Date of Birth</Label>
-                    <Input id="dateOfBirth" type="date" />
+                    <Label htmlFor="email">Email Address</Label>
+                    <Input id="email" type="email" placeholder="student@email.com" value={formData.email} onChange={handleInputChange} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Phone Number</Label>
+                    <Input id="phone" placeholder="+1-555-0000" value={formData.phone} onChange={handleInputChange} />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="date_of_birth">Date of Birth</Label>
+                    <Input id="date_of_birth" type="date" value={formData.date_of_birth} onChange={handleInputChange} />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="gender">Gender</Label>
-                    <Select>
+                    <Select onValueChange={(value) => handleSelectChange('gender', value)}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select gender" />
                       </SelectTrigger>
@@ -93,9 +252,15 @@ export default function Students() {
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="address">Address</Label>
-                  <Input id="address" placeholder="Enter full address" />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="address">Address</Label>
+                    <Input id="address" placeholder="Enter full address" value={formData.address} onChange={handleInputChange} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Student Password</Label>
+                    <Input id="password" type="password" placeholder="Enter password" value={formData.password} onChange={handleInputChange} required />
+                  </div>
                 </div>
               </TabsContent>
 
@@ -103,28 +268,28 @@ export default function Students() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="grade">Grade Level</Label>
-                    <Select>
+                    <Select onValueChange={(value) => handleSelectChange('grade', value)}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select grade" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="grade-9">Grade 9</SelectItem>
-                        <SelectItem value="grade-10">Grade 10</SelectItem>
-                        <SelectItem value="grade-11">Grade 11</SelectItem>
-                        <SelectItem value="grade-12">Grade 12</SelectItem>
+                        <SelectItem value="Grade 9">Grade 9</SelectItem>
+                        <SelectItem value="Grade 10">Grade 10</SelectItem>
+                        <SelectItem value="Grade 11">Grade 11</SelectItem>
+                        <SelectItem value="Grade 12">Grade 12</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="class">Class Section</Label>
-                    <Select>
+                    <Select onValueChange={(value) => handleSelectChange('class', value)}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select class" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="a">Section A</SelectItem>
-                        <SelectItem value="b">Section B</SelectItem>
-                        <SelectItem value="c">Section C</SelectItem>
+                        <SelectItem value="A">Section A</SelectItem>
+                        <SelectItem value="B">Section B</SelectItem>
+                        <SelectItem value="C">Section C</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -136,15 +301,15 @@ export default function Students() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="admissionDate">Admission Date</Label>
-                  <Input id="admissionDate" type="date" />
+                  <Label htmlFor="enrollment_date">Admission Date</Label>
+                  <Input id="enrollment_date" type="date" value={formData.enrollment_date} onChange={handleInputChange} />
                 </div>
               </TabsContent>
 
               <TabsContent value="guardian" className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="relation">Relation</Label>
-                  <Select>
+                  <Select onValueChange={(value) => handleSelectChange('relation', value)}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select relation" />
                     </SelectTrigger>
@@ -169,36 +334,122 @@ export default function Students() {
                     <div className="w-full border-t border-gray-300" />
                   </div>
                   <div className="relative flex justify-center text-sm">
-                    <span className="px-2 bg-white text-gray-500">Or enter manually</span>
+                    <span className="px-2 bg-white text-gray-500">Or create new account</span>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="guardianName">Guardian Name</Label>
-                    <Input id="guardianName" placeholder="Enter guardian name" />
+                    <Label htmlFor="parent_name">Parent Name</Label>
+                    <Input id="parent_name" placeholder="Enter parent name" value={formData.parent_name} onChange={handleInputChange} />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="guardianPhone">Guardian Phone</Label>
-                    <Input id="guardianPhone" placeholder="+1-555-0000" />
+                    <Label htmlFor="parent_phone">Parent Phone</Label>
+                    <Input id="parent_phone" placeholder="+1-555-0000" value={formData.parent_phone} onChange={handleInputChange} />
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="guardianEmail">Guardian Email</Label>
-                  <Input id="guardianEmail" type="email" placeholder="guardian@email.com" />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="parent_email">Parent Email</Label>
+                    <Input id="parent_email" type="email" placeholder="parent@email.com" value={formData.parent_email} onChange={handleInputChange} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="parent_password">Parent Password</Label>
+                    <Input id="parent_password" type="password" placeholder="Enter password" value={formData.parent_password} onChange={handleInputChange} />
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="teacher" className="space-y-4">
+                <div className="p-4 border rounded-lg space-y-4">
+                  <h4 className="font-medium">Assign Teacher Account</h4>
+                  <div className="space-y-2">
+                    <Label htmlFor="teacherSearch">Search Teacher by Email</Label>
+                    <Input id="teacherSearch" placeholder="Enter teacher's email" />
+                  </div>
+                  <Button variant="outline" size="sm">Search & Assign</Button>
+                </div>
+
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-gray-300" />
+                  </div>
+                  <div className="relative flex justify-center text-sm">
+                    <span className="px-2 bg-white text-gray-500">Or create new account</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="teacher_name">Teacher Name</Label>
+                    <Input id="teacher_name" placeholder="Enter teacher name" value={formData.teacher_name} onChange={handleInputChange} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="teacher_phone">Teacher Phone</Label>
+                    <Input id="teacher_phone" placeholder="+1-555-0000" value={formData.teacher_phone} onChange={handleInputChange} />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="teacher_email">Teacher Email</Label>
+                    <Input id="teacher_email" type="email" placeholder="teacher@email.com" value={formData.teacher_email} onChange={handleInputChange} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="teacher_password">Teacher Password</Label>
+                    <Input id="teacher_password" type="password" placeholder="Enter password" value={formData.teacher_password} onChange={handleInputChange} />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="teacher_class">Assigned Class</Label>
+                    <Select onValueChange={(value) => handleSelectChange('teacher_class', value)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select class" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="10A">Grade 10 - Section A</SelectItem>
+                        <SelectItem value="10B">Grade 10 - Section B</SelectItem>
+                        <SelectItem value="11A">Grade 11 - Section A</SelectItem>
+                        <SelectItem value="11B">Grade 11 - Section B</SelectItem>
+                        <SelectItem value="12A">Grade 12 - Section A</SelectItem>
+                        <SelectItem value="12B">Grade 12 - Section B</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="teacher_subject">Subject</Label>
+                    <Select onValueChange={(value) => handleSelectChange('teacher_subject', value)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select subject" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Mathematics">Mathematics</SelectItem>
+                        <SelectItem value="English">English</SelectItem>
+                        <SelectItem value="Science">Science</SelectItem>
+                        <SelectItem value="History">History</SelectItem>
+                        <SelectItem value="Geography">Geography</SelectItem>
+                        <SelectItem value="Art">Art</SelectItem>
+                        <SelectItem value="Physical Education">Physical Education</SelectItem>
+                        <SelectItem value="Class Teacher">Class Teacher</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </TabsContent>
             </Tabs>
-            
+
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsEnrollmentDialogOpen(false)}>
+              <Button type="button" variant="outline" onClick={() => setIsEnrollmentDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={() => setIsEnrollmentDialogOpen(false)}>
+              <Button type="submit">
                 Enroll Student
               </Button>
             </DialogFooter>
+          </form>
           </DialogContent>
         </Dialog>
       </div>

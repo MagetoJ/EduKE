@@ -62,6 +62,24 @@ const navItems: NavItem[] = [
     roles: ['parent', 'student']
   },
   {
+    title: 'Parent Portal',
+    href: '/dashboard/parent',
+    icon: Users,
+    roles: ['parent']
+  },
+  {
+    title: 'My Discipline',
+    href: '/dashboard/student-dashboard',
+    icon: FileText,
+    roles: ['student']
+  },
+  {
+    title: 'Teacher Portal',
+    href: '/dashboard/teacher-dashboard',
+    icon: BookOpen,
+    roles: ['teacher']
+  },
+  {
     title: 'Timetable',
     href: '/dashboard/timetable',
     icon: Calendar,
@@ -88,7 +106,7 @@ const navItems: NavItem[] = [
   {
     title: 'Reports',
     href: '/dashboard/reports',
-    icon: FileText,
+    icon: BarChart3,
     roles: ['admin', 'super_admin']
   },
   {

@@ -6,6 +6,9 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Students from "./pages/Students";
 import Schools from "./pages/Schools";
+import { SchoolProfile } from "./pages/SchoolProfile";
+import { Reports } from "./pages/Reports";
+import { Settings } from "./pages/Settings";
 import Staff from "./pages/Staff";
 import Communications from "./pages/Communications";
 import Progress from "./pages/Progress";
@@ -13,6 +16,9 @@ import Academics from "./pages/Academics";
 import Fees from "./pages/Fees";
 import Timetable from "./pages/Timetable";
 import Leave from "./pages/Leave";
+import ParentDashboard from "./pages/ParentDashboard";
+import StudentDashboard from "./pages/StudentDashboard";
+import TeacherDashboard from "./pages/TeacherDashboard";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -59,6 +65,8 @@ function AppRoutes() {
         <Route index element={<Dashboard />} />
         <Route path="students" element={<Students />} />
         <Route path="schools" element={<Schools />} />
+        <Route path="schools/:id" element={<SchoolProfile />} />
+        <Route path="reports" element={<Reports />} />
         <Route path="staff" element={<Staff />} />
         <Route path="communications" element={<Communications />} />
         <Route path="progress" element={<Progress />} />
@@ -66,6 +74,10 @@ function AppRoutes() {
         <Route path="fees" element={<Fees />} />
         <Route path="timetable" element={<Timetable />} />
         <Route path="leave" element={<Leave />} />
+        <Route path="settings" element={<Settings />} />
+        <Route path="parent" element={<ParentDashboard />} />
+        <Route path="student-dashboard" element={<StudentDashboard />} />
+        <Route path="teacher-dashboard" element={<TeacherDashboard />} />
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" />} />
     </Routes>
