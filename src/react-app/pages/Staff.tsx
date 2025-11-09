@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Plus, Search, Filter, UserCheck, Mail, Phone, Calendar, Clock, CheckCircle, XCircle, DollarSign } from 'lucide-react'
+import { type ChangeEvent, type FormEvent, useEffect, useState } from 'react'
+import { Plus, Search, Filter, UserCheck, Mail, Phone, Calendar, Clock, CheckCircle, XCircle, DollarSign, Pencil } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
@@ -17,6 +17,8 @@ const mockStaff = [
     phone: '+1-555-0201',
     role: 'Teacher',
     department: 'Mathematics',
+    classAssigned: 'Grade 10 - Section A',
+    subject: 'Mathematics',
     joinDate: '2019-08-15',
     status: 'Active',
     avatar: 'https://images.unsplash.com/photo-1494790108755-2616b2b5aac1?w=150&h=150&fit=crop&crop=face'
@@ -28,6 +30,8 @@ const mockStaff = [
     phone: '+1-555-0202',
     role: 'Teacher',
     department: 'Science',
+    classAssigned: 'Grade 11 - Section B',
+    subject: 'Science',
     joinDate: '2020-01-12',
     status: 'Active',
     avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face'
@@ -69,11 +73,50 @@ const mockLeaveRequests = [
   }
 ]
 
+const initialStaffForm = {
+  firstName: '',
+  lastName: '',
+  email: '',
+  phone: '',
+  role: '',
+  department: '',
+  joinDate: '',
+  password: '',
+  classAssigned: '',
+  subject: '',
+  school_id: 1
+}
+
 export default function Staff() {
   const [activeTab, setActiveTab] = useState('directory')
-  const [staff] = useState(mockStaff)
+  const [staff, setStaff] = useState(mockStaff)
   const [leaveRequests, setLeaveRequests] = useState(mockLeaveRequests)
   const [isStaffDialogOpen, setIsStaffDialogOpen] = useState(false)
+  const [formData, setFormData] = useState(initialStaffForm)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState('')
+  const [isEditStaffDialogOpen, setIsEditStaffDialogOpen] = useState(false)
+  const [editingStaffId, setEditingStaffId] = useState<string | null>(null)
+  const [editStaffForm, setEditStaffForm] = useState({
+    id: '',
+    name: '',
+    email: '',
+    phone: '',
+    role: '',
+    department: '',
+    classAssigned: '',
+    subject: '',
+    joinDate: '',
+    status: ''
+  })
+
+  useEffect(() => {
+    if (!isStaffDialogOpen) {
+      setFormData(initialStaffForm)
+      setError('')
+      setIsSubmitting(false)
+    }
+  }, [isStaffDialogOpen])
 
   const handleLeaveAction = (requestId: string, action: 'approve' | 'deny') => {
     setLeaveRequests(prev => 
@@ -83,6 +126,143 @@ export default function Staff() {
           : request
       )
     )
+  }
+
+  const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const { id, value } = e.target
+    setFormData(prev => ({ ...prev, [id]: value }))
+  }
+
+  const handleSelectChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }))
+  }
+
+  const handleEditStaffInputChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const { id, value } = e.target
+    setEditStaffForm(prev => ({ ...prev, [id]: value }))
+  }
+
+  const handleEditStaffSelectChange = (field: string, value: string) => {
+    setEditStaffForm(prev => ({ ...prev, [field]: value }))
+  }
+
+  const handleAddStaff = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+    setError('')
+
+    if (!formData.firstName || !formData.lastName || !formData.email || !formData.role) {
+      setError('Please complete all required fields.')
+      setIsSubmitting(false)
+      return
+    }
+
+    if (formData.role === 'teacher') {
+      if (!formData.password) {
+        setError('Please provide a password for the teacher account.')
+        setIsSubmitting(false)
+        return
+      }
+
+      if (!formData.classAssigned) {
+        setError('Please assign a class to the teacher.')
+        setIsSubmitting(false)
+        return
+      }
+    }
+
+    try {
+      if (formData.role === 'teacher') {
+        const response = await fetch('/api/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: `${formData.firstName} ${formData.lastName}`.trim(),
+            email: formData.email,
+            password: formData.password,
+            role: 'teacher',
+            phone: formData.phone,
+            school_id: formData.school_id,
+            class_assigned: formData.classAssigned,
+            subject: formData.subject
+          })
+        })
+
+        const data = await response.json()
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to create teacher account.')
+        }
+      }
+
+      const roleLabel = formData.role ? formData.role.charAt(0).toUpperCase() + formData.role.slice(1) : 'Staff'
+
+      setStaff(prev => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          name: `${formData.firstName} ${formData.lastName}`.trim(),
+          email: formData.email,
+          phone: formData.phone,
+          role: roleLabel,
+          department: formData.department || 'General',
+          classAssigned: formData.role === 'teacher' ? formData.classAssigned : undefined,
+          subject: formData.role === 'teacher' ? formData.subject : undefined,
+          joinDate: formData.joinDate || new Date().toISOString(),
+          status: 'Active',
+          avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&h=150&fit=crop&crop=face'
+        }
+      ])
+
+      setIsStaffDialogOpen(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const openStaffEdit = (member: typeof mockStaff[number]) => {
+    setEditStaffForm({
+      id: member.id,
+      name: member.name,
+      email: member.email,
+      phone: member.phone,
+      role: member.role,
+      department: member.department ?? '',
+      classAssigned: member.classAssigned ?? '',
+      subject: member.subject ?? '',
+      joinDate: member.joinDate ?? '',
+      status: member.status ?? 'Active'
+    })
+    setEditingStaffId(member.id)
+    setIsEditStaffDialogOpen(true)
+  }
+
+  const handleEditStaffSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    if (!editingStaffId) {
+      return
+    }
+
+    setStaff(prev => prev.map(member => (
+      member.id === editingStaffId
+        ? {
+            ...member,
+            name: editStaffForm.name,
+            email: editStaffForm.email,
+            phone: editStaffForm.phone,
+            role: editStaffForm.role,
+            department: editStaffForm.department,
+            classAssigned: editStaffForm.role === 'Teacher' ? (editStaffForm.classAssigned || undefined) : undefined,
+            subject: editStaffForm.role === 'Teacher' ? (editStaffForm.subject || undefined) : undefined,
+            joinDate: editStaffForm.joinDate,
+            status: editStaffForm.status || member.status
+          }
+        : member
+    )))
+    setIsEditStaffDialogOpen(false)
+    setEditingStaffId(null)
   }
 
   return (
@@ -101,82 +281,244 @@ export default function Staff() {
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Add Staff Member</DialogTitle>
-              <DialogDescription>
-                Add a new staff member to the school
-              </DialogDescription>
-            </DialogHeader>
-            
-            <div className="grid gap-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="firstName">First Name</Label>
-                  <Input id="firstName" placeholder="Enter first name" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="lastName">Last Name</Label>
-                  <Input id="lastName" placeholder="Enter last name" />
-                </div>
-              </div>
+            <form onSubmit={handleAddStaff} className="space-y-6">
+              <DialogHeader>
+                <DialogTitle>Add Staff Member</DialogTitle>
+                <DialogDescription>
+                  Add a new staff member to the school
+                </DialogDescription>
+              </DialogHeader>
               
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email Address</Label>
-                  <Input id="email" type="email" placeholder="staff@school.edu" />
+              <div className="grid gap-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="firstName">First Name</Label>
+                    <Input id="firstName" placeholder="Enter first name" value={formData.firstName} onChange={handleInputChange} required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="lastName">Last Name</Label>
+                    <Input id="lastName" placeholder="Enter last name" value={formData.lastName} onChange={handleInputChange} required />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Phone Number</Label>
-                  <Input id="phone" placeholder="+1-555-0000" />
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email Address</Label>
+                    <Input id="email" type="email" placeholder="staff@school.edu" value={formData.email} onChange={handleInputChange} required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Phone Number</Label>
+                    <Input id="phone" placeholder="+1-555-0000" value={formData.phone} onChange={handleInputChange} />
+                  </div>
                 </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="role">Role</Label>
+                    <Select value={formData.role} onValueChange={(value) => handleSelectChange('role', value)}>
+                      <SelectTrigger id="role">
+                        <SelectValue placeholder="Select role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="teacher">Teacher</SelectItem>
+                        <SelectItem value="administrator">Administrator</SelectItem>
+                        <SelectItem value="counselor">Counselor</SelectItem>
+                        <SelectItem value="librarian">Librarian</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="department">Department</Label>
+                    <Select value={formData.department} onValueChange={(value) => handleSelectChange('department', value)}>
+                      <SelectTrigger id="department">
+                        <SelectValue placeholder="Select department" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Mathematics">Mathematics</SelectItem>
+                        <SelectItem value="Science">Science</SelectItem>
+                        <SelectItem value="English">English</SelectItem>
+                        <SelectItem value="History">History</SelectItem>
+                        <SelectItem value="Administration">Administration</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Password</Label>
+                    <Input id="password" type="password" placeholder="Enter password" value={formData.password} onChange={handleInputChange} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="joinDate">Join Date</Label>
+                    <Input id="joinDate" type="date" value={formData.joinDate} onChange={handleInputChange} />
+                  </div>
+                </div>
+
+                {formData.role === 'teacher' && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="classAssigned">Assigned Class</Label>
+                      <Select value={formData.classAssigned} onValueChange={(value) => handleSelectChange('classAssigned', value)}>
+                        <SelectTrigger id="classAssigned">
+                          <SelectValue placeholder="Select class" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Grade 10 - Section A">Grade 10 - Section A</SelectItem>
+                          <SelectItem value="Grade 10 - Section B">Grade 10 - Section B</SelectItem>
+                          <SelectItem value="Grade 11 - Section A">Grade 11 - Section A</SelectItem>
+                          <SelectItem value="Grade 11 - Section B">Grade 11 - Section B</SelectItem>
+                          <SelectItem value="Grade 12 - Section A">Grade 12 - Section A</SelectItem>
+                          <SelectItem value="Grade 12 - Section B">Grade 12 - Section B</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="subject">Subject</Label>
+                      <Select value={formData.subject} onValueChange={(value) => handleSelectChange('subject', value)}>
+                        <SelectTrigger id="subject">
+                          <SelectValue placeholder="Select subject" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Mathematics">Mathematics</SelectItem>
+                          <SelectItem value="English">English</SelectItem>
+                          <SelectItem value="Science">Science</SelectItem>
+                          <SelectItem value="History">History</SelectItem>
+                          <SelectItem value="Geography">Geography</SelectItem>
+                          <SelectItem value="Art">Art</SelectItem>
+                          <SelectItem value="Physical Education">Physical Education</SelectItem>
+                          <SelectItem value="Class Teacher">Class Teacher</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              {error && <p className="text-sm text-red-500">{error}</p>}
+              
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsStaffDialogOpen(false)} disabled={isSubmitting}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? 'Adding...' : 'Add Staff Member'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog
+          open={isEditStaffDialogOpen}
+          onOpenChange={(open) => {
+            setIsEditStaffDialogOpen(open)
+            if (!open) {
+              setEditingStaffId(null)
+            }
+          }}
+        >
+          <DialogContent className="max-w-2xl">
+            <form onSubmit={handleEditStaffSubmit} className="space-y-6">
+              <DialogHeader>
+                <DialogTitle>Edit Staff Member</DialogTitle>
+                <DialogDescription>
+                  Update staff details and assignments
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="grid gap-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Full Name</Label>
+                    <Input id="name" value={editStaffForm.name} onChange={handleEditStaffInputChange} required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input id="email" type="email" value={editStaffForm.email} onChange={handleEditStaffInputChange} required />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Phone</Label>
+                    <Input id="phone" value={editStaffForm.phone} onChange={handleEditStaffInputChange} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="joinDate">Join Date</Label>
+                    <Input id="joinDate" type="date" value={editStaffForm.joinDate} onChange={handleEditStaffInputChange} />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="role">Role</Label>
+                    <Select value={editStaffForm.role} onValueChange={(value) => handleEditStaffSelectChange('role', value)}>
+                      <SelectTrigger id="role">
+                        <SelectValue placeholder="Select role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Teacher">Teacher</SelectItem>
+                        <SelectItem value="Administrator">Administrator</SelectItem>
+                        <SelectItem value="Counselor">Counselor</SelectItem>
+                        <SelectItem value="Librarian">Librarian</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="department">Department</Label>
+                    <Select value={editStaffForm.department} onValueChange={(value) => handleEditStaffSelectChange('department', value)}>
+                      <SelectTrigger id="department">
+                        <SelectValue placeholder="Select department" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Mathematics">Mathematics</SelectItem>
+                        <SelectItem value="Science">Science</SelectItem>
+                        <SelectItem value="English">English</SelectItem>
+                        <SelectItem value="History">History</SelectItem>
+                        <SelectItem value="Administration">Administration</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {editStaffForm.role === 'Teacher' && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="classAssigned">Assigned Class</Label>
+                      <Input id="classAssigned" value={editStaffForm.classAssigned} onChange={handleEditStaffInputChange} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="subject">Subject</Label>
+                      <Input id="subject" value={editStaffForm.subject} onChange={handleEditStaffInputChange} />
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-2">
-                  <Label htmlFor="role">Role</Label>
-                  <Select>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select role" />
+                  <Label htmlFor="status">Status</Label>
+                  <Select value={editStaffForm.status} onValueChange={(value) => handleEditStaffSelectChange('status', value)}>
+                    <SelectTrigger id="status">
+                      <SelectValue placeholder="Select status" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="teacher">Teacher</SelectItem>
-                      <SelectItem value="administrator">Administrator</SelectItem>
-                      <SelectItem value="counselor">Counselor</SelectItem>
-                      <SelectItem value="librarian">Librarian</SelectItem>
+                      <SelectItem value="Active">Active</SelectItem>
+                      <SelectItem value="Inactive">Inactive</SelectItem>
+                      <SelectItem value="On Leave">On Leave</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="department">Department</Label>
-                  <Select>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select department" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="mathematics">Mathematics</SelectItem>
-                      <SelectItem value="science">Science</SelectItem>
-                      <SelectItem value="english">English</SelectItem>
-                      <SelectItem value="history">History</SelectItem>
-                      <SelectItem value="administration">Administration</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="joinDate">Join Date</Label>
-                <Input id="joinDate" type="date" />
-              </div>
-            </div>
-            
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsStaffDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={() => setIsStaffDialogOpen(false)}>
-                Add Staff Member
-              </Button>
-            </DialogFooter>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsEditStaffDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit">
+                  Save Changes
+                </Button>
+              </DialogFooter>
+            </form>
           </DialogContent>
         </Dialog>
       </div>
@@ -237,9 +579,28 @@ export default function Staff() {
                         <span className="text-sm">Joined {new Date(member.joinDate).getFullYear()}</span>
                       </div>
 
-                      <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
-                        {member.status}
-                      </span>
+                      {member.classAssigned && (
+                        <div className="text-center">
+                          <p className="text-sm font-medium text-gray-900">{member.classAssigned}</p>
+                          <p className="text-xs text-gray-500">Class</p>
+                        </div>
+                      )}
+
+                      {member.subject && (
+                        <div className="text-center">
+                          <p className="text-sm font-medium text-gray-900">{member.subject}</p>
+                          <p className="text-xs text-gray-500">Subject</p>
+                        </div>
+                      )}
+
+                      <div className="flex items-center space-x-2">
+                        <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
+                          {member.status}
+                        </span>
+                        <Button variant="ghost" size="icon" onClick={() => openStaffEdit(member)}>
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </CardContent>

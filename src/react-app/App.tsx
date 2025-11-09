@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import DashboardLayout from "./components/layout/DashboardLayout";
 import Login from "./pages/Login";
+import RegisterSchool from "./pages/RegisterSchool";
 import Dashboard from "./pages/Dashboard";
 import Students from "./pages/Students";
 import Schools from "./pages/Schools";
@@ -45,6 +46,7 @@ function AppRoutes() {
     return (
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/register-school" element={<RegisterSchool />} />
         <Route path="*" element={<Navigate to="/login" />} />
       </Routes>
     );

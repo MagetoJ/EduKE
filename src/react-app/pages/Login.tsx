@@ -133,6 +133,16 @@ export default function Login() {
                 </Button>
               </div>
             </div>
+
+            <div className="mt-4 text-center text-sm">
+              Registering a new school?{' '}
+              <button
+                onClick={() => window.location.href = '/register-school'}
+                className="underline text-blue-600 hover:text-blue-800"
+              >
+                Sign Up Here
+              </button>
+            </div>
           </CardContent>
         </Card>
       </div>

@@ -9,11 +9,13 @@ export interface User {
   role: UserRole
   schoolId?: string
   schoolName?: string
+  schoolCurriculum?: string
   avatar?: string
 }
 
 interface AuthContextType {
   user: User | null
+  setUser: (user: User | null) => void
   login: (email: string, password: string) => Promise<void>
   logout: () => void
   isLoading: boolean
@@ -26,20 +28,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    // Simulate checking for existing session
-    setTimeout(() => {
-      // For demo purposes, set a default user
-      setUser({
-        id: '1',
-        email: 'admin@eduke.com',
-        name: 'John Administrator',
-        role: 'admin',
-        schoolId: 'school-1',
-        schoolName: 'Demo High School',
-        avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face'
-      })
-      setIsLoading(false)
-    }, 1000)
+    setIsLoading(false)
   }, [])
 
   const login = async (email: string) => {
@@ -49,7 +38,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     
     // Mock different user roles based on email
     let role: UserRole = 'admin'
-    let schoolData: { schoolId?: string, schoolName?: string } = { schoolId: 'school-1', schoolName: 'Demo High School' }
+    let schoolData: { schoolId?: string, schoolName?: string, schoolCurriculum?: string } = {
+      schoolId: 'school-1',
+      schoolName: 'Demo High School',
+      schoolCurriculum: 'cbc'
+    }
     
     if (email.includes('super')) {
       role = 'super_admin'
@@ -69,6 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       role,
       schoolId: schoolData.schoolId,
       schoolName: schoolData.schoolName,
+      schoolCurriculum: schoolData.schoolCurriculum,
       avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face'
     })
     setIsLoading(false)
@@ -79,7 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, setUser, login, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   )
