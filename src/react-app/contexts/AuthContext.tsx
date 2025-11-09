@@ -42,7 +42,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, 1000)
   }, [])
 
-  const login = async (email: string, _password: string) => {
+  const login = async (email: string) => {
     setIsLoading(true)
     // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 1000))

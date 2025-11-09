@@ -110,16 +110,16 @@ export default function Sidebar() {
   )
 
   return (
-    <div className="w-64 bg-white border-r border-gray-200 h-screen flex flex-col">
+    <div className="w-64 bg-card border-r border-border h-screen flex flex-col">
       <div className="p-6">
         <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
-            <GraduationCap className="w-5 h-5 text-white" />
+          <div className="w-8 h-8 bg-gradient-to-r from-primary to-primary/80 rounded-lg flex items-center justify-center">
+            <GraduationCap className="w-5 h-5 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-gray-900">EduKE</h1>
+            <h1 className="text-xl font-bold text-card-foreground">EduKE</h1>
             {user.schoolName && (
-              <p className="text-sm text-gray-600">{user.schoolName}</p>
+              <p className="text-sm text-muted-foreground">{user.schoolName}</p>
             )}
           </div>
         </div>
@@ -137,14 +137,14 @@ export default function Sidebar() {
               to={item.href}
               className={cn(
                 'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
-                isActive 
-                  ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-700' 
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                isActive
+                  ? 'bg-accent text-accent-foreground border-r-2 border-primary'
+                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
               )}
             >
               <Icon className={cn(
                 'mr-3 h-4 w-4',
-                isActive ? 'text-blue-700' : 'text-gray-400'
+                isActive ? 'text-primary' : 'text-muted-foreground'
               )} />
               {item.title}
             </Link>
@@ -152,7 +152,7 @@ export default function Sidebar() {
         })}
       </nav>
 
-      <div className="p-4 border-t border-gray-200">
+      <div className="p-4 border-t border-border">
         <div className="flex items-center space-x-3">
           <img
             src={user.avatar}
@@ -160,10 +160,10 @@ export default function Sidebar() {
             className="w-8 h-8 rounded-full"
           />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900 truncate">
+            <p className="text-sm font-medium text-card-foreground truncate">
               {user.name}
             </p>
-            <p className="text-xs text-gray-500 capitalize">
+            <p className="text-xs text-muted-foreground capitalize">
               {user.role.replace('_', ' ')}
             </p>
           </div>

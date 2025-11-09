@@ -2,6 +2,7 @@ import { Bell, Search, LogOut } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { useAuth } from '../../contexts/AuthContext'
+import { ThemeToggle } from '../ThemeToggle'
 
 export default function Header() {
   const { user, logout } = useAuth()
@@ -9,11 +10,11 @@ export default function Header() {
   if (!user) return null
 
   return (
-    <header className="bg-white border-b border-gray-200 px-6 py-4">
+    <header className="bg-card border-b border-border px-6 py-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
             <Input
               placeholder="Search..."
               className="pl-10 w-96"
@@ -25,7 +26,9 @@ export default function Header() {
           <Button variant="ghost" size="icon">
             <Bell className="w-5 h-5" />
           </Button>
-          
+
+          <ThemeToggle />
+
           <div className="flex items-center space-x-3">
             <img
               src={user.avatar}
@@ -33,8 +36,8 @@ export default function Header() {
               className="w-8 h-8 rounded-full"
             />
             <div>
-              <p className="text-sm font-medium text-gray-900">{user.name}</p>
-              <p className="text-xs text-gray-500 capitalize">
+              <p className="text-sm font-medium text-card-foreground">{user.name}</p>
+              <p className="text-xs text-muted-foreground capitalize">
                 {user.role.replace('_', ' ')}
               </p>
             </div>
