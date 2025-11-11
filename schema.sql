@@ -11,6 +11,20 @@ CREATE TABLE IF NOT EXISTS schools (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL UNIQUE,
+  password_hash TEXT,
+  role TEXT NOT NULL,
+  phone TEXT,
+  school_id INTEGER,
+  class_assigned TEXT,
+  subject TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (school_id) REFERENCES schools(id)
+);
+
 CREATE TABLE IF NOT EXISTS students (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   first_name TEXT NOT NULL,
@@ -25,7 +39,8 @@ CREATE TABLE IF NOT EXISTS students (
   parent_id INTEGER,
   status TEXT DEFAULT 'Active',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (school_id) REFERENCES schools(id)
+  FOREIGN KEY (school_id) REFERENCES schools(id),
+  FOREIGN KEY (parent_id) REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS academic_years (
@@ -36,4 +51,221 @@ CREATE TABLE IF NOT EXISTS academic_years (
   status TEXT NOT NULL DEFAULT 'active',
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (school_id) REFERENCES schools(id)
+);
+
+CREATE TABLE IF NOT EXISTS student_guardians (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id INTEGER NOT NULL,
+  guardian_id INTEGER NOT NULL,
+  relationship TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (student_id, guardian_id),
+  FOREIGN KEY (student_id) REFERENCES students(id),
+  FOREIGN KEY (guardian_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS discipline (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id INTEGER NOT NULL,
+  teacher_id INTEGER,
+  type TEXT,
+  severity TEXT,
+  description TEXT,
+  date TEXT,
+  status TEXT DEFAULT 'Pending',
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (student_id) REFERENCES students(id),
+  FOREIGN KEY (teacher_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS performance (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id INTEGER NOT NULL,
+  teacher_id INTEGER,
+  subject TEXT,
+  grade REAL,
+  term TEXT,
+  comments TEXT,
+  date_recorded TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (student_id) REFERENCES students(id),
+  FOREIGN KEY (teacher_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS attendance (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id INTEGER NOT NULL,
+  date TEXT NOT NULL,
+  status TEXT NOT NULL,
+  teacher_id INTEGER,
+  recorded_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (student_id, date),
+  FOREIGN KEY (student_id) REFERENCES students(id),
+  FOREIGN KEY (teacher_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS courses (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  school_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  code TEXT,
+  description TEXT,
+  grade TEXT,
+  term TEXT,
+  teacher_id INTEGER,
+  start_date TEXT,
+  end_date TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (school_id) REFERENCES schools(id),
+  FOREIGN KEY (teacher_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS enrollments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id INTEGER NOT NULL,
+  course_id INTEGER NOT NULL,
+  enrollment_date TEXT DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (student_id, course_id),
+  FOREIGN KEY (student_id) REFERENCES students(id),
+  FOREIGN KEY (course_id) REFERENCES courses(id)
+);
+
+CREATE TABLE IF NOT EXISTS assignments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  course_id INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  due_date TEXT,
+  total_marks INTEGER,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (course_id) REFERENCES courses(id)
+);
+
+CREATE TABLE IF NOT EXISTS submissions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  assignment_id INTEGER NOT NULL,
+  student_id INTEGER NOT NULL,
+  submitted_at TEXT,
+  grade REAL,
+  status TEXT,
+  feedback TEXT,
+  UNIQUE (assignment_id, student_id),
+  FOREIGN KEY (assignment_id) REFERENCES assignments(id),
+  FOREIGN KEY (student_id) REFERENCES students(id)
+);
+
+CREATE TABLE IF NOT EXISTS exams (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  course_id INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  exam_date TEXT,
+  term TEXT,
+  total_marks INTEGER,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (course_id) REFERENCES courses(id)
+);
+
+CREATE TABLE IF NOT EXISTS exam_results (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  exam_id INTEGER NOT NULL,
+  student_id INTEGER NOT NULL,
+  score REAL,
+  grade TEXT,
+  recorded_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (exam_id, student_id),
+  FOREIGN KEY (exam_id) REFERENCES exams(id),
+  FOREIGN KEY (student_id) REFERENCES students(id)
+);
+
+CREATE TABLE IF NOT EXISTS fee_structures (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  school_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT,
+  amount REAL NOT NULL,
+  due_date TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (school_id) REFERENCES schools(id)
+);
+
+CREATE TABLE IF NOT EXISTS student_fees (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id INTEGER NOT NULL,
+  fee_structure_id INTEGER NOT NULL,
+  amount_due REAL NOT NULL,
+  amount_paid REAL NOT NULL DEFAULT 0,
+  status TEXT DEFAULT 'Pending',
+  due_date TEXT,
+  last_payment_date TEXT,
+  UNIQUE (student_id, fee_structure_id),
+  FOREIGN KEY (student_id) REFERENCES students(id),
+  FOREIGN KEY (fee_structure_id) REFERENCES fee_structures(id)
+);
+
+CREATE TABLE IF NOT EXISTS fee_payments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id INTEGER NOT NULL,
+  fee_structure_id INTEGER NOT NULL,
+  amount REAL NOT NULL,
+  payment_date TEXT DEFAULT CURRENT_TIMESTAMP,
+  method TEXT,
+  reference TEXT,
+  FOREIGN KEY (student_id) REFERENCES students(id),
+  FOREIGN KEY (fee_structure_id) REFERENCES fee_structures(id)
+);
+
+CREATE TABLE IF NOT EXISTS leave_requests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  staff_id INTEGER NOT NULL,
+  start_date TEXT NOT NULL,
+  end_date TEXT NOT NULL,
+  reason TEXT,
+  status TEXT DEFAULT 'Pending',
+  reviewed_by INTEGER,
+  reviewed_at TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (staff_id) REFERENCES users(id),
+  FOREIGN KEY (reviewed_by) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS announcements (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  school_id INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT,
+  audience TEXT,
+  published_at TEXT,
+  created_by INTEGER,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (school_id) REFERENCES schools(id),
+  FOREIGN KEY (created_by) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  school_id INTEGER NOT NULL,
+  sender_id INTEGER NOT NULL,
+  recipient_id INTEGER,
+  subject TEXT,
+  body TEXT,
+  status TEXT DEFAULT 'Sent',
+  sent_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (school_id) REFERENCES schools(id),
+  FOREIGN KEY (sender_id) REFERENCES users(id),
+  FOREIGN KEY (recipient_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS timetables (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  school_id INTEGER NOT NULL,
+  grade TEXT NOT NULL,
+  class TEXT,
+  day_of_week TEXT NOT NULL,
+  start_time TEXT NOT NULL,
+  end_time TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  teacher_id INTEGER,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (school_id) REFERENCES schools(id),
+  FOREIGN KEY (teacher_id) REFERENCES users(id)
 );

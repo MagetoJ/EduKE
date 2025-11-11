@@ -1,88 +1,134 @@
-import React, { createContext, useContext, useState, useEffect } from 'react'
+import React, { createContext, useContext, useEffect, useState } from 'react';
 
-export type UserRole = 'super_admin' | 'admin' | 'teacher' | 'parent' | 'student'
+export type UserRole = 'super_admin' | 'admin' | 'teacher' | 'parent' | 'student';
 
 export interface User {
-  id: string
-  email: string
-  name: string
-  role: UserRole
-  schoolId?: string
-  schoolName?: string
-  schoolCurriculum?: string
-  avatar?: string
+  id: string;
+  email: string;
+  name: string;
+  role: UserRole;
+  schoolId?: string;
+  schoolName?: string;
+  schoolCurriculum?: string;
+  avatar?: string;
 }
 
 interface AuthContextType {
-  user: User | null
-  setUser: (user: User | null) => void
-  login: (email: string, password: string) => Promise<void>
-  logout: () => void
-  isLoading: boolean
+  user: User | null;
+  setUser: (user: User | null) => void;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => void;
+  isLoading: boolean;
+  token: string | null;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export function useApi() {
+  const { token, logout } = useAuth();
+
+  const authenticatedFetch = async (url: string, options: RequestInit = {}) => {
+    const headers = new Headers(options.headers || {});
+    if (token) {
+      headers.append('Authorization', `Bearer ${token}`);
+    }
+    if (!headers.has('Content-Type') && options.body) {
+      headers.append('Content-Type', 'application/json');
+    }
+
+    const response = await fetch(url, { ...options, headers });
+
+    if (response.status === 401 || response.status === 403) {
+      logout();
+      throw new Error('Authentication failed');
+    }
+
+    return response;
+  };
+
+  return authenticatedFetch;
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'));
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    setIsLoading(false)
-  }, [])
+    const checkUser = async () => {
+      const storedToken = localStorage.getItem('token');
+      if (storedToken) {
+        setToken(storedToken);
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          setUser(JSON.parse(storedUser));
+        }
+      }
+      setIsLoading(false);
+    };
+    checkUser();
+  }, []);
 
-  const login = async (email: string) => {
-    setIsLoading(true)
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
-    // Mock different user roles based on email
-    let role: UserRole = 'admin'
-    let schoolData: { schoolId?: string, schoolName?: string, schoolCurriculum?: string } = {
-      schoolId: 'school-1',
-      schoolName: 'Demo High School',
-      schoolCurriculum: 'cbc'
-    }
-    
-    if (email.includes('super')) {
-      role = 'super_admin'
-      schoolData = {}
-    } else if (email.includes('teacher')) {
-      role = 'teacher'
-    } else if (email.includes('parent')) {
-      role = 'parent'
-    } else if (email.includes('student')) {
-      role = 'student'
-    }
+  const login = async (email: string, password: string) => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
 
-    setUser({
-      id: '1',
-      email,
-      name: email.split('@')[0].replace('.', ' ').replace(/\b\w/g, l => l.toUpperCase()),
-      role,
-      schoolId: schoolData.schoolId,
-      schoolName: schoolData.schoolName,
-      schoolCurriculum: schoolData.schoolCurriculum,
-      avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face'
-    })
-    setIsLoading(false)
-  }
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Login failed');
+      }
+
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      setToken(data.token);
+      setUser(data.user);
+    } catch (error) {
+      console.error('Login error:', error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const logout = () => {
-    setUser(null)
-  }
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setToken(null);
+    setUser(null);
+  };
+
+  const value = {
+    user,
+    setUser: (newUser: User | null) => {
+      if (newUser) {
+        localStorage.setItem('user', JSON.stringify(newUser));
+      } else {
+        localStorage.removeItem('user');
+      }
+      setUser(newUser);
+    },
+    login,
+    logout,
+    isLoading,
+    token
+  };
 
   return (
-    <AuthContext.Provider value={{ user, setUser, login, logout, isLoading }}>
-      {children}
+    <AuthContext.Provider value={value}>
+      {!isLoading && children}
     </AuthContext.Provider>
-  )
+  );
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext)
+  const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider')
+    throw new Error('useAuth must be used within an AuthProvider');
   }
-  return context
+  return context;
 }
