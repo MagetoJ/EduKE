@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   PieChart,
   Pie,
@@ -20,51 +20,101 @@ import {
 } from "../ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { Badge } from "../ui/badge";
+import { useApi } from "../../contexts/AuthContext";
 
-const STATUS_COLORS = {
-  Active: '#10B981',
-  Trial: '#F59E0B',
-  Expired: '#EF4444',
+const STATUS_COLORS: Record<string, string> = {
+  Active: "#10B981",
+  Trial: "#F59E0B",
+  Expired: "#EF4444",
 };
 
-const PLAN_COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
+const PLAN_COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8"];
+
+interface SubscriptionPlan {
+  plan: string;
+  status: string;
+  subscribers: number;
+  revenue: number;
+}
+
+interface StatusAggregate {
+  status: string;
+  subscribers: number;
+  revenue: number;
+}
 
 export function SubscriptionStatusChart() {
-  const [subscriptionData, setSubscriptionData] = useState([]);
+  const apiFetch = useApi();
+  const [subscriptionData, setSubscriptionData] = useState<SubscriptionPlan[]>([]);
 
   useEffect(() => {
+    let isMounted = true;
+
     const fetchData = async () => {
       try {
-        const response = await fetch('/api/reports/subscription-status');
-        if (response.ok) {
-          const data = await response.json();
+        const response = await apiFetch("/api/reports/subscription-status");
+        if (!response.ok) {
+          return;
+        }
+        const data: SubscriptionPlan[] = await response.json();
+        if (isMounted) {
           setSubscriptionData(data);
         }
       } catch (error) {
-        console.error('Error fetching subscription data:', error);
+        console.error("Error fetching subscription data:", error);
       }
     };
 
     fetchData();
-  }, []);
 
-  const statusData = subscriptionData.reduce((acc: Array<{ status: string; subscribers: number; revenue: number }>, item: { status: string; subscribers: number; revenue: number }) => {
-    const existing = acc.find(s => s.status === item.status);
-    if (existing) {
-      existing.subscribers += item.subscribers;
-      existing.revenue += item.revenue;
-    } else {
-      acc.push({
-        status: item.status,
-        subscribers: item.subscribers,
-        revenue: item.revenue,
-      });
-    }
-    return acc;
-  }, []);
+    return () => {
+      isMounted = false;
+    };
+  }, [apiFetch]);
 
-  const totalRevenue = subscriptionData.reduce((sum: number, item: { revenue: number }) => sum + item.revenue, 0);
-  const totalSubscribers = subscriptionData.reduce((sum: number, item: { subscribers: number }) => sum + item.subscribers, 0);
+  const statusData = useMemo<StatusAggregate[]>(() => {
+    const aggregated: Record<string, StatusAggregate> = {};
+    subscriptionData.forEach((item) => {
+      const existing = aggregated[item.status];
+      if (existing) {
+        existing.subscribers += item.subscribers;
+        existing.revenue += item.revenue;
+      } else {
+        aggregated[item.status] = {
+          status: item.status,
+          subscribers: item.subscribers,
+          revenue: item.revenue,
+        };
+      }
+    });
+    return Object.values(aggregated);
+  }, [subscriptionData]);
+
+  const totalRevenue = useMemo(
+    () => subscriptionData.reduce((sum, item) => sum + item.revenue, 0),
+    [subscriptionData]
+  );
+
+  const totalSubscribers = useMemo(
+    () => subscriptionData.reduce((sum, item) => sum + item.subscribers, 0),
+    [subscriptionData]
+  );
+
+  const activeSubscribers = useMemo(
+    () =>
+      subscriptionData
+        .filter((item) => item.status === "Active")
+        .reduce((sum, item) => sum + item.subscribers, 0),
+    [subscriptionData]
+  );
+
+  const trialSubscribers = useMemo(
+    () =>
+      subscriptionData
+        .filter((item) => item.status === "Trial")
+        .reduce((sum, item) => sum + item.subscribers, 0),
+    [subscriptionData]
+  );
 
   return (
     <Card>
@@ -92,9 +142,9 @@ export function SubscriptionStatusChart() {
                       borderColor: "hsl(var(--border))",
                       borderRadius: "var(--radius)",
                     }}
-                    formatter={(value, name) => [
-                      name === 'revenue' ? `$${value}` : value,
-                      name === 'revenue' ? 'Revenue' : 'Subscribers'
+                    formatter={(value: number, name: string) => [
+                      name === "revenue" ? `$${value}` : value,
+                      name === "revenue" ? "Revenue" : "Subscribers",
                     ]}
                   />
                   <Legend />
@@ -105,8 +155,11 @@ export function SubscriptionStatusChart() {
                     radius={[4, 4, 0, 0]}
                     name="Subscribers"
                   >
-                    {subscriptionData.map((entry: any, index: number) => (
-                      <Cell key={`subscribers-${index}`} fill={PLAN_COLORS[index % PLAN_COLORS.length]} />
+                    {subscriptionData.map((_, index) => (
+                      <Cell
+                        key={`subscribers-${index}`}
+                        fill={PLAN_COLORS[index % PLAN_COLORS.length]}
+                      />
                     ))}
                   </Bar>
                   <Bar
@@ -122,9 +175,9 @@ export function SubscriptionStatusChart() {
           </TabsContent>
 
           <TabsContent value="status" className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               <div>
-                <h4 className="text-sm font-medium mb-4">Subscriber Distribution</h4>
+                <h4 className="mb-4 text-sm font-medium">Subscriber Distribution</h4>
                 <div style={{ width: "100%", height: 250 }}>
                   <ResponsiveContainer>
                     <PieChart>
@@ -138,8 +191,11 @@ export function SubscriptionStatusChart() {
                         fill="#8884d8"
                         dataKey="subscribers"
                       >
-                        {statusData.map((entry: { status: string; subscribers: number; revenue: number }, index: number) => (
-                          <Cell key={`cell-${index}`} fill={STATUS_COLORS[entry.status as keyof typeof STATUS_COLORS] || '#8884d8'} />
+                        {statusData.map((entry, index) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={STATUS_COLORS[entry.status] || "#8884d8"}
+                          />
                         ))}
                       </Pie>
                       <Tooltip />
@@ -149,14 +205,14 @@ export function SubscriptionStatusChart() {
               </div>
 
               <div>
-                <h4 className="text-sm font-medium mb-4">Revenue by Status</h4>
+                <h4 className="mb-4 text-sm font-medium">Revenue by Status</h4>
                 <div style={{ width: "100%", height: 250 }}>
                   <ResponsiveContainer>
                     <BarChart data={statusData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                       <XAxis dataKey="status" />
                       <YAxis />
                       <Tooltip
-                        formatter={(value) => [`$${value}`, 'Revenue']}
+                        formatter={(value: number) => [`$${value}`, "Revenue"]}
                         contentStyle={{
                           backgroundColor: "hsl(var(--background))",
                           borderColor: "hsl(var(--border))",
@@ -164,8 +220,11 @@ export function SubscriptionStatusChart() {
                         }}
                       />
                       <Bar dataKey="revenue" radius={[4, 4, 0, 0]}>
-                        {statusData.map((entry: { status: string; subscribers: number; revenue: number }, index: number) => (
-                          <Cell key={`revenue-${index}`} fill={STATUS_COLORS[entry.status as keyof typeof STATUS_COLORS] || '#8884d8'} />
+                        {statusData.map((entry, index) => (
+                          <Cell
+                            key={`revenue-${index}`}
+                            fill={STATUS_COLORS[entry.status] || "#8884d8"}
+                          />
                         ))}
                       </Bar>
                     </BarChart>
@@ -176,47 +235,45 @@ export function SubscriptionStatusChart() {
           </TabsContent>
         </Tabs>
 
-        <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="text-center p-4 bg-muted rounded-lg">
+        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-4">
+          <div className="rounded-lg bg-muted p-4 text-center">
             <div className="text-2xl font-bold text-primary">${totalRevenue.toLocaleString()}</div>
             <div className="text-sm text-muted-foreground">Total Revenue</div>
           </div>
-          <div className="text-center p-4 bg-muted rounded-lg">
+          <div className="rounded-lg bg-muted p-4 text-center">
             <div className="text-2xl font-bold text-green-600">{totalSubscribers}</div>
             <div className="text-sm text-muted-foreground">Total Subscribers</div>
           </div>
-          <div className="text-center p-4 bg-muted rounded-lg">
-            <div className="text-2xl font-bold text-blue-600">
-              {subscriptionData.filter((item: { status: string; subscribers: number }) => item.status === 'Active').reduce((sum: number, item: { subscribers: number }) => sum + item.subscribers, 0)}
-            </div>
+          <div className="rounded-lg bg-muted p-4 text-center">
+            <div className="text-2xl font-bold text-blue-600">{activeSubscribers}</div>
             <div className="text-sm text-muted-foreground">Active Subscribers</div>
           </div>
-          <div className="text-center p-4 bg-muted rounded-lg">
-            <div className="text-2xl font-bold text-orange-600">
-              {subscriptionData.filter((item: { status: string; subscribers: number }) => item.status === 'Trial').reduce((sum: number, item: { subscribers: number }) => sum + item.subscribers, 0)}
-            </div>
+          <div className="rounded-lg bg-muted p-4 text-center">
+            <div className="text-2xl font-bold text-orange-600">{trialSubscribers}</div>
             <div className="text-sm text-muted-foreground">Trial Users</div>
           </div>
         </div>
 
-        <div className="mt-4">
-          <h4 className="text-sm font-medium mb-2">Plan Details</h4>
-          <div className="grid gap-2">
-            {subscriptionData.map((plan: { plan: string; status: string; subscribers: number; revenue: number }) => (
-              <div key={plan.plan} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <span className="font-medium">{plan.plan}</span>
-                  <Badge variant={plan.status === 'Active' ? 'default' : plan.status === 'Trial' ? 'secondary' : 'destructive'}>
-                    {plan.status}
-                  </Badge>
-                </div>
-                <div className="text-right">
-                  <div className="text-sm font-medium">{plan.subscribers} subscribers</div>
-                  <div className="text-sm text-muted-foreground">${plan.revenue.toLocaleString()} revenue</div>
-                </div>
-              </div>
-            ))}
-          </div>
+        <div className="mt-6 grid gap-4 md:grid-cols-3">
+          {subscriptionData.map((plan, index) => (
+            <Card key={plan.plan} className="border-dashed border-muted-foreground/20">
+              <CardHeader className="pb-2">
+                <Badge
+                  style={{
+                    backgroundColor: PLAN_COLORS[index % PLAN_COLORS.length],
+                    color: "white",
+                  }}
+                >
+                  {plan.plan}
+                </Badge>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="text-2xl font-bold">{plan.subscribers} subscribers</div>
+                <div className="text-sm text-muted-foreground">${plan.revenue.toLocaleString()} revenue</div>
+                <div className="text-sm font-medium text-muted-foreground">Status: {plan.status}</div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </CardContent>
     </Card>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   LineChart,
   Line,
@@ -18,25 +18,50 @@ import {
   CardDescription,
 } from "../ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
+import { useApi } from "../../contexts/AuthContext";
+
+interface SchoolAnalyticsRecord {
+  month: string;
+  totalSchools: number;
+  activeSchools: number;
+  newSchools: number;
+}
 
 export function SchoolAnalyticsChart() {
-  const [schoolData, setSchoolData] = useState([]);
+  const apiFetch = useApi();
+  const [schoolData, setSchoolData] = useState<SchoolAnalyticsRecord[]>([]);
 
   useEffect(() => {
+    let isMounted = true;
+
     const fetchData = async () => {
       try {
-        const response = await fetch('/api/reports/school-analytics');
-        if (response.ok) {
-          const data = await response.json();
+        const response = await apiFetch("/api/reports/school-analytics");
+        if (!response.ok) {
+          return;
+        }
+        const data: SchoolAnalyticsRecord[] = await response.json();
+        if (isMounted) {
           setSchoolData(data);
         }
       } catch (error) {
-        console.error('Error fetching school analytics:', error);
+        console.error("Error fetching school analytics:", error);
       }
     };
 
     fetchData();
-  }, []);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [apiFetch]);
+
+  const latestEntry = useMemo(() => {
+    if (schoolData.length === 0) {
+      return null;
+    }
+    return schoolData[schoolData.length - 1];
+  }, [schoolData]);
 
   return (
     <Card>
@@ -119,22 +144,22 @@ export function SchoolAnalyticsChart() {
           </TabsContent>
         </Tabs>
 
-        <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="text-center p-4 bg-muted rounded-lg">
+        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="rounded-lg bg-muted p-4 text-center">
             <div className="text-2xl font-bold text-primary">
-              {schoolData.length > 0 ? schoolData[schoolData.length - 1].totalSchools : 0}
+              {latestEntry ? latestEntry.totalSchools : 0}
             </div>
             <div className="text-sm text-muted-foreground">Total Schools</div>
           </div>
-          <div className="text-center p-4 bg-muted rounded-lg">
+          <div className="rounded-lg bg-muted p-4 text-center">
             <div className="text-2xl font-bold text-green-600">
-              {schoolData.length > 0 ? schoolData[schoolData.length - 1].activeSchools : 0}
+              {latestEntry ? latestEntry.activeSchools : 0}
             </div>
             <div className="text-sm text-muted-foreground">Active Schools</div>
           </div>
-          <div className="text-center p-4 bg-muted rounded-lg">
+          <div className="rounded-lg bg-muted p-4 text-center">
             <div className="text-2xl font-bold text-blue-600">
-              {schoolData.length > 0 ? schoolData[schoolData.length - 1].newSchools : 0}
+              {latestEntry ? latestEntry.newSchools : 0}
             </div>
             <div className="text-sm text-muted-foreground">New This Month</div>
           </div>

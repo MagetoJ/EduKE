@@ -1,21 +1,36 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { AlertTriangle, Calendar, User } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
-import { useAuth } from '../contexts/AuthContext'
+import { useApi, useAuth } from '../contexts/AuthContext'
+
+type DisciplineRecord = {
+  id: number
+  student_id: number
+  teacher_id: number | null
+  type: string
+  severity: string
+  description: string
+  date: string
+  status: string
+}
 
 export default function StudentDashboard() {
   const { user } = useAuth()
-  const [disciplineData, setDisciplineData] = useState([])
+  const apiFetch = useApi()
+  const [disciplineData, setDisciplineData] = useState<DisciplineRecord[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const fetchDisciplineData = async () => {
+      if (!user) {
+        setLoading(false)
+        return
+      }
+
       try {
-        // In a real app, we'd get the student ID from the logged-in user
-        // For now, using a mock student ID
-        const response = await fetch('/api/discipline/1') // Mock student ID
+        const response = await apiFetch(`/api/discipline/${user.id}`)
         if (response.ok) {
-          const data = await response.json()
+          const data: DisciplineRecord[] = await response.json()
           setDisciplineData(data)
         }
       } catch (error) {
@@ -26,36 +41,38 @@ export default function StudentDashboard() {
     }
 
     fetchDisciplineData()
-  }, [])
+  }, [apiFetch, user])
 
-  // Mock data as fallback
-  const mockDisciplineData = [
+  const mockDisciplineData: DisciplineRecord[] = [
     {
       id: 1,
+      student_id: 1,
+      teacher_id: null,
       date: '2024-01-15',
       type: 'Late to class',
       severity: 'Minor',
       status: 'Resolved',
-      description: 'Arrived 10 minutes late to Mathematics class',
-      teacher: 'Mr. Johnson'
+      description: 'Arrived 10 minutes late to Mathematics class'
     },
     {
       id: 2,
+      student_id: 1,
+      teacher_id: null,
       date: '2024-01-20',
       type: 'Incomplete homework',
       severity: 'Minor',
       status: 'Warning issued',
-      description: 'Failed to submit Science homework assignment',
-      teacher: 'Ms. Davis'
+      description: 'Failed to submit Science homework assignment'
     },
     {
       id: 3,
+      student_id: 1,
+      teacher_id: null,
       date: '2024-02-05',
       type: 'Disruptive behavior',
       severity: 'Moderate',
       status: 'Parent notified',
-      description: 'Talking during class time',
-      teacher: 'Mr. Wilson'
+      description: 'Talking during class time'
     }
   ]
 
@@ -63,27 +80,36 @@ export default function StudentDashboard() {
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
-      case 'Minor': return 'bg-yellow-100 text-yellow-800'
-      case 'Moderate': return 'bg-orange-100 text-orange-800'
-      case 'Major': return 'bg-red-100 text-red-800'
-      default: return 'bg-gray-100 text-gray-800'
+      case 'Minor':
+        return 'bg-yellow-100 text-yellow-800'
+      case 'Moderate':
+        return 'bg-orange-100 text-orange-800'
+      case 'Major':
+        return 'bg-red-100 text-red-800'
+      default:
+        return 'bg-gray-100 text-gray-800'
     }
   }
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'Resolved': return 'bg-green-100 text-green-800'
-      case 'Warning issued': return 'bg-blue-100 text-blue-800'
-      case 'Parent notified': return 'bg-purple-100 text-purple-800'
-      case 'Pending': return 'bg-gray-100 text-gray-800'
-      default: return 'bg-gray-100 text-gray-800'
+      case 'Resolved':
+        return 'bg-green-100 text-green-800'
+      case 'Warning issued':
+        return 'bg-blue-100 text-blue-800'
+      case 'Parent notified':
+        return 'bg-purple-100 text-purple-800'
+      case 'Pending':
+        return 'bg-gray-100 text-gray-800'
+      default:
+        return 'bg-gray-100 text-gray-800'
     }
   }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"></div>
       </div>
     )
   }
@@ -116,7 +142,7 @@ export default function StudentDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {displayData.filter(record => record.status === 'Resolved').length}
+              {displayData.filter((record) => record.status === 'Resolved').length}
             </div>
             <p className="text-xs text-muted-foreground">Cases resolved</p>
           </CardContent>
@@ -129,7 +155,7 @@ export default function StudentDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-orange-600">
-              {displayData.filter(record => record.status !== 'Resolved').length}
+              {displayData.filter((record) => record.status !== 'Resolved').length}
             </div>
             <p className="text-xs text-muted-foreground">Pending cases</p>
           </CardContent>
@@ -143,23 +169,21 @@ export default function StudentDashboard() {
         <CardContent>
           <div className="space-y-4">
             {displayData.map((record) => (
-              <div key={record.id} className="border rounded-lg p-4 space-y-3">
+              <div key={record.id} className="space-y-3 rounded-lg border p-4">
                 <div className="flex items-start justify-between">
                   <div className="flex items-start space-x-3">
-                    <AlertTriangle className="h-5 w-5 text-orange-500 mt-0.5" />
+                    <AlertTriangle className="mt-0.5 h-5 w-5 text-orange-500" />
                     <div>
                       <h4 className="font-medium">{record.type}</h4>
                       <p className="text-sm text-gray-600">{record.description}</p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Reported by: Teacher • {record.date}
-                      </p>
+                      <p className="mt-1 text-xs text-gray-500">Reported on {record.date}</p>
                     </div>
                   </div>
                   <div className="flex flex-col items-end space-y-2">
-                    <div className={`px-2 py-1 rounded-full text-xs font-medium ${getSeverityColor(record.severity)}`}>
+                    <div className={`rounded-full px-2 py-1 text-xs font-medium ${getSeverityColor(record.severity)}`}>
                       {record.severity}
                     </div>
-                    <div className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(record.status)}`}>
+                    <div className={`rounded-full px-2 py-1 text-xs font-medium ${getStatusColor(record.status)}`}>
                       {record.status}
                     </div>
                   </div>

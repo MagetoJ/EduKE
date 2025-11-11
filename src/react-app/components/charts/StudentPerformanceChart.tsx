@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   BarChart,
   Bar,
@@ -17,38 +17,60 @@ import {
   CardDescription,
 } from "../ui/card";
 import { Button } from "../ui/button";
+import { useApi } from "../../contexts/AuthContext";
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D'];
+const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8", "#82CA9D"];
+
+interface PerformanceRecord {
+  subject: string;
+  average: number;
+  students: number;
+}
 
 export function StudentPerformanceChart() {
-  const [performanceData, setPerformanceData] = useState([]);
+  const apiFetch = useApi();
+  const [performanceData, setPerformanceData] = useState<PerformanceRecord[]>([]);
   const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
 
   useEffect(() => {
+    let isMounted = true;
+
     const fetchData = async () => {
       try {
-        const response = await fetch('/api/reports/performance-summary');
-        if (response.ok) {
-          const data = await response.json();
+        const response = await apiFetch("/api/reports/performance-summary");
+        if (!response.ok) {
+          return;
+        }
+        const data: PerformanceRecord[] = await response.json();
+        if (isMounted) {
           setPerformanceData(data);
         }
       } catch (error) {
-        console.error('Error fetching performance data:', error);
+        console.error("Error fetching performance data:", error);
       }
     };
 
     fetchData();
-  }, []);
 
-  const handleBarClick = (data: { subject?: string }) => {
-    if (data && data.subject) {
-      setSelectedSubject(selectedSubject === data.subject ? null : data.subject);
+    return () => {
+      isMounted = false;
+    };
+  }, [apiFetch]);
+
+  const filteredData = useMemo(() => {
+    if (!selectedSubject) {
+      return performanceData;
     }
-  };
+    return performanceData.filter((item) => item.subject === selectedSubject);
+  }, [performanceData, selectedSubject]);
 
-  const filteredData = selectedSubject
-    ? performanceData.filter((item: { subject: string }) => item.subject === selectedSubject)
-    : performanceData;
+  const handleSubjectToggle = (subject: string | null) => {
+    if (!subject) {
+      setSelectedSubject(null);
+      return;
+    }
+    setSelectedSubject((current) => (current === subject ? null : subject));
+  };
 
   return (
     <Card>
@@ -64,16 +86,16 @@ export function StudentPerformanceChart() {
           <Button
             variant={selectedSubject === null ? "default" : "outline"}
             size="sm"
-            onClick={() => setSelectedSubject(null)}
+            onClick={() => handleSubjectToggle(null)}
           >
             All Subjects
           </Button>
-          {performanceData.map((item: any) => (
+          {performanceData.map((item) => (
             <Button
               key={item.subject}
               variant={selectedSubject === item.subject ? "default" : "outline"}
               size="sm"
-              onClick={() => setSelectedSubject(item.subject)}
+              onClick={() => handleSubjectToggle(item.subject)}
             >
               {item.subject}
             </Button>
@@ -82,11 +104,7 @@ export function StudentPerformanceChart() {
 
         <div style={{ width: "100%", height: 300 }}>
           <ResponsiveContainer>
-            <BarChart
-              data={filteredData}
-              margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
-              onClick={handleBarClick}
-            >
+            <BarChart data={filteredData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
               <XAxis dataKey="subject" />
               <YAxis yAxisId="left" orientation="left" domain={[0, 100]} />
               <YAxis yAxisId="right" orientation="right" />
@@ -97,9 +115,9 @@ export function StudentPerformanceChart() {
                   borderColor: "hsl(var(--border))",
                   borderRadius: "var(--radius)",
                 }}
-                formatter={(value, name) => [
-                  name === 'average' ? `${value}%` : value,
-                  name === 'average' ? 'Average Grade' : 'Students'
+                formatter={(value: number, name: string) => [
+                  name === "average" ? `${value}%` : value,
+                  name === "average" ? "Average Grade" : "Students",
                 ]}
               />
               <Legend />
@@ -109,12 +127,18 @@ export function StudentPerformanceChart() {
                 fill="hsl(var(--primary))"
                 radius={[4, 4, 0, 0]}
                 name="Average Grade (%)"
+                onClick={(_, index) => {
+                  const entry = filteredData[index];
+                  if (entry) {
+                    handleSubjectToggle(entry.subject);
+                  }
+                }}
               >
-                {filteredData.map((entry: { subject: string; average: number; students: number }, index: number) => (
+                {filteredData.map((_, index) => (
                   <Cell
                     key={`cell-${index}`}
                     fill={COLORS[index % COLORS.length]}
-                    style={{ cursor: 'pointer' }}
+                    style={{ cursor: "pointer" }}
                   />
                 ))}
               </Bar>
@@ -130,11 +154,11 @@ export function StudentPerformanceChart() {
         </div>
 
         {selectedSubject && (
-          <div className="mt-4 p-4 bg-muted rounded-lg">
+          <div className="mt-4 rounded-lg bg-muted p-4">
             <h4 className="font-semibold">{selectedSubject} Details</h4>
             {performanceData
-              .filter((item: { subject: string; average: number; students: number }) => item.subject === selectedSubject)
-              .map((item: { subject: string; average: number; students: number }) => (
+              .filter((item) => item.subject === selectedSubject)
+              .map((item) => (
                 <div key={item.subject} className="mt-2">
                   <p>Average Grade: {item.average}%</p>
                   <p>Number of Students: {item.students}</p>

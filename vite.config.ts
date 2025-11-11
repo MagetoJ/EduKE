@@ -1,18 +1,15 @@
 import { defineConfig } from "vite";
+import path from "node:path";
 import react from "@vitejs/plugin-react";
-// 1. Remove the cloudflare plugin
-// import { cloudflare } from "@cloudflare/vite-plugin"; 
 import { mochaPlugins } from "@getmocha/vite-plugins";
 
 export default defineConfig({
-  // 2. Remove cloudflare() from here
-  plugins: [...mochaPlugins(process.env as any), react()], 
+  plugins: [...mochaPlugins(process.env), react()],
   server: {
     allowedHosts: true,
-    // 3. Add this proxy configuration
     proxy: {
-      '/api': {
-        target: 'http://localhost:3000', // Port from server/index.js
+      "/api": {
+        target: "http://localhost:3001",
         changeOrigin: true,
       },
     },

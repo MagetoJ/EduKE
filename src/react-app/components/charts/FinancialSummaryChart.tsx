@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   BarChart,
   Bar,
@@ -17,38 +17,60 @@ import {
   CardDescription,
 } from "../ui/card";
 import { Button } from "../ui/button";
+import { useApi } from "../../contexts/AuthContext";
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D'];
+const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8", "#82CA9D"];
+
+interface FinancialRecord {
+  name: string;
+  Collected: number;
+  Pending: number;
+}
 
 export function FinancialSummaryChart() {
-  const [financialData, setFinancialData] = useState([]);
+  const apiFetch = useApi();
+  const [financialData, setFinancialData] = useState<FinancialRecord[]>([]);
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
 
   useEffect(() => {
+    let isMounted = true;
+
     const fetchData = async () => {
       try {
-        const response = await fetch('/api/reports/financial-summary');
-        if (response.ok) {
-          const data = await response.json();
+        const response = await apiFetch("/api/reports/financial-summary");
+        if (!response.ok) {
+          return;
+        }
+        const data: FinancialRecord[] = await response.json();
+        if (isMounted) {
           setFinancialData(data);
         }
       } catch (error) {
-        console.error('Error fetching financial data:', error);
+        console.error("Error fetching financial data:", error);
       }
     };
 
     fetchData();
-  }, []);
 
-  const handleBarClick = (data: { name?: string }) => {
-    if (data && data.name) {
-      setSelectedMonth(selectedMonth === data.name ? null : data.name);
+    return () => {
+      isMounted = false;
+    };
+  }, [apiFetch]);
+
+  const filteredData = useMemo(() => {
+    if (!selectedMonth) {
+      return financialData;
     }
-  };
+    return financialData.filter((item) => item.name === selectedMonth);
+  }, [financialData, selectedMonth]);
 
-  const filteredData = selectedMonth
-    ? financialData.filter((item: { name: string }) => item.name === selectedMonth)
-    : financialData;
+  const handleMonthToggle = (month: string | null) => {
+    if (!month) {
+      setSelectedMonth(null);
+      return;
+    }
+    setSelectedMonth((current) => (current === month ? null : month));
+  };
 
   return (
     <Card>
@@ -56,7 +78,7 @@ export function FinancialSummaryChart() {
         <CardTitle>Financial Status</CardTitle>
         <CardDescription>
           Collected vs. Pending Fees
-          {selectedMonth ? ` - ${selectedMonth}` : ' (Last 6 Months)'}
+          {selectedMonth ? ` - ${selectedMonth}` : " (Last 6 Months)"}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -64,16 +86,16 @@ export function FinancialSummaryChart() {
           <Button
             variant={selectedMonth === null ? "default" : "outline"}
             size="sm"
-            onClick={() => setSelectedMonth(null)}
+            onClick={() => handleMonthToggle(null)}
           >
             All Months
           </Button>
-          {financialData.map((item: any) => (
+          {financialData.map((item) => (
             <Button
               key={item.name}
               variant={selectedMonth === item.name ? "default" : "outline"}
               size="sm"
-              onClick={() => setSelectedMonth(item.name)}
+              onClick={() => handleMonthToggle(item.name)}
             >
               {item.name}
             </Button>
@@ -82,11 +104,7 @@ export function FinancialSummaryChart() {
 
         <div style={{ width: "100%", height: 300 }}>
           <ResponsiveContainer>
-            <BarChart
-              data={filteredData}
-              margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
-              onClick={handleBarClick}
-            >
+            <BarChart data={filteredData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
               <XAxis dataKey="name" />
               <YAxis unit="$" />
               <Tooltip
@@ -96,7 +114,7 @@ export function FinancialSummaryChart() {
                   borderColor: "hsl(var(--border))",
                   borderRadius: "var(--radius)",
                 }}
-                formatter={(value) => [`$${value}`, '']}
+                formatter={(value: number) => [`$${value}`, ""]}
               />
               <Legend />
               <Bar
@@ -104,12 +122,18 @@ export function FinancialSummaryChart() {
                 fill="hsl(var(--primary))"
                 radius={[4, 4, 0, 0]}
                 name="Collected ($)"
+                onClick={(_, index) => {
+                  const entry = filteredData[index];
+                  if (entry) {
+                    handleMonthToggle(entry.name);
+                  }
+                }}
               >
-                {filteredData.map((entry: { name: string; Collected: number; Pending: number }, index: number) => (
+                {filteredData.map((_, index) => (
                   <Cell
                     key={`collected-${index}`}
                     fill={COLORS[index % COLORS.length]}
-                    style={{ cursor: 'pointer' }}
+                    style={{ cursor: "pointer" }}
                   />
                 ))}
               </Bar>
@@ -124,11 +148,11 @@ export function FinancialSummaryChart() {
         </div>
 
         {selectedMonth && (
-          <div className="mt-4 p-4 bg-muted rounded-lg">
+          <div className="mt-4 rounded-lg bg-muted p-4">
             <h4 className="font-semibold">{selectedMonth} Financial Details</h4>
             {financialData
-              .filter((item: { name: string; Collected: number; Pending: number }) => item.name === selectedMonth)
-              .map((item: { name: string; Collected: number; Pending: number }) => (
+              .filter((item) => item.name === selectedMonth)
+              .map((item) => (
                 <div key={item.name} className="mt-2 grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm text-muted-foreground">Collected</p>

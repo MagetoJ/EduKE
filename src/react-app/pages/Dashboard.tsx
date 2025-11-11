@@ -1,20 +1,152 @@
-import { useAuth } from '../contexts/AuthContext'
+import { useEffect, useMemo, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
-import { 
-  Users, 
-  BookOpen, 
-  DollarSign, 
-  Calendar,
+import {
+  Users,
+  BookOpen,
+  DollarSign,
   TrendingUp,
   School,
   UserCheck,
   MessageSquare
 } from 'lucide-react'
+import { useApi, useAuth } from '../contexts/AuthContext'
+
+type SchoolRecord = {
+  id: string
+  name: string
+  students: number
+  staff: number
+  revenue: string
+  status: string
+}
+
+type StudentRecord = {
+  id: string
+  name: string
+  grade: string | null
+  class: string | null
+  status: string | null
+  fees: string | null
+}
+
+type StaffRecord = {
+  id: string
+  name: string
+  role: string
+  status: string | null
+}
+
+const parseCurrency = (value: string | null | undefined) => {
+  if (!value) {
+    return 0
+  }
+  const numeric = Number(value.replace(/[^0-9.-]/g, ''))
+  return Number.isNaN(numeric) ? 0 : numeric
+}
 
 export default function Dashboard() {
   const { user } = useAuth()
+  const apiFetch = useApi()
+  const [schools, setSchools] = useState<SchoolRecord[]>([])
+  const [students, setStudents] = useState<StudentRecord[]>([])
+  const [staff, setStaff] = useState<StaffRecord[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const loadData = async () => {
+      if (!user) {
+        return
+      }
+      setIsLoading(true)
+      setError(null)
+      setSchools([])
+      setStudents([])
+      setStaff([])
+
+      try {
+        if (user.role === 'super_admin') {
+          const response = await apiFetch('/api/schools')
+          if (!response.ok) {
+            throw new Error('Failed to load schools')
+          }
+          const data: SchoolRecord[] = await response.json()
+          setSchools(data)
+        } else if (user.role === 'admin') {
+          const [studentsResponse, staffResponse] = await Promise.all([
+            apiFetch('/api/students'),
+            apiFetch('/api/staff')
+          ])
+          if (!studentsResponse.ok) {
+            throw new Error('Failed to load students')
+          }
+          if (!staffResponse.ok) {
+            throw new Error('Failed to load staff')
+          }
+          const studentData: StudentRecord[] = await studentsResponse.json()
+          const staffData: StaffRecord[] = await staffResponse.json()
+          setStudents(studentData)
+          setStaff(staffData)
+        } else if (user.role === 'teacher') {
+          const studentsResponse = await apiFetch('/api/students')
+          if (!studentsResponse.ok) {
+            throw new Error('Failed to load students')
+          }
+          const studentData: StudentRecord[] = await studentsResponse.json()
+          setStudents(studentData)
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to load dashboard data'
+        setError(message)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadData()
+  }, [apiFetch, user])
 
   if (!user) return null
+
+  if (isLoading) {
+    return <p className="text-sm text-muted-foreground">Loading dashboard...</p>
+  }
+
+  if (error) {
+    return <p className="text-sm font-medium text-red-500">{error}</p>
+  }
+
+  const superAdminMetrics = useMemo(() => {
+    const totalSchools = schools.length
+    const totalStudents = schools.reduce((sum, school) => sum + Number(school.students || 0), 0)
+    const totalStaff = schools.reduce((sum, school) => sum + Number(school.staff || 0), 0)
+    const totalRevenue = schools.reduce((sum, school) => sum + parseCurrency(school.revenue), 0)
+    return { totalSchools, totalStudents, totalStaff, totalRevenue }
+  }, [schools])
+
+  const adminMetrics = useMemo(() => {
+    const totalStudents = students.length
+    const activeStudents = students.filter((student) => student.status === 'Active').length
+    const uniqueCourses = new Set(students.map((student) => student.grade ?? '')).size
+    const totalStaff = staff.length
+    const outstandingFees = students.reduce((sum, student) => sum + parseCurrency(student.fees), 0)
+    return { totalStudents, activeStudents, uniqueCourses, totalStaff, outstandingFees }
+  }, [students, staff])
+
+  const teacherMetrics = useMemo(() => {
+    const classSet = new Set<string>()
+    students.forEach((student) => {
+      if (student.class) {
+        classSet.add(student.class)
+      }
+    })
+    return {
+      studentCount: students.length,
+      classCount: classSet.size,
+      pendingGrades: 0,
+      unreadMessages: 0
+    }
+  }, [students])
 
   const renderSuperAdminDashboard = () => (
     <div>
@@ -23,15 +155,15 @@ export default function Dashboard() {
         <p className="text-gray-600">Manage all schools across the network</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Schools</CardTitle>
             <School className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">24</div>
-            <p className="text-xs text-muted-foreground">+2 from last month</p>
+            <div className="text-2xl font-bold">{superAdminMetrics.totalSchools}</div>
+            <p className="text-xs text-muted-foreground">Active institutions</p>
           </CardContent>
         </Card>
 
@@ -41,19 +173,19 @@ export default function Dashboard() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">12,847</div>
-            <p className="text-xs text-muted-foreground">+573 from last month</p>
+            <div className="text-2xl font-bold">{superAdminMetrics.totalStudents.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">Across all schools</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+            <CardTitle className="text-sm font-medium">Annual Revenue</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">$2.4M</div>
-            <p className="text-xs text-muted-foreground">+12% from last month</p>
+            <div className="text-2xl font-bold">${superAdminMetrics.totalRevenue.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">Collected to date</p>
           </CardContent>
         </Card>
 
@@ -63,8 +195,8 @@ export default function Dashboard() {
             <UserCheck className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">1,247</div>
-            <p className="text-xs text-muted-foreground">+23 from last month</p>
+            <div className="text-2xl font-bold">{superAdminMetrics.totalStaff}</div>
+            <p className="text-xs text-muted-foreground">Educators and administrators</p>
           </CardContent>
         </Card>
       </div>
@@ -78,37 +210,37 @@ export default function Dashboard() {
         <p className="text-gray-600">Overview of {user.schoolName}</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Students</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">847</div>
-            <p className="text-xs text-muted-foreground">+23 from last month</p>
+            <div className="text-2xl font-bold">{adminMetrics.totalStudents}</div>
+            <p className="text-xs text-muted-foreground">{adminMetrics.activeStudents} active</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Courses</CardTitle>
+            <CardTitle className="text-sm font-medium">Programs Offered</CardTitle>
             <BookOpen className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">42</div>
-            <p className="text-xs text-muted-foreground">+3 from last term</p>
+            <div className="text-2xl font-bold">{adminMetrics.uniqueCourses}</div>
+            <p className="text-xs text-muted-foreground">Distinct grade levels</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Fee Collection</CardTitle>
+            <CardTitle className="text-sm font-medium">Outstanding Fees</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">$124K</div>
-            <p className="text-xs text-muted-foreground">87% collected</p>
+            <div className="text-2xl font-bold">${adminMetrics.outstandingFees.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">Across all students</p>
           </CardContent>
         </Card>
 
@@ -118,71 +250,8 @@ export default function Dashboard() {
             <UserCheck className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">67</div>
-            <p className="text-xs text-muted-foreground">5 on leave today</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Activities</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center space-x-4">
-              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-              <div className="flex-1">
-                <p className="text-sm font-medium">New student enrollment</p>
-                <p className="text-xs text-gray-500">Sarah Johnson joined Grade 10A</p>
-              </div>
-              <span className="text-xs text-gray-500">2 hours ago</span>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <div className="flex-1">
-                <p className="text-sm font-medium">Fee payment received</p>
-                <p className="text-xs text-gray-500">$1,200 from Michael Brown</p>
-              </div>
-              <span className="text-xs text-gray-500">4 hours ago</span>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-              <div className="flex-1">
-                <p className="text-sm font-medium">Staff leave request</p>
-                <p className="text-xs text-gray-500">John Smith requested 3 days leave</p>
-              </div>
-              <span className="text-xs text-gray-500">6 hours ago</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Upcoming Events</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center space-x-4">
-              <Calendar className="w-4 h-4 text-blue-500" />
-              <div className="flex-1">
-                <p className="text-sm font-medium">Parent-Teacher Conference</p>
-                <p className="text-xs text-gray-500">Tomorrow at 2:00 PM</p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <Calendar className="w-4 h-4 text-green-500" />
-              <div className="flex-1">
-                <p className="text-sm font-medium">Grade 12 Final Exams</p>
-                <p className="text-xs text-gray-500">Starting March 15th</p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <Calendar className="w-4 h-4 text-purple-500" />
-              <div className="flex-1">
-                <p className="text-sm font-medium">Annual Sports Day</p>
-                <p className="text-xs text-gray-500">March 25th</p>
-              </div>
-            </div>
+            <div className="text-2xl font-bold">{adminMetrics.totalStaff}</div>
+            <p className="text-xs text-muted-foreground">Active faculty</p>
           </CardContent>
         </Card>
       </div>
@@ -196,26 +265,26 @@ export default function Dashboard() {
         <p className="text-gray-600">Welcome back, {user.name}</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">My Classes</CardTitle>
+            <CardTitle className="text-sm font-medium">My Students</CardTitle>
             <BookOpen className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">6</div>
-            <p className="text-xs text-muted-foreground">3 classes today</p>
+            <div className="text-2xl font-bold">{teacherMetrics.studentCount}</div>
+            <p className="text-xs text-muted-foreground">Across assigned classes</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Students</CardTitle>
+            <CardTitle className="text-sm font-medium">Classes Taught</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">156</div>
-            <p className="text-xs text-muted-foreground">Across all classes</p>
+            <div className="text-2xl font-bold">{teacherMetrics.classCount}</div>
+            <p className="text-xs text-muted-foreground">Unique sections</p>
           </CardContent>
         </Card>
 
@@ -225,8 +294,8 @@ export default function Dashboard() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">23</div>
-            <p className="text-xs text-muted-foreground">Assignments to grade</p>
+            <div className="text-2xl font-bold">{teacherMetrics.pendingGrades}</div>
+            <p className="text-xs text-muted-foreground">Awaiting submission</p>
           </CardContent>
         </Card>
 
@@ -236,8 +305,8 @@ export default function Dashboard() {
             <MessageSquare className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">7</div>
-            <p className="text-xs text-muted-foreground">Unread messages</p>
+            <div className="text-2xl font-bold">{teacherMetrics.unreadMessages}</div>
+            <p className="text-xs text-muted-foreground">Unread notifications</p>
           </CardContent>
         </Card>
       </div>
@@ -248,42 +317,7 @@ export default function Dashboard() {
     <div>
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Parent Dashboard</h1>
-        <p className="text-gray-600">Track your child's progress</p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Child's Attendance</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">94%</div>
-            <p className="text-xs text-muted-foreground">This semester</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Outstanding Fees</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">$450</div>
-            <p className="text-xs text-muted-foreground">Due March 15th</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Upcoming Events</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">3</div>
-            <p className="text-xs text-muted-foreground">This week</p>
-          </CardContent>
-        </Card>
+        <p className="text-gray-600">Use the Parent view to access detailed student information.</p>
       </div>
     </div>
   )
@@ -293,52 +327,6 @@ export default function Dashboard() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Student Dashboard</h1>
         <p className="text-gray-600">Welcome back, {user.name}</p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">My Courses</CardTitle>
-            <BookOpen className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">8</div>
-            <p className="text-xs text-muted-foreground">This semester</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Assignments Due</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">4</div>
-            <p className="text-xs text-muted-foreground">This week</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Average Grade</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">B+</div>
-            <p className="text-xs text-muted-foreground">85.4% average</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Attendance</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">96%</div>
-            <p className="text-xs text-muted-foreground">This semester</p>
-          </CardContent>
-        </Card>
       </div>
     </div>
   )
