@@ -2,6 +2,12 @@ const fs = require('fs');
 const path = require('path');
 const sqlite3 = require('sqlite3').verbose();
 const bcrypt = require('bcrypt');
+const { nowIso } = require('./utils');
+const {
+  SALT_ROUNDS,
+  SUPER_ADMIN_USERNAME,
+  SUPER_ADMIN_PASSWORD
+} = require('./config');
 
 const DB_PATH = path.join(__dirname, 'eduke.db');
 const db = new sqlite3.Database(DB_PATH, (err) => {
@@ -101,27 +107,36 @@ const ensureSchemaUpgrades = async () => {
   }
 };
 
-// Add the ensureSuperAdmin function
 const ensureSuperAdmin = async () => {
   try {
-    // Check if super admin already exists
+    const normalizedEmail = SUPER_ADMIN_USERNAME.trim().toLowerCase();
     const existingAdmin = await dbGet(
-      'SELECT * FROM users WHERE email = ?',
-      ['jabez@edu.ke']
+      'SELECT id FROM users WHERE email = ? LIMIT 1',
+      [normalizedEmail]
     );
 
+    const passwordHash = await bcrypt.hash(SUPER_ADMIN_PASSWORD, SALT_ROUNDS);
+
     if (existingAdmin) {
-      console.log('Super admin account already exists.');
+      await dbRun(
+        `UPDATE users
+           SET name = ?,
+               password_hash = ?,
+               role = ?,
+               is_verified = 1,
+               email_verified_at = COALESCE(email_verified_at, CURRENT_TIMESTAMP),
+               status = COALESCE(status, 'Active')
+         WHERE id = ?`,
+        ['Super Admin', passwordHash, 'super_admin', existingAdmin.id]
+      );
       return;
     }
 
-    // Create super admin if it doesn't exist
-    const hashedPassword = await bcrypt.hash('admin123', 12);
     await dbRun(
-      'INSERT INTO users (name, email, password, is_admin) VALUES (?, ?, ?, ?)',
-      ['Super Admin', 'jabez@edu.ke', hashedPassword, 1]
+      `INSERT INTO users (name, email, password_hash, role, is_verified, email_verified_at, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      ['Super Admin', normalizedEmail, passwordHash, 'super_admin', 1, nowIso(), 'Active']
     );
-    console.log('Super admin account created successfully.');
   } catch (error) {
     console.error('Failed to ensure super admin account', error);
   }
