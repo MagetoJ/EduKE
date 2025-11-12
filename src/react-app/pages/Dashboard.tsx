@@ -106,16 +106,6 @@ export default function Dashboard() {
     loadData()
   }, [apiFetch, user])
 
-  if (!user) return null
-
-  if (isLoading) {
-    return <p className="text-sm text-muted-foreground">Loading dashboard...</p>
-  }
-
-  if (error) {
-    return <p className="text-sm font-medium text-red-500">{error}</p>
-  }
-
   const superAdminMetrics = useMemo(() => {
     const totalSchools = schools.length
     const totalStudents = schools.reduce((sum, school) => sum + Number(school.students || 0), 0)
@@ -147,6 +137,16 @@ export default function Dashboard() {
       unreadMessages: 0
     }
   }, [students])
+
+  if (!user) return null
+
+  if (isLoading) {
+    return <p className="text-sm text-muted-foreground">Loading dashboard...</p>
+  }
+
+  if (error) {
+    return <p className="text-sm font-medium text-red-500">{error}</p>
+  }
 
   const renderSuperAdminDashboard = () => (
     <div>

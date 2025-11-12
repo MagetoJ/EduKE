@@ -10,13 +10,20 @@ import { Textarea } from '../components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Badge } from '../components/ui/badge'
 
+type TeacherStudent = {
+  id: string
+  name: string
+  grade: string
+  class: string
+}
+
 export default function TeacherDashboard() {
   const [isDisciplineDialogOpen, setIsDisciplineDialogOpen] = useState(false)
   const [isPerformanceDialogOpen, setIsPerformanceDialogOpen] = useState(false)
-  const [selectedStudent, setSelectedStudent] = useState<any>(null)
+  const [selectedStudent, setSelectedStudent] = useState<TeacherStudent | null>(null)
 
   // Mock data
-  const mockStudents = [
+  const mockStudents: TeacherStudent[] = [
     { id: '1', name: 'John Smith', grade: 'Grade 10', class: '10A' },
     { id: '2', name: 'Sarah Johnson', grade: 'Grade 10', class: '10A' },
     { id: '3', name: 'Michael Brown', grade: 'Grade 10', class: '10A' },

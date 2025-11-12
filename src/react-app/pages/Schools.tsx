@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Plus, Search, School, Users, DollarSign, MapPin, Phone, Mail, MoreVertical } from 'lucide-react'
 import { Link } from 'react-router'
 import { Button } from '../components/ui/button'
@@ -47,7 +47,7 @@ export default function Schools() {
     role: 'admin'
   })
 
-  const loadSchools = async () => {
+  const loadSchools = useCallback(async () => {
     setIsLoading(true)
     setError(null)
     try {
@@ -63,11 +63,11 @@ export default function Schools() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [apiFetch])
 
   useEffect(() => {
     loadSchools()
-  }, [])
+  }, [loadSchools])
 
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = event.target

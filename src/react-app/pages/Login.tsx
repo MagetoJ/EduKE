@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { Link } from 'react-router'
 import { GraduationCap } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -9,13 +10,20 @@ import { useAuth } from '../contexts/AuthContext'
 export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [rememberMe, setRememberMe] = useState(true)
+  const [error, setError] = useState('')
   
   const { login, isLoading } = useAuth()
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    setError('')
     if (email && password) {
-      await login(email, password)
+      try {
+        await login(email, password, rememberMe)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unable to sign in')
+      }
     }
   }
 
@@ -27,9 +35,9 @@ export default function Login() {
       'parent': 'parent@eduke.com',
       'student': 'student@eduke.com'
     }
+    setError('')
     setEmail(demoCredentials[demoRole as keyof typeof demoCredentials])
     setPassword('demo123')
-    
   }
 
   return (
@@ -73,6 +81,25 @@ export default function Login() {
                   required
                 />
               </div>
+
+              <div className="flex items-center justify-between text-sm">
+                <label className="flex items-center space-x-2 text-gray-600">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                  />
+                  <span>Remember me</span>
+                </label>
+                <Link to="/forgot-password" className="font-medium text-blue-600 hover:text-blue-800">
+                  Forgot password?
+                </Link>
+              </div>
+
+              {error && (
+                <p className="text-sm font-medium text-red-500">{error}</p>
+              )}
 
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? 'Signing In...' : 'Sign In'}
