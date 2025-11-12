@@ -248,35 +248,38 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 export function useApi() {
   const { token, logout, refreshSession } = useAuth();
 
-  const authenticatedFetch = async (url: string, options: RequestInit = {}) => {
-    const executeRequest = async (overrideToken?: string) => {
-      const headers = new Headers(options.headers || {});
-      const authToken = overrideToken ?? token;
-      if (authToken) {
-        headers.set('Authorization', `Bearer ${authToken}`);
-      }
-      if (!headers.has('Content-Type') && options.body) {
-        headers.set('Content-Type', 'application/json');
-      }
-      return fetch(url, { ...options, headers });
-    };
+  const authenticatedFetch = useCallback(
+    async (url: string, options: RequestInit = {}) => {
+      const executeRequest = async (overrideToken?: string) => {
+        const headers = new Headers(options.headers || {});
+        const authToken = overrideToken ?? token;
+        if (authToken) {
+          headers.set('Authorization', `Bearer ${authToken}`);
+        }
+        if (!headers.has('Content-Type') && options.body) {
+          headers.set('Content-Type', 'application/json');
+        }
+        return fetch(url, { ...options, headers });
+      };
 
-    let response = await executeRequest();
+      let response = await executeRequest();
 
-    if (response.status === 401 || response.status === 403) {
-      const newToken = await refreshSession();
-      if (!newToken) {
-        throw new Error('Authentication failed');
-      }
-      response = await executeRequest(newToken);
       if (response.status === 401 || response.status === 403) {
-        logout();
-        throw new Error('Authentication failed');
+        const newToken = await refreshSession();
+        if (!newToken) {
+          throw new Error('Authentication failed');
+        }
+        response = await executeRequest(newToken);
+        if (response.status === 401 || response.status === 403) {
+          logout();
+          throw new Error('Authentication failed');
+        }
       }
-    }
 
-    return response;
-  };
+      return response;
+    },
+    [logout, refreshSession, token]
+  );
 
   return authenticatedFetch;
 }

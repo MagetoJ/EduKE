@@ -68,18 +68,22 @@ router.get('/staff', async (req, res) => {
   }
   try {
     const staff = await dbAll(
-      `SELECT id, name, email, phone, role, department, class_assigned, subject, created_at as joinDate 
+      `SELECT id, name, email, phone, role, department, class_assigned, subject, status, created_at as joinDate 
        FROM users 
        WHERE school_id = ? AND role NOT IN ('student', 'parent', 'super_admin')`,
       [req.user.schoolId]
     );
 
     const formattedStaff = staff.map((s) => ({
-      ...s,
       id: s.id.toString(),
-      status: 'Active',
+      name: s.name,
+      email: s.email,
+      phone: s.phone,
+      role: s.role,
+      department: s.department,
+      status: s.status ?? 'Active',
       avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
-      joinDate: s.joinDate.split('T')[0],
+      joinDate: s.joinDate ? s.joinDate.split('T')[0].split(' ')[0] : null,
       classAssigned: s.class_assigned,
       subject: s.subject
     }));
@@ -102,7 +106,7 @@ router.put('/staff/:id', async (req, res) => {
       `UPDATE users 
        SET name = ?, email = ?, phone = ?, role = ?, department = ?, class_assigned = ?, subject = ?, status = ?
        WHERE id = ? AND school_id = ?`,
-      [name, email, phone, role, department, classAssigned, subject, status, id, req.user.schoolId]
+      [name, email, phone, role, department ?? null, classAssigned ?? null, subject ?? null, status ?? 'Active', id, req.user.schoolId]
     );
 
     if (result.changes === 0) {
@@ -196,14 +200,18 @@ router.put('/students/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { name, email, phone, grade, class: classSection, status } = req.body;
-    const [first_name, ...lastNameParts] = name.split(' ');
+    const normalizedName = typeof name === 'string' ? name.trim() : '';
+    if (!normalizedName) {
+      return res.status(400).json({ error: 'Name is required.' });
+    }
+    const [first_name, ...lastNameParts] = normalizedName.split(/\s+/);
     const last_name = lastNameParts.join(' ');
 
     const result = await dbRun(
       `UPDATE students 
        SET first_name = ?, last_name = ?, email = ?, phone = ?, grade = ?, class_section = ?, status = ?
        WHERE id = ? AND school_id = ?`,
-      [first_name, last_name, email, phone, grade, classSection, status, id, req.user.schoolId]
+      [first_name, last_name || null, email, phone, grade, classSection ?? null, status ?? 'Active', id, req.user.schoolId]
     );
 
     if (result.changes === 0) {

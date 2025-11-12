@@ -17,7 +17,7 @@ const REFRESH_TOKEN_BYTES = Number.isFinite(Number(process.env.REFRESH_TOKEN_BYT
   ? Number(process.env.REFRESH_TOKEN_BYTES)
   : 48;
 const SUPER_ADMIN_USERNAME = process.env.SUPER_ADMIN_USERNAME || 'jabez@edu.ke';
-const SUPER_ADMIN_PASSWORD = process.env.SUPER_ADMIN_PASSWORD || 'lokeshen-password';
+const SUPER_ADMIN_PASSWORD = process.env.SUPER_ADMIN_PASSWORD || 'lokeshen@58';
 const PROMOTION_THRESHOLD = 60;
 const DEFAULT_CURRICULUM = 'cbc';
 const CURRICULUM_LEVELS = {
