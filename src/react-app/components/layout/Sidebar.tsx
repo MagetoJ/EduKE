@@ -12,7 +12,8 @@ import {
   BarChart3,
   UserCheck,
   FileText,
-  Clock
+  Clock,
+  CreditCard
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { useAuth } from '../../contexts/AuthContext'
@@ -35,6 +36,12 @@ const navItems: NavItem[] = [
     title: 'Schools',
     href: '/dashboard/schools',
     icon: School,
+    roles: ['super_admin']
+  },
+  {
+    title: 'Subscriptions',
+    href: '/dashboard/subscriptions',
+    icon: CreditCard,
     roles: ['super_admin']
   },
   {

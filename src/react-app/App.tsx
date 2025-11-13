@@ -28,6 +28,7 @@ import Leave from "./pages/Leave";
 import ParentDashboard from "./pages/ParentDashboard";
 import StudentDashboard from "./pages/StudentDashboard";
 import TeacherDashboard from "./pages/TeacherDashboard";
+import Subscriptions from "./pages/Subscriptions";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -92,6 +93,7 @@ function AppRoutes() {
         <Route path="fees" element={<Fees />} />
         <Route path="timetable" element={<Timetable />} />
         <Route path="leave" element={<Leave />} />
+        <Route path="subscriptions" element={<Subscriptions />} />
         <Route path="settings" element={<Settings />} />
         <Route path="parent" element={<ParentDashboard />} />
         <Route path="student-dashboard" element={<StudentDashboard />} />

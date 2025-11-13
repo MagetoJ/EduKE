@@ -8,7 +8,43 @@ CREATE TABLE IF NOT EXISTS schools (
   email TEXT,
   principal TEXT,
   logo TEXT,
+  primary_color TEXT,
+  accent_color TEXT,
+  grade_levels TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS subscription_plans (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  slug TEXT NOT NULL UNIQUE,
+  description TEXT,
+  student_limit INTEGER,
+  staff_limit INTEGER,
+  trial_duration_days INTEGER,
+  include_parent_portal INTEGER NOT NULL DEFAULT 0,
+  include_student_portal INTEGER NOT NULL DEFAULT 0,
+  include_messaging INTEGER NOT NULL DEFAULT 0,
+  include_finance INTEGER NOT NULL DEFAULT 0,
+  include_advanced_reports INTEGER NOT NULL DEFAULT 0,
+  include_leave_management INTEGER NOT NULL DEFAULT 0,
+  include_ai_analytics INTEGER NOT NULL DEFAULT 0,
+  is_trial INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS subscriptions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  school_id INTEGER NOT NULL UNIQUE,
+  plan_id INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  start_date TEXT NOT NULL,
+  end_date TEXT,
+  trial_ends_at TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (school_id) REFERENCES schools(id),
+  FOREIGN KEY (plan_id) REFERENCES subscription_plans(id)
 );
 
 CREATE TABLE IF NOT EXISTS users (
@@ -143,6 +179,19 @@ CREATE TABLE IF NOT EXISTS assignments (
   total_marks INTEGER,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (course_id) REFERENCES courses(id)
+);
+
+CREATE TABLE IF NOT EXISTS course_resources (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  course_id INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  resource_type TEXT,
+  url TEXT,
+  created_by INTEGER,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (course_id) REFERENCES courses(id),
+  FOREIGN KEY (created_by) REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS submissions (

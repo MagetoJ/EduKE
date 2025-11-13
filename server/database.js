@@ -102,8 +102,197 @@ const ensureSchemaUpgrades = async () => {
     if (!studentColumnNames.includes('class_section')) {
       await dbRun('ALTER TABLE students ADD COLUMN class_section TEXT');
     }
+
+    const schoolColumns = await dbAll('PRAGMA table_info(schools)');
+    const schoolColumnNames = schoolColumns.map((column) => column.name);
+    if (!schoolColumnNames.includes('primary_color')) {
+      await dbRun('ALTER TABLE schools ADD COLUMN primary_color TEXT');
+    }
+    if (!schoolColumnNames.includes('accent_color')) {
+      await dbRun('ALTER TABLE schools ADD COLUMN accent_color TEXT');
+    }
+    if (!schoolColumnNames.includes('grade_levels')) {
+      await dbRun('ALTER TABLE schools ADD COLUMN grade_levels TEXT');
+    }
+
+    const subscriptionsTable = await dbAll(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'subscriptions'"
+    );
+    if (subscriptionsTable.length > 0) {
+      await dbRun(
+        `CREATE TRIGGER IF NOT EXISTS subscriptions_updated_at
+           AFTER UPDATE ON subscriptions
+           BEGIN
+             UPDATE subscriptions SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+           END`
+      );
+    }
   } catch (schemaUpgradeError) {
     console.error('Failed to ensure schema upgrades', schemaUpgradeError);
+  }
+};
+
+const ensureSubscriptionPlans = async () => {
+  const plans = [
+    {
+      name: 'Trial',
+      slug: 'trial',
+      description: 'Full access for evaluation with limited usage.',
+      student_limit: 25,
+      staff_limit: 5,
+      trial_duration_days: 14,
+      include_parent_portal: 1,
+      include_student_portal: 1,
+      include_messaging: 1,
+      include_finance: 1,
+      include_advanced_reports: 1,
+      include_leave_management: 1,
+      include_ai_analytics: 1,
+      is_trial: 1
+    },
+    {
+      name: 'Basic',
+      slug: 'basic',
+      description: 'Core academic operations for smaller schools.',
+      student_limit: 100,
+      staff_limit: 10,
+      trial_duration_days: null,
+      include_parent_portal: 0,
+      include_student_portal: 0,
+      include_messaging: 0,
+      include_finance: 0,
+      include_advanced_reports: 0,
+      include_leave_management: 0,
+      include_ai_analytics: 0,
+      is_trial: 0
+    },
+    {
+      name: 'Pro',
+      slug: 'pro',
+      description: 'Comprehensive operations, finance, and engagement suite.',
+      student_limit: null,
+      staff_limit: null,
+      trial_duration_days: null,
+      include_parent_portal: 1,
+      include_student_portal: 1,
+      include_messaging: 1,
+      include_finance: 1,
+      include_advanced_reports: 1,
+      include_leave_management: 1,
+      include_ai_analytics: 1,
+      is_trial: 0
+    }
+  ];
+
+  for (const plan of plans) {
+    const existingPlan = await dbGet('SELECT id FROM subscription_plans WHERE slug = ?', [plan.slug]);
+    if (existingPlan) {
+      await dbRun(
+        `UPDATE subscription_plans
+           SET name = ?,
+               description = ?,
+               student_limit = ?,
+               staff_limit = ?,
+               trial_duration_days = ?,
+               include_parent_portal = ?,
+               include_student_portal = ?,
+               include_messaging = ?,
+               include_finance = ?,
+               include_advanced_reports = ?,
+               include_leave_management = ?,
+               include_ai_analytics = ?,
+               is_trial = ?
+         WHERE id = ?`,
+        [
+          plan.name,
+          plan.description,
+          plan.student_limit,
+          plan.staff_limit,
+          plan.trial_duration_days,
+          plan.include_parent_portal,
+          plan.include_student_portal,
+          plan.include_messaging,
+          plan.include_finance,
+          plan.include_advanced_reports,
+          plan.include_leave_management,
+          plan.include_ai_analytics,
+          plan.is_trial,
+          existingPlan.id
+        ]
+      );
+      continue;
+    }
+
+    await dbRun(
+      `INSERT INTO subscription_plans (
+         name,
+         slug,
+         description,
+         student_limit,
+         staff_limit,
+         trial_duration_days,
+         include_parent_portal,
+         include_student_portal,
+         include_messaging,
+         include_finance,
+         include_advanced_reports,
+         include_leave_management,
+         include_ai_analytics,
+         is_trial
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        plan.name,
+        plan.slug,
+        plan.description,
+        plan.student_limit,
+        plan.staff_limit,
+        plan.trial_duration_days,
+        plan.include_parent_portal,
+        plan.include_student_portal,
+        plan.include_messaging,
+        plan.include_finance,
+        plan.include_advanced_reports,
+        plan.include_leave_management,
+        plan.include_ai_analytics,
+        plan.is_trial
+      ]
+    );
+  }
+};
+
+const ensureSchoolSubscriptions = async () => {
+  try {
+    const trialPlan = await dbGet(
+      'SELECT id, trial_duration_days FROM subscription_plans WHERE slug = ? LIMIT 1',
+      ['trial']
+    );
+    if (!trialPlan) {
+      return;
+    }
+
+    const schoolsWithoutSubscriptions = await dbAll(
+      `SELECT s.id, s.created_at
+         FROM schools s
+         LEFT JOIN subscriptions sub ON sub.school_id = s.id
+         WHERE sub.id IS NULL`
+    );
+
+    for (const school of schoolsWithoutSubscriptions) {
+      const startDate = nowIso();
+      const trialEnds =
+        typeof trialPlan.trial_duration_days === 'number'
+          ? new Date(Date.now() + trialPlan.trial_duration_days * 86400000).toISOString()
+          : null;
+
+      await dbRun(
+        `INSERT INTO subscriptions (school_id, plan_id, status, start_date, trial_ends_at)
+         VALUES (?, ?, ?, ?, ?)`
+          ,
+        [school.id, trialPlan.id, 'active', startDate, trialEnds]
+      );
+    }
+  } catch (subscriptionError) {
+    console.error('Failed to ensure school subscriptions', subscriptionError);
   }
 };
 
@@ -142,9 +331,17 @@ const ensureSuperAdmin = async () => {
   }
 };
 
-// Run schema upgrades and ensure super admin
-ensureSchemaUpgrades();
-ensureSuperAdmin();
+// Run schema upgrades and ensure baseline data
+const initializeDatabase = async () => {
+  await ensureSchemaUpgrades();
+  await ensureSubscriptionPlans();
+  await ensureSuperAdmin();
+  await ensureSchoolSubscriptions();
+};
+
+initializeDatabase().catch((error) => {
+  console.error('Database initialization error', error);
+});
 
 module.exports = {
   db,

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Plus, Search, Edit, AlertTriangle, BookOpen, Users } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Textarea } from '../components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Badge } from '../components/ui/badge'
+import { useApi } from '../contexts/AuthContext'
 
 type TeacherStudent = {
   id: string
@@ -17,7 +18,25 @@ type TeacherStudent = {
   class: string
 }
 
+type AttendanceStudent = {
+  id: string
+  name: string
+  grade?: string | null
+  classSection?: string | null
+  status: string
+  recordedAt?: string | null
+}
+
 export default function TeacherDashboard() {
+  const api = useApi()
+  const defaultStatuses = useMemo(() => ['Present', 'Absent', 'Late', 'Excused', 'Not Marked'], [])
+  const [attendanceStatuses, setAttendanceStatuses] = useState(defaultStatuses)
+  const [attendanceRoster, setAttendanceRoster] = useState<AttendanceStudent[]>([])
+  const [attendanceDate, setAttendanceDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [attendanceLoading, setAttendanceLoading] = useState(false)
+  const [attendanceSaving, setAttendanceSaving] = useState(false)
+  const [attendanceError, setAttendanceError] = useState<string | null>(null)
+  const [attendanceDirty, setAttendanceDirty] = useState(false)
   const [isDisciplineDialogOpen, setIsDisciplineDialogOpen] = useState(false)
   const [isPerformanceDialogOpen, setIsPerformanceDialogOpen] = useState(false)
   const [selectedStudent, setSelectedStudent] = useState<TeacherStudent | null>(null)
@@ -52,6 +71,95 @@ export default function TeacherDashboard() {
       status: 'Warning issued'
     }
   ]
+
+  const parseRoster = useCallback((payload: unknown): AttendanceStudent[] => {
+    if (!Array.isArray(payload)) {
+      return []
+    }
+    return payload.map((item: any) => {
+      const firstName = typeof item.firstName === 'string' ? item.firstName : ''
+      const lastName = typeof item.lastName === 'string' ? item.lastName : ''
+      const fallbackName = `${firstName} ${lastName}`.trim()
+      const name = typeof item.name === 'string' && item.name.trim() !== '' ? item.name : fallbackName
+      const statusRaw = typeof item.status === 'string' && item.status.trim() !== '' ? item.status.trim() : 'Not Marked'
+      return {
+        id: String(item.id),
+        name: name || `Student ${String(item.id)}`,
+        grade: item.grade ?? '',
+        classSection: item.classSection ?? '',
+        status: statusRaw,
+        recordedAt: item.recordedAt ?? null
+      }
+    })
+  }, [])
+
+  const loadRoster = useCallback(async () => {
+    setAttendanceLoading(true)
+    setAttendanceError(null)
+    try {
+      const response = await api(`/api/teacher/attendance/roster?date=${encodeURIComponent(attendanceDate)}`)
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(data.error || 'Unable to load attendance roster')
+      }
+      const statuses = Array.isArray(data.statuses) && data.statuses.length > 0 ? data.statuses : defaultStatuses
+      setAttendanceStatuses(Array.from(new Set(statuses)))
+      setAttendanceRoster(parseRoster(data.students ?? []))
+      setAttendanceDirty(false)
+    } catch (error) {
+      setAttendanceRoster([])
+      setAttendanceError(error instanceof Error ? error.message : 'Failed to load attendance roster')
+    } finally {
+      setAttendanceLoading(false)
+    }
+  }, [api, attendanceDate, defaultStatuses, parseRoster])
+
+  const handleAttendanceStatusChange = useCallback((studentId: string, status: string) => {
+    setAttendanceRoster((current) => current.map((student) => (student.id === studentId ? { ...student, status } : student)))
+    setAttendanceDirty(true)
+  }, [])
+
+  const saveAttendance = useCallback(async () => {
+    const records = attendanceRoster
+      .map((student) => ({
+        studentId: Number(student.id),
+        status: student.status
+      }))
+      .filter((record) => Number.isFinite(record.studentId) && record.studentId > 0)
+
+    if (records.length === 0) {
+      setAttendanceError('No valid attendance records to submit.')
+      return
+    }
+
+    setAttendanceSaving(true)
+    setAttendanceError(null)
+    try {
+      const response = await api('/api/teacher/attendance', {
+        method: 'POST',
+        body: JSON.stringify({
+          date: attendanceDate,
+          records
+        })
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to save attendance')
+      }
+      const statuses = Array.isArray(data.statuses) && data.statuses.length > 0 ? data.statuses : defaultStatuses
+      setAttendanceStatuses(Array.from(new Set(statuses)))
+      setAttendanceRoster(parseRoster(data.students ?? []))
+      setAttendanceDirty(false)
+    } catch (error) {
+      setAttendanceError(error instanceof Error ? error.message : 'Failed to save attendance')
+    } finally {
+      setAttendanceSaving(false)
+    }
+  }, [api, attendanceDate, attendanceRoster, defaultStatuses, parseRoster])
+
+  useEffect(() => {
+    loadRoster()
+  }, [loadRoster])
 
   const [disciplineForm, setDisciplineForm] = useState({
     studentId: '',
@@ -183,12 +291,103 @@ export default function TeacherDashboard() {
         </Card>
       </div>
 
-      <Tabs defaultValue="students" className="space-y-4">
+      <Tabs defaultValue="attendance" className="space-y-4">
         <TabsList>
+          <TabsTrigger value="attendance">Attendance</TabsTrigger>
           <TabsTrigger value="students">My Students</TabsTrigger>
           <TabsTrigger value="discipline">Discipline</TabsTrigger>
           <TabsTrigger value="performance">Performance</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="attendance" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Daily Attendance</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-col gap-4 md:flex-row md:items-end">
+                <div className="space-y-2">
+                  <Label htmlFor="attendance-date">Date</Label>
+                  <Input
+                    id="attendance-date"
+                    type="date"
+                    value={attendanceDate}
+                    onChange={(event) => setAttendanceDate(event.target.value)}
+                    max={new Date().toISOString().split('T')[0]}
+                  />
+                </div>
+                <div className="flex gap-2 md:ml-auto">
+                  <Button variant="outline" onClick={loadRoster} disabled={attendanceLoading}>
+                    {attendanceLoading ? 'Refreshing...' : 'Refresh'}
+                  </Button>
+                  <Button
+                    onClick={saveAttendance}
+                    disabled={attendanceSaving || attendanceRoster.length === 0 || !attendanceDirty}
+                  >
+                    {attendanceSaving ? 'Saving...' : 'Save Attendance'}
+                  </Button>
+                </div>
+              </div>
+
+              {attendanceError ? (
+                <div className="rounded-md bg-red-50 p-4 text-sm text-red-700">{attendanceError}</div>
+              ) : null}
+
+              {attendanceLoading ? (
+                <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                  Loading attendance roster...
+                </div>
+              ) : (
+                <div className="rounded-md border">
+                  {attendanceRoster.length === 0 ? (
+                    <div className="p-6 text-center text-sm text-muted-foreground">
+                      No students found for this class.
+                    </div>
+                  ) : (
+                    <div className="divide-y">
+                      {attendanceRoster.map((student) => (
+                        <div
+                          key={student.id}
+                          className="flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between"
+                        >
+                          <div>
+                            <p className="font-medium">{student.name}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {student.grade || 'Grade not set'}
+                              {student.classSection ? ` • ${student.classSection}` : ''}
+                            </p>
+                          </div>
+                          <div className="flex flex-col items-start gap-2 md:flex-row md:items-center md:gap-4">
+                            <Select
+                              value={student.status}
+                              onValueChange={(value) => handleAttendanceStatusChange(student.id, value)}
+                            >
+                              <SelectTrigger className="w-40">
+                                <SelectValue placeholder="Select status" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {attendanceStatuses.map((status) => (
+                                  <SelectItem key={status} value={status}>
+                                    {status}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            {student.recordedAt ? (
+                              <span className="text-xs text-muted-foreground">
+                                Last updated {student.recordedAt}
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="students" className="space-y-4">
           <div className="flex items-center gap-4">

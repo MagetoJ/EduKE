@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Plus, Search, School, Users, DollarSign, MapPin, Phone, Mail, MoreVertical } from 'lucide-react'
+import { Plus, Search, School, Users, DollarSign, MapPin, Phone, Mail } from 'lucide-react'
 import { Link } from 'react-router'
-import { Button } from '../components/ui/button'
+import { Button, buttonVariants } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
 import { Label } from '../components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../components/ui/dropdown-menu'
 import { useApi } from '../contexts/AuthContext'
+import { cn } from '../lib/utils'
 
 type SchoolRecord = {
   id: string
@@ -23,6 +23,33 @@ type SchoolRecord = {
   status: string
 }
 
+type AdminFormState = {
+  name: string
+  email: string
+  phone: string
+  password: string
+  role: 'admin' | 'super_admin'
+}
+
+type AdminInputField = 'name' | 'email' | 'phone' | 'password'
+
+const createDefaultSchoolForm = () => ({
+  name: '',
+  address: '',
+  phone: '',
+  email: '',
+  principal: '',
+  logo: ''
+})
+
+const createDefaultAdminForm = (): AdminFormState => ({
+  name: '',
+  email: '',
+  phone: '',
+  password: '',
+  role: 'admin'
+})
+
 export default function Schools() {
   const apiFetch = useApi()
   const [schools, setSchools] = useState<SchoolRecord[]>([])
@@ -31,21 +58,10 @@ export default function Schools() {
   const [isAddSchoolDialogOpen, setIsAddSchoolDialogOpen] = useState(false)
   const [isManageSchoolDialogOpen, setIsManageSchoolDialogOpen] = useState(false)
   const [selectedSchool, setSelectedSchool] = useState<SchoolRecord | null>(null)
-  const [formData, setFormData] = useState({
-    name: '',
-    address: '',
-    phone: '',
-    email: '',
-    principal: '',
-    logo: ''
-  })
-  const [adminFormData, setAdminFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    password: '',
-    role: 'admin'
-  })
+  const [formData, setFormData] = useState(() => createDefaultSchoolForm())
+  const [adminFormData, setAdminFormData] = useState<AdminFormState>(() => createDefaultAdminForm())
+  const [adminError, setAdminError] = useState<string | null>(null)
+  const [isAdminSubmitting, setIsAdminSubmitting] = useState(false)
 
   const loadSchools = useCallback(async () => {
     setIsLoading(true)
@@ -76,19 +92,53 @@ export default function Schools() {
 
   const handleAdminInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = event.target
-    setAdminFormData((prev) => ({ ...prev, [id]: value }))
+    const key = id as AdminInputField
+    setAdminFormData((prev) => ({ ...prev, [key]: value }))
   }
 
   const handleManageClick = (school: SchoolRecord) => {
     setSelectedSchool(school)
+    setAdminFormData(createDefaultAdminForm())
+    setAdminError(null)
+    setIsAdminSubmitting(false)
     setIsManageSchoolDialogOpen(true)
+  }
+
+  const handleManageDialogOpenChange = (open: boolean) => {
+    setIsManageSchoolDialogOpen(open)
+    if (!open) {
+      setSelectedSchool(null)
+      setAdminFormData(createDefaultAdminForm())
+      setAdminError(null)
+      setIsAdminSubmitting(false)
+    }
   }
 
   const handleAdminSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
-    setAdminFormData({ name: '', email: '', phone: '', password: '', role: 'admin' })
-    setIsManageSchoolDialogOpen(false)
-    setSelectedSchool(null)
+    if (!selectedSchool) {
+      return
+    }
+
+    setIsAdminSubmitting(true)
+    setAdminError(null)
+    try {
+      const response = await apiFetch(`/api/schools/${selectedSchool.id}/admin`, {
+        method: 'POST',
+        body: JSON.stringify(adminFormData)
+      })
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.error || 'Failed to assign administrator')
+      }
+      await loadSchools()
+      handleManageDialogOpenChange(false)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Error assigning administrator'
+      setAdminError(message)
+    } finally {
+      setIsAdminSubmitting(false)
+    }
   }
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -105,13 +155,19 @@ export default function Schools() {
         throw new Error(data.error || 'Failed to add school')
       }
       await loadSchools()
-      setFormData({ name: '', address: '', phone: '', email: '', principal: '', logo: '' })
+      setFormData(createDefaultSchoolForm())
       setIsAddSchoolDialogOpen(false)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Error adding school'
       setError(message)
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleContactClick = (school: SchoolRecord) => {
+    if (school.email && typeof window !== 'undefined') {
+      window.location.href = `mailto:${school.email}`
     }
   }
 
@@ -183,39 +239,41 @@ export default function Schools() {
           </DialogContent>
         </Dialog>
 
-        <Dialog open={isManageSchoolDialogOpen} onOpenChange={setIsManageSchoolDialogOpen}>
+        <Dialog open={isManageSchoolDialogOpen} onOpenChange={handleManageDialogOpenChange}>
           <DialogContent className="max-w-2xl">
             <form onSubmit={handleAdminSubmit}>
               <DialogHeader>
                 <DialogTitle>Manage School Admin</DialogTitle>
-                <DialogDescription>Add or manage the administrator for {selectedSchool?.name}</DialogDescription>
+                <DialogDescription>
+                  {selectedSchool ? `Add or manage the administrator for ${selectedSchool.name}` : 'Select a school to manage administrators'}
+                </DialogDescription>
               </DialogHeader>
 
               <div className="grid gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="adminName">Admin Name</Label>
+                  <Label htmlFor="name">Admin Name</Label>
                   <Input id="name" placeholder="Enter admin name" value={adminFormData.name} onChange={handleAdminInputChange} required />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="adminEmail">Email Address</Label>
+                    <Label htmlFor="email">Email Address</Label>
                     <Input id="email" type="email" placeholder="admin@school.edu" value={adminFormData.email} onChange={handleAdminInputChange} required />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="adminPhone">Phone Number</Label>
+                    <Label htmlFor="phone">Phone Number</Label>
                     <Input id="phone" placeholder="+1-555-0000" value={adminFormData.phone} onChange={handleAdminInputChange} />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="adminPassword">Password</Label>
-                    <Input id="password" type="password" placeholder="Enter password" value={adminFormData.password} onChange={handleAdminInputChange} required />
+                    <Label htmlFor="password">Password</Label>
+                    <Input id="password" type="password" placeholder="Enter password" value={adminFormData.password} onChange={handleAdminInputChange} required autoComplete="new-password" />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="adminRole">Role</Label>
-                    <Select onValueChange={(value) => setAdminFormData((prev) => ({ ...prev, role: value }))}>
+                    <Label htmlFor="role">Role</Label>
+                    <Select value={adminFormData.role} onValueChange={(value) => setAdminFormData((prev) => ({ ...prev, role: value as AdminFormState['role'] }))}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select role" />
                       </SelectTrigger>
@@ -226,13 +284,17 @@ export default function Schools() {
                     </Select>
                   </div>
                 </div>
+
+                {adminError && <p className="text-sm font-medium text-red-500">{adminError}</p>}
               </div>
 
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsManageSchoolDialogOpen(false)}>
+                <Button type="button" variant="outline" onClick={() => handleManageDialogOpenChange(false)} disabled={isAdminSubmitting}>
                   Cancel
                 </Button>
-                <Button type="submit">Add Admin</Button>
+                <Button type="submit" disabled={isAdminSubmitting}>
+                  {isAdminSubmitting ? 'Saving...' : 'Save Admin'}
+                </Button>
               </DialogFooter>
             </form>
           </DialogContent>
@@ -269,9 +331,6 @@ export default function Schools() {
                     <span className="rounded-full px-3 py-1 text-sm font-medium text-green-800">
                       {school.status || 'Active'}
                     </span>
-                    <Button variant="ghost" size="icon">
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
                   </div>
                 </div>
               </CardHeader>
@@ -318,20 +377,16 @@ export default function Schools() {
                   </div>
                 </div>
 
-                <div className="flex justify-end space-x-2 pt-4">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm">
-                        Actions
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent>
-                      <DropdownMenuItem asChild>
-                        <Link to={`/dashboard/schools/${school.id}`}>View Details</Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleManageClick(school)}>Manage Admin</DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                <div className="flex flex-wrap justify-end gap-2 pt-4">
+                  <Link className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))} to={`/dashboard/schools/${school.id}`}>
+                    View Details
+                  </Link>
+                  <Button variant="outline" size="sm" onClick={() => handleManageClick(school)}>
+                    Manage Admin
+                  </Button>
+                  <Button variant="secondary" size="sm" disabled={!school.email} onClick={() => handleContactClick(school)}>
+                    Contact
+                  </Button>
                 </div>
               </CardContent>
             </Card>

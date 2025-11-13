@@ -1,9 +1,16 @@
-import { useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router'
-import { Users, Calendar, BookOpen, Clock, FileText } from 'lucide-react'
+import { Users, Calendar, BookOpen, Clock, FileText, Plus, ExternalLink, Trash2 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Badge } from '../components/ui/badge'
+import { Button } from '../components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
+import { Label } from '../components/ui/label'
+import { Input } from '../components/ui/input'
+import { Textarea } from '../components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
+import { useApi, useAuth } from '../contexts/AuthContext'
 
 const courseProfiles = [
   {
@@ -78,9 +85,200 @@ const courseProfiles = [
   }
 ]
 
+type CourseResource = {
+  id: string
+  title: string
+  description?: string | null
+  type?: string | null
+  url?: string | null
+  createdAt?: string | null
+  createdByName?: string | null
+}
+
+type ResourceFormState = {
+  title: string
+  type: string
+  url: string
+  description: string
+}
+
+const formatResourceDate = (value?: string | null) => {
+  if (!value) {
+    return null
+  }
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) {
+    return value
+  }
+  return parsed.toLocaleDateString()
+}
+
 export function CourseDetail() {
   const { id } = useParams()
   const course = useMemo(() => courseProfiles.find((item) => item.id === id) ?? courseProfiles[0], [id])
+  const { user } = useAuth()
+  const api = useApi()
+
+  const fallbackResources = useMemo<CourseResource[]>(
+    () =>
+      course.resources.map((resource) => ({
+        id: resource.id,
+        title: resource.label,
+        description: null,
+        type: resource.type,
+        url: null,
+        createdAt: null,
+        createdByName: null
+      })),
+    [course.resources]
+  )
+
+  const [resources, setResources] = useState<CourseResource[]>(fallbackResources)
+  const [resourcesLoading, setResourcesLoading] = useState(false)
+  const [resourceError, setResourceError] = useState<string | null>(null)
+  const [isResourceDialogOpen, setIsResourceDialogOpen] = useState(false)
+  const [resourceForm, setResourceForm] = useState<ResourceFormState>({
+    title: '',
+    type: 'Document',
+    url: '',
+    description: ''
+  })
+  const [resourceSaving, setResourceSaving] = useState(false)
+  const [resourceDeletingId, setResourceDeletingId] = useState<string | null>(null)
+
+  useEffect(() => {
+    setResources(fallbackResources)
+  }, [fallbackResources])
+
+  const parseResources = useCallback((payload: unknown): CourseResource[] => {
+    if (!Array.isArray(payload)) {
+      return []
+    }
+    return payload.map((item: any) => {
+      const title = typeof item.title === 'string' && item.title.trim() !== '' ? item.title.trim() : 'Untitled resource'
+      const description = typeof item.description === 'string' && item.description.trim() !== '' ? item.description.trim() : null
+      const typeValue =
+        typeof item.type === 'string' && item.type.trim() !== ''
+          ? item.type.trim()
+          : typeof item.resource_type === 'string' && item.resource_type.trim() !== ''
+            ? item.resource_type.trim()
+            : 'Document'
+      const urlValue = typeof item.url === 'string' && item.url.trim() !== '' ? item.url.trim() : null
+      const createdAtValue =
+        typeof item.createdAt === 'string'
+          ? item.createdAt
+          : typeof item.created_at === 'string'
+            ? item.created_at
+            : null
+      let createdByName: string | null = null
+      if (item.createdBy && typeof item.createdBy === 'object' && item.createdBy !== null && 'name' in item.createdBy) {
+        const nameValue = (item.createdBy as { name?: unknown }).name
+        createdByName = typeof nameValue === 'string' ? nameValue : null
+      } else if (typeof item.createdByName === 'string') {
+        createdByName = item.createdByName
+      }
+      return {
+        id: String(item.id),
+        title,
+        description,
+        type: typeValue,
+        url: urlValue,
+        createdAt: createdAtValue,
+        createdByName
+      }
+    })
+  }, [])
+
+  const loadResources = useCallback(async () => {
+    if (!id) {
+      setResources(fallbackResources)
+      return
+    }
+    setResourcesLoading(true)
+    setResourceError(null)
+    try {
+      const response = await api(`/api/courses/${id}/resources`)
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(data.error || 'Unable to load resources')
+      }
+      const parsed = parseResources(data.resources ?? [])
+      setResources(parsed)
+    } catch (error) {
+      setResourceError(error instanceof Error ? error.message : 'Failed to load resources')
+      setResources(fallbackResources)
+    } finally {
+      setResourcesLoading(false)
+    }
+  }, [api, fallbackResources, id, parseResources])
+
+  useEffect(() => {
+    loadResources()
+  }, [loadResources])
+
+  const canManageResources = Boolean(user && ['super_admin', 'admin', 'teacher'].includes(user.role))
+
+  const handleResourceSubmit = useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!id || !canManageResources) {
+      return
+    }
+    const title = resourceForm.title.trim()
+    if (title === '') {
+      setResourceError('Title is required.')
+      return
+    }
+    setResourceSaving(true)
+    setResourceError(null)
+    try {
+      const payload = {
+        title,
+        type: resourceForm.type,
+        url: resourceForm.url.trim() || undefined,
+        description: resourceForm.description.trim() || undefined
+      }
+      const response = await api(`/api/courses/${id}/resources`, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to add resource')
+      }
+      if (data.resource) {
+        const [created] = parseResources([data.resource])
+        setResources((current) => (created ? [created, ...current] : current))
+      }
+      setIsResourceDialogOpen(false)
+      setResourceForm({ title: '', type: 'Document', url: '', description: '' })
+    } catch (error) {
+      setResourceError(error instanceof Error ? error.message : 'Failed to add resource')
+    } finally {
+      setResourceSaving(false)
+    }
+  }, [api, canManageResources, id, parseResources, resourceForm])
+
+  const handleDeleteResource = useCallback(async (resourceId: string) => {
+    if (!id || !canManageResources) {
+      return
+    }
+    setResourceDeletingId(resourceId)
+    setResourceError(null)
+    try {
+      const response = await api(`/api/courses/${id}/resources/${resourceId}`, {
+        method: 'DELETE'
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to delete resource')
+      }
+      setResources((current) => current.filter((resource) => resource.id !== resourceId))
+    } catch (error) {
+      setResourceError(error instanceof Error ? error.message : 'Failed to delete resource')
+    } finally {
+      setResourceDeletingId(null)
+    }
+  }, [api, canManageResources, id])
 
   return (
     <div className="space-y-6">
@@ -232,20 +430,153 @@ export function CourseDetail() {
 
         <TabsContent value="resources" className="space-y-6">
           <Card>
-            <CardHeader>
-              <CardTitle>Course Resources</CardTitle>
-              <CardDescription>Supporting materials</CardDescription>
+            <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <CardTitle>Course Resources</CardTitle>
+                <CardDescription>Supporting materials</CardDescription>
+              </div>
+              {canManageResources ? (
+                <Dialog
+                  open={isResourceDialogOpen}
+                  onOpenChange={(open) => {
+                    setIsResourceDialogOpen(open)
+                    if (!open) {
+                      setResourceForm({ title: '', type: 'Document', url: '', description: '' })
+                    }
+                  }}
+                >
+                  <DialogTrigger asChild>
+                    <Button>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Resource
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Share a resource</DialogTitle>
+                      <DialogDescription>Upload supporting links or materials for this course.</DialogDescription>
+                    </DialogHeader>
+                    <form className="space-y-4" onSubmit={handleResourceSubmit}>
+                      <div className="space-y-2">
+                        <Label htmlFor="resource-title">Title</Label>
+                        <Input
+                          id="resource-title"
+                          value={resourceForm.title}
+                          onChange={(event) => setResourceForm((current) => ({ ...current, title: event.target.value }))}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="resource-type">Type</Label>
+                        <Select
+                          value={resourceForm.type}
+                          onValueChange={(value) => setResourceForm((current) => ({ ...current, type: value }))}
+                        >
+                          <SelectTrigger id="resource-type">
+                            <SelectValue placeholder="Select type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Document">Document</SelectItem>
+                            <SelectItem value="PDF">PDF</SelectItem>
+                            <SelectItem value="Presentation">Presentation</SelectItem>
+                            <SelectItem value="Video">Video</SelectItem>
+                            <SelectItem value="Link">Link</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="resource-url">Link</Label>
+                        <Input
+                          id="resource-url"
+                          placeholder="https://..."
+                          value={resourceForm.url}
+                          onChange={(event) => setResourceForm((current) => ({ ...current, url: event.target.value }))}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="resource-description">Description</Label>
+                        <Textarea
+                          id="resource-description"
+                          rows={3}
+                          value={resourceForm.description}
+                          onChange={(event) => setResourceForm((current) => ({ ...current, description: event.target.value }))}
+                        />
+                      </div>
+                      <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setIsResourceDialogOpen(false)}>
+                          Cancel
+                        </Button>
+                        <Button type="submit" disabled={resourceSaving}>
+                          {resourceSaving ? 'Saving...' : 'Share Resource'}
+                        </Button>
+                      </DialogFooter>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+              ) : null}
             </CardHeader>
             <CardContent className="space-y-4">
-              {course.resources.map((resource) => (
-                <div key={resource.id} className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex items-center space-x-3 text-gray-900">
-                    <FileText className="w-4 h-4" />
-                    <span>{resource.label}</span>
-                  </div>
-                  <Badge variant="outline">{resource.type}</Badge>
+              {resourceError ? (
+                <div className="rounded-md bg-red-50 p-4 text-sm text-red-700">{resourceError}</div>
+              ) : null}
+              {resourcesLoading ? (
+                <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                  Loading resources...
                 </div>
-              ))}
+              ) : resources.length === 0 ? (
+                <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                  No resources available yet.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {resources.map((resource) => {
+                    const formattedDate = formatResourceDate(resource.createdAt)
+                    return (
+                      <div
+                        key={resource.id}
+                        className="flex flex-col gap-3 rounded-lg border p-4 md:flex-row md:items-center md:justify-between"
+                      >
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap items-center gap-2 text-gray-900">
+                            <FileText className="w-4 h-4" />
+                            <span className="font-medium">{resource.title}</span>
+                            <Badge variant="outline">{resource.type ?? 'Document'}</Badge>
+                          </div>
+                          {resource.description ? (
+                            <p className="text-sm text-gray-600">{resource.description}</p>
+                          ) : null}
+                          {resource.createdByName || formattedDate ? (
+                            <p className="text-xs text-muted-foreground">
+                              {resource.createdByName ? `Shared by ${resource.createdByName}` : 'Shared'}
+                              {formattedDate ? ` • ${formattedDate}` : ''}
+                            </p>
+                          ) : null}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {resource.url ? (
+                            <Button asChild variant="outline" size="sm">
+                              <a href={resource.url} target="_blank" rel="noopener noreferrer">
+                                <ExternalLink className="w-4 h-4 mr-2" />
+                                Open
+                              </a>
+                            </Button>
+                          ) : null}
+                          {canManageResources ? (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDeleteResource(resource.id)}
+                              disabled={resourceDeletingId === resource.id}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          ) : null}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

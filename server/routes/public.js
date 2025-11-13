@@ -22,6 +22,33 @@ const { dbRun, dbGet } = require('../database');
 
 const router = express.Router();
 
+const ensureTrialSubscriptionForSchool = async (schoolId) => {
+  if (!schoolId) {
+    return;
+  }
+  const existing = await dbGet('SELECT id FROM subscriptions WHERE school_id = ? LIMIT 1', [schoolId]);
+  if (existing) {
+    return;
+  }
+  const plan = await dbGet(
+    'SELECT id, trial_duration_days FROM subscription_plans WHERE slug = ? LIMIT 1',
+    ['trial']
+  );
+  if (!plan) {
+    return;
+  }
+  const startDate = nowIso();
+  const trialEnds =
+    typeof plan.trial_duration_days === 'number'
+      ? new Date(Date.now() + plan.trial_duration_days * 86400000).toISOString()
+      : null;
+  await dbRun(
+    `INSERT INTO subscriptions (school_id, plan_id, status, start_date, trial_ends_at)
+     VALUES (?, ?, ?, ?, ?)`,
+    [schoolId, plan.id, 'active', startDate, trialEnds]
+  );
+};
+
 const loginRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
@@ -67,10 +94,12 @@ router.post('/register-school', registerRateLimiter, async (req, res) => {
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
     const schoolResult = await dbRun(
-      'INSERT INTO schools (name, curriculum, level) VALUES (?, ?, ?)',
-      [schoolName, curriculum, curriculum]
+      'INSERT INTO schools (name, curriculum, level, principal) VALUES (?, ?, ?, ?)',
+      [schoolName, curriculum, curriculum, adminName]
     );
     const schoolId = schoolResult.lastID;
+
+    await ensureTrialSubscriptionForSchool(schoolId);
 
     const userResult = await dbRun(
       'INSERT INTO users (name, email, password_hash, role, school_id) VALUES (?, ?, ?, ?, ?)',
