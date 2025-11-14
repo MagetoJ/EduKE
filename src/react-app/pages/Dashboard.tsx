@@ -70,8 +70,8 @@ export default function Dashboard() {
           if (!response.ok) {
             throw new Error('Failed to load schools')
           }
-          const data: SchoolRecord[] = await response.json()
-          setSchools(data)
+          const data = await response.json()
+          setSchools(data.data || [])
         } else if (user.role === 'admin') {
           const [studentsResponse, staffResponse] = await Promise.all([
             apiFetch('/api/students'),
@@ -83,17 +83,17 @@ export default function Dashboard() {
           if (!staffResponse.ok) {
             throw new Error('Failed to load staff')
           }
-          const studentData: StudentRecord[] = await studentsResponse.json()
-          const staffData: StaffRecord[] = await staffResponse.json()
-          setStudents(studentData)
-          setStaff(staffData)
+          const studentData = await studentsResponse.json()
+          const staffData = await staffResponse.json()
+          setStudents(studentData.data || [])
+          setStaff(staffData.data || [])
         } else if (user.role === 'teacher') {
           const studentsResponse = await apiFetch('/api/students')
           if (!studentsResponse.ok) {
             throw new Error('Failed to load students')
           }
-          const studentData: StudentRecord[] = await studentsResponse.json()
-          setStudents(studentData)
+          const studentData = await studentsResponse.json()
+          setStudents(studentData.data || [])
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to load dashboard data'
@@ -107,31 +107,35 @@ export default function Dashboard() {
   }, [apiFetch, user])
 
   const superAdminMetrics = useMemo(() => {
-    const totalSchools = schools.length
-    const totalStudents = schools.reduce((sum, school) => sum + Number(school.students || 0), 0)
-    const totalStaff = schools.reduce((sum, school) => sum + Number(school.staff || 0), 0)
-    const totalRevenue = schools.reduce((sum, school) => sum + parseCurrency(school.revenue), 0)
+    const schoolsArray = Array.isArray(schools) ? schools : []
+    const totalSchools = schoolsArray.length
+    const totalStudents = schoolsArray.reduce((sum, school) => sum + Number(school.students || 0), 0)
+    const totalStaff = schoolsArray.reduce((sum, school) => sum + Number(school.staff || 0), 0)
+    const totalRevenue = schoolsArray.reduce((sum, school) => sum + parseCurrency(school.revenue), 0)
     return { totalSchools, totalStudents, totalStaff, totalRevenue }
   }, [schools])
 
   const adminMetrics = useMemo(() => {
-    const totalStudents = students.length
-    const activeStudents = students.filter((student) => student.status === 'Active').length
-    const uniqueCourses = new Set(students.map((student) => student.grade ?? '')).size
-    const totalStaff = staff.length
-    const outstandingFees = students.reduce((sum, student) => sum + parseCurrency(student.fees), 0)
+    const studentsArray = Array.isArray(students) ? students : []
+    const staffArray = Array.isArray(staff) ? staff : []
+    const totalStudents = studentsArray.length
+    const activeStudents = studentsArray.filter((student) => student.status === 'Active').length
+    const uniqueCourses = new Set(studentsArray.map((student) => student.grade ?? '')).size
+    const totalStaff = staffArray.length
+    const outstandingFees = studentsArray.reduce((sum, student) => sum + parseCurrency(student.fees), 0)
     return { totalStudents, activeStudents, uniqueCourses, totalStaff, outstandingFees }
   }, [students, staff])
 
   const teacherMetrics = useMemo(() => {
+    const studentsArray = Array.isArray(students) ? students : []
     const classSet = new Set<string>()
-    students.forEach((student) => {
+    studentsArray.forEach((student) => {
       if (student.class) {
         classSet.add(student.class)
       }
     })
     return {
-      studentCount: students.length,
+      studentCount: studentsArray.length,
       classCount: classSet.size,
       pendingGrades: 0,
       unreadMessages: 0

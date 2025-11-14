@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavigate } from 'react-router'
 
+
 // Mock courses data
 const mockCourses = [
   {

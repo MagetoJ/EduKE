@@ -20,4 +20,25 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-module.exports = { authenticateToken };
+const authorizeRole = (roles) => {
+  return (req, res, next) => {
+    if (!req.user || !req.user.role) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({ error: 'Forbidden: You do not have permission for this resource' });
+    }
+
+    next();
+  };
+};
+
+const requireFeature = (feature) => {
+  return (req, res, next) => {
+    // TODO: Implement feature checking logic
+    next();
+  };
+};
+
+module.exports = { authenticateToken, authorizeRole, requireFeature };

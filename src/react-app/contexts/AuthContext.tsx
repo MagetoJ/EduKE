@@ -144,11 +144,21 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     []
   );
 
-  const logout = useCallback(() => {
-    clearAuthStorage();
-    setToken(null);
-    setRefreshToken(null);
-    setUserState(null);
+  const logout = useCallback(async () => {
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      await fetch(`${API_URL}/api/auth/logout`, {
+        method: 'POST',
+        credentials: 'include'
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      clearAuthStorage();
+      setToken(null);
+      setRefreshToken(null);
+      setUserState(null);
+    }
   }, []);
 
   const refreshSession = useCallback(async () => {
@@ -158,21 +168,23 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
 
     try {
-      const response = await fetch('/api/refresh-token', {
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      const response = await fetch(`${API_URL}/api/auth/refresh-token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ refreshToken })
       });
 
       const data = await response.json();
-      if (!response.ok) {
+      if (!response.ok || !data.success) {
         throw new Error(data.error || 'Unable to refresh session');
       }
 
-      setToken(data.token);
-      setRefreshToken(data.refreshToken);
-      writeAuthToStorage(storagePreferenceRef.current, data.token, data.refreshToken, userRef.current);
-      return data.token as string;
+      const newToken = data.data.accessToken;
+      setToken(newToken);
+      writeAuthToStorage(storagePreferenceRef.current, newToken, refreshToken, userRef.current);
+      return newToken as string;
     } catch {
       logout();
       return null;
@@ -183,34 +195,37 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     async (email: string, password: string, remember = true) => {
       setIsLoading(true);
       try {
-        const response = await fetch('/api/login', {
+        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+        const response = await fetch(`${API_URL}/api/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({ email, password })
         });
 
         const data = await response.json();
-        if (!response.ok) {
+        if (!response.ok || !data.success) {
           throw new Error(data.error || 'Login failed');
         }
 
         const storageType: StorageType = remember ? 'local' : 'session';
         const normalizedUser: User = {
-          id: String(data.user.id),
-          email: data.user.email,
-          name: data.user.name,
-          role: data.user.role,
-          schoolId: data.user.schoolId ? String(data.user.schoolId) : undefined,
-          schoolName: data.user.schoolName,
-          schoolCurriculum: data.user.schoolCurriculum,
-          avatar: data.user.avatar
+          id: String(data.data.user.id),
+          email: data.data.user.email,
+          name: data.data.user.name || `${data.data.user.first_name} ${data.data.user.last_name}`,
+          role: data.data.user.role,
+          schoolId: data.data.user.school_id ? String(data.data.user.school_id) : undefined,
+          schoolName: data.data.user.school_name,
+          schoolCurriculum: data.data.user.curriculum,
+          avatar: data.data.user.avatar
         };
 
         setStoragePreference(storageType);
-        setToken(data.token);
-        setRefreshToken(data.refreshToken);
+        setToken(data.data.accessToken);
+        // Refresh token is in httpOnly cookie, but store a flag
+        setRefreshToken('stored-in-cookie');
         setUserState(normalizedUser);
-        writeAuthToStorage(storageType, data.token, data.refreshToken, normalizedUser);
+        writeAuthToStorage(storageType, data.data.accessToken, 'stored-in-cookie', normalizedUser);
       } finally {
         setIsLoading(false);
       }
