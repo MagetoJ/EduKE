@@ -27,6 +27,16 @@ type AttendanceStudent = {
   recordedAt?: string | null
 }
 
+type DisciplineRecord = {
+  id: number,
+  studentName: string,
+  date: string,
+  type: string,
+  severity: string,
+  description: string,
+  status: string
+}
+
 export default function TeacherDashboard() {
   const api = useApi()
   const defaultStatuses = useMemo(() => ['Present', 'Absent', 'Late', 'Excused', 'Not Marked'], [])
@@ -41,36 +51,11 @@ export default function TeacherDashboard() {
   const [isPerformanceDialogOpen, setIsPerformanceDialogOpen] = useState(false)
   const [selectedStudent, setSelectedStudent] = useState<TeacherStudent | null>(null)
 
-  // Mock data
-  const mockStudents: TeacherStudent[] = [
-    { id: '1', name: 'John Smith', grade: 'Grade 10', class: '10A' },
-    { id: '2', name: 'Sarah Johnson', grade: 'Grade 10', class: '10A' },
-    { id: '3', name: 'Michael Brown', grade: 'Grade 10', class: '10A' },
-    { id: '4', name: 'Emma Davis', grade: 'Grade 11', class: '11B' },
-  ]
+  // Real data state variables
+  const [students, setStudents] = useState<TeacherStudent[]>([]);
+  const [disciplineRecords, setDisciplineRecords] = useState<DisciplineRecord[]>([]);
 
-  const mockDisciplineRecords = [
-    {
-      id: 1,
-      studentId: '1',
-      studentName: 'John Smith',
-      date: '2024-01-15',
-      type: 'Late to class',
-      severity: 'Minor',
-      description: 'Arrived 10 minutes late to Mathematics class',
-      status: 'Resolved'
-    },
-    {
-      id: 2,
-      studentId: '2',
-      studentName: 'Sarah Johnson',
-      date: '2024-01-20',
-      type: 'Incomplete homework',
-      severity: 'Minor',
-      description: 'Failed to submit Science homework assignment',
-      status: 'Warning issued'
-    }
-  ]
+
 
   const parseRoster = useCallback((payload: unknown): AttendanceStudent[] => {
     if (!Array.isArray(payload)) {
@@ -161,6 +146,45 @@ export default function TeacherDashboard() {
     loadRoster()
   }, [loadRoster])
 
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        // Fetch students for the "My Students" tab
+        const studentRes = await api('/api/students');
+        const studentData = await studentRes.json();
+        if (studentData.data) {
+          setStudents(studentData.data.map((s: any) => ({
+            id: s.id.toString(),
+            name: `${s.first_name} ${s.last_name}`,
+            grade: s.grade,
+            class: s.class_section || 'N/A'
+          })));
+        }
+
+        // Fetch records for the "Discipline" tab
+        const disciplineRes = await api('/api/discipline');
+        const disciplineData = await disciplineRes.json();
+        if (disciplineData.data) {
+          setDisciplineRecords(disciplineData.data.map((d: any) => ({
+            id: d.id,
+            studentName: d.student_name, // Assuming backend provides this
+            date: d.date,
+            type: d.incident_type,
+            severity: d.severity,
+            description: d.description,
+            status: d.status
+          })));
+        }
+
+        // You can also fetch performance records here
+
+      } catch (err) {
+        console.error("Failed to load dashboard data", err);
+      }
+    }
+    loadData();
+  }, [api]);
+
   const [disciplineForm, setDisciplineForm] = useState({
     studentId: '',
     type: '',
@@ -180,9 +204,8 @@ export default function TeacherDashboard() {
   const handleDisciplineSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      const response = await fetch('/api/discipline', {
+      const response = await api('/api/discipline', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           student_id: parseInt(disciplineForm.studentId),
           teacher_id: 1, // Would come from logged-in user
@@ -215,9 +238,8 @@ export default function TeacherDashboard() {
   const handlePerformanceSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      const response = await fetch('/api/performance', {
+      const response = await api('/api/performance', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           student_id: parseInt(performanceForm.studentId),
           teacher_id: 1, // Would come from logged-in user
@@ -263,8 +285,8 @@ export default function TeacherDashboard() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{mockStudents.length}</div>
-            <p className="text-xs text-muted-foreground">Grade 10A class</p>
+            <div className="text-2xl font-bold">{students.length}</div>
+            <p className="text-xs text-muted-foreground">Total students</p>
           </CardContent>
         </Card>
 
@@ -274,8 +296,8 @@ export default function TeacherDashboard() {
             <AlertTriangle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{mockDisciplineRecords.length}</div>
-            <p className="text-xs text-muted-foreground">This month</p>
+            <div className="text-2xl font-bold">{disciplineRecords.length}</div>
+            <p className="text-xs text-muted-foreground">Total records</p>
           </CardContent>
         </Card>
 
@@ -398,7 +420,7 @@ export default function TeacherDashboard() {
           </div>
 
           <div className="grid gap-4">
-            {mockStudents.map((student) => (
+            {students.map((student) => (
               <Card key={student.id}>
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
@@ -467,7 +489,7 @@ export default function TeacherDashboard() {
                           <SelectValue placeholder="Select student" />
                         </SelectTrigger>
                         <SelectContent>
-                          {mockStudents.map((student) => (
+                          {students.map((student) => (
                             <SelectItem key={student.id} value={student.id}>
                               {student.name} - {student.grade}
                             </SelectItem>
@@ -547,7 +569,7 @@ export default function TeacherDashboard() {
           </div>
 
           <div className="space-y-4">
-            {mockDisciplineRecords.map((record) => (
+            {disciplineRecords.map((record) => (
               <Card key={record.id}>
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
@@ -605,7 +627,7 @@ export default function TeacherDashboard() {
                           <SelectValue placeholder="Select student" />
                         </SelectTrigger>
                         <SelectContent>
-                          {mockStudents.map((student) => (
+                          {students.map((student) => (
                             <SelectItem key={student.id} value={student.id}>
                               {student.name} - {student.grade}
                             </SelectItem>
