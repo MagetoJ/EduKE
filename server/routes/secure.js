@@ -7,9 +7,8 @@ const { authorizeRole, requireFeature } = require('../middleware/auth');
 // --- Courses ---
 secureRouter.get('/courses', authorizeRole(['admin', 'teacher', 'student', 'parent']), async (req, res) => {
   try {
-    const { schoolId } = req; // From tenantContext middleware
-    const result = await query('SELECT * FROM courses WHERE school_id = $1 ORDER BY name', [schoolId]);
-
+    const { schoolId } = req;
+    const result = await query('SELECT c.*, u.name as teacher_name FROM courses c LEFT JOIN users u ON c.teacher_id = u.id WHERE c.school_id = $1 ORDER BY c.name', [schoolId]);
     res.json({ success: true, data: result.rows });
   } catch (err) {
     console.error('Error fetching courses:', err);
@@ -17,27 +16,77 @@ secureRouter.get('/courses', authorizeRole(['admin', 'teacher', 'student', 'pare
   }
 });
 
+secureRouter.get('/courses/:id', authorizeRole(['admin', 'teacher', 'student']), async (req, res) => {
+  try {
+    const { schoolId } = req;
+    const { id } = req.params;
+    const result = await query('SELECT c.*, u.name as teacher_name FROM courses c LEFT JOIN users u ON c.teacher_id = u.id WHERE c.id = $1 AND c.school_id = $2', [id, schoolId]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Course not found' });
+    }
+    
+    res.json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    console.error('Error fetching course:', err);
+    res.status(500).json({ success: false, error: 'Failed to fetch course' });
+  }
+});
+
 secureRouter.post('/courses', authorizeRole(['admin']), async (req, res) => {
   try {
     const { schoolId } = req;
-    const { name, code, grade, subject_area, teacher_id } = req.body; // Data from the frontend form
+    const { name, code, grade, subject_area, teacher_id, description } = req.body;
 
-    // Get the active academic year
     const yearRes = await query('SELECT id FROM academic_years WHERE school_id = $1 AND status = $2', [schoolId, 'active']);
     const academic_year_id = yearRes.rows[0]?.id || null;
 
-    const sql = `
-      INSERT INTO courses (school_id, name, code, grade, subject_area, teacher_id, academic_year_id, is_active)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, true)
-      RETURNING *
-    `;
-    
-    const result = await query(sql, [schoolId, name, code, grade, subject_area, teacher_id, academic_year_id]);
+    const result = await query(
+      `INSERT INTO courses (school_id, name, code, grade, subject_area, teacher_id, academic_year_id, description, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true) RETURNING *`,
+      [schoolId, name, code, grade, subject_area, teacher_id, academic_year_id, description]
+    );
     
     res.status(201).json({ success: true, data: result.rows[0], message: 'Course created successfully' });
   } catch (err) {
     console.error('Error creating course:', err);
-    res.status(500).json({ success: false, error: 'Failed to create course. Check for duplicate course code.' });
+    res.status(500).json({ success: false, error: 'Failed to create course' });
+  }
+});
+
+secureRouter.put('/courses/:id', authorizeRole(['admin']), async (req, res) => {
+  try {
+    const { schoolId } = req;
+    const { id } = req.params;
+    const { name, code, grade, subject_area, teacher_id, description, is_active } = req.body;
+    
+    const result = await query(
+      `UPDATE courses SET name = $1, code = $2, grade = $3, subject_area = $4, teacher_id = $5, description = $6, is_active = $7, updated_at = NOW()
+       WHERE id = $8 AND school_id = $9 RETURNING *`,
+      [name, code, grade, subject_area, teacher_id, description, is_active, id, schoolId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Course not found' });
+    }
+    
+    res.json({ success: true, data: result.rows[0], message: 'Course updated successfully' });
+  } catch (err) {
+    console.error('Error updating course:', err);
+    res.status(500).json({ success: false, error: 'Failed to update course' });
+  }
+});
+
+secureRouter.delete('/courses/:id', authorizeRole(['admin']), async (req, res) => {
+  try {
+    const { schoolId } = req;
+    const { id } = req.params;
+    
+    await query('UPDATE courses SET is_active = false, updated_at = NOW() WHERE id = $1 AND school_id = $2', [id, schoolId]);
+    res.json({ success: true, message: 'Course deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting course:', err);
+    res.status(500).json({ success: false, error: 'Failed to delete course' });
   }
 });
 
@@ -64,6 +113,59 @@ secureRouter.get('/schools/:id', authorizeRole(['super_admin', 'admin']), async 
   } catch (err) {
     console.error('Error fetching school:', err);
     res.status(500).json({ success: false, error: 'Failed to fetch school' });
+  }
+});
+
+secureRouter.post('/schools', authorizeRole(['super_admin']), async (req, res) => {
+  try {
+    const { name, email, phone, address, city, state, country, curriculum, level, principal, grade_levels } = req.body;
+    
+    const result = await query(
+      `INSERT INTO schools (name, email, phone, address, city, state, country, curriculum, level, principal, grade_levels, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'active')
+       RETURNING *`,
+      [name, email, phone, address, city, state, country, curriculum, level, principal, JSON.stringify(grade_levels)]
+    );
+    
+    res.status(201).json({ success: true, data: result.rows[0], message: 'School created successfully' });
+  } catch (err) {
+    console.error('Error creating school:', err);
+    res.status(500).json({ success: false, error: 'Failed to create school' });
+  }
+});
+
+secureRouter.put('/schools/:id', authorizeRole(['super_admin']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, email, phone, address, city, state, country, curriculum, level, principal, grade_levels, status } = req.body;
+    
+    const result = await query(
+      `UPDATE schools SET name = $1, email = $2, phone = $3, address = $4, city = $5, state = $6, country = $7, 
+       curriculum = $8, level = $9, principal = $10, grade_levels = $11, status = $12, updated_at = NOW()
+       WHERE id = $13 RETURNING *`,
+      [name, email, phone, address, city, state, country, curriculum, level, principal, JSON.stringify(grade_levels), status, id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'School not found' });
+    }
+    
+    res.json({ success: true, data: result.rows[0], message: 'School updated successfully' });
+  } catch (err) {
+    console.error('Error updating school:', err);
+    res.status(500).json({ success: false, error: 'Failed to update school' });
+  }
+});
+
+secureRouter.delete('/schools/:id', authorizeRole(['super_admin']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    await query('UPDATE schools SET status = $1, updated_at = NOW() WHERE id = $2', ['inactive', id]);
+    res.json({ success: true, message: 'School deactivated successfully' });
+  } catch (err) {
+    console.error('Error deleting school:', err);
+    res.status(500).json({ success: false, error: 'Failed to delete school' });
   }
 });
 

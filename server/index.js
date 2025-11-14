@@ -12,6 +12,8 @@ const authRoutes = require('./routes/auth');
 const { publicRouter } = require('./routes/public');
 const { secureRouter } = require('./routes/secure');
 const studentsRoutes = require('./routes/students');
+const assignmentsRoutes = require('./routes/assignments');
+const completeRoutes = require('./routes/complete');
 
 // Import middleware
 const { authenticateToken } = require('./middleware/auth');
@@ -49,6 +51,8 @@ app.get('/health', async (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api', tenantContext, publicRouter);
 app.use('/api/students', authenticateToken, tenantContext, studentsRoutes);
+app.use('/api/assignments', authenticateToken, tenantContext, assignmentsRoutes);
+app.use('/api', authenticateToken, tenantContext, completeRoutes);
 app.use('/api', authenticateToken, tenantContext, secureRouter);
 
 // 404 handler
