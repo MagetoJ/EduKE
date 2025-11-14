@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useAuth } from '../contexts/AuthContext'
+import { useAuth, useApi } from '../contexts/AuthContext'
 import { Link } from 'react-router'
 import { Plus, Search, Filter, Pencil, User } from 'lucide-react'
 import { Button } from '../components/ui/button'
@@ -97,6 +97,7 @@ const CURRICULUM_LEVELS: Record<string, string[]> = {
 
 export default function Students() {
   const { user } = useAuth()
+  const api = useApi()
   const [gradeLevels, setGradeLevels] = useState<string[]>(CURRICULUM_LEVELS.cbc)
   const [students, setStudents] = useState(mockStudents)
 
@@ -177,9 +178,8 @@ export default function Students() {
 
       // Create caregiver user account first if details provided
       if (formData.parent_email && formData.parent_password) {
-        const parentResponse = await fetch('/api/users', {
+        const parentResponse = await api('/api/users', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             name: formData.parent_name,
             email: formData.parent_email,
@@ -196,9 +196,8 @@ export default function Students() {
         }
       }
 
-      const studentResponse = await fetch('/api/students', {
+      const studentResponse = await api('/api/students', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           first_name: formData.first_name,
           last_name: formData.last_name,
@@ -218,9 +217,8 @@ export default function Students() {
         const studentId = studentResult.id
 
         if (formData.password) {
-          await fetch('/api/users', {
+          await api('/api/users', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               name: `${formData.first_name} ${formData.last_name}`,
               email: formData.email,

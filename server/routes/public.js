@@ -18,7 +18,7 @@ const {
   generateRandomToken,
   hashToken
 } = require('../utils');
-const { dbRun, dbGet } = require('../database');
+const { query } = require('../db/connection'); // Correct import
 
 const router = express.Router();
 
@@ -26,14 +26,15 @@ const ensureTrialSubscriptionForSchool = async (schoolId) => {
   if (!schoolId) {
     return;
   }
-  const existing = await dbGet('SELECT id FROM subscriptions WHERE school_id = ? LIMIT 1', [schoolId]);
+  const existing = (await query('SELECT id FROM subscriptions WHERE school_id = $1 LIMIT 1', [schoolId])).rows[0];
   if (existing) {
     return;
   }
-  const plan = await dbGet(
-    'SELECT id, trial_duration_days FROM subscription_plans WHERE slug = ? LIMIT 1',
+  const plan = (await query(
+    'SELECT id, trial_duration_days FROM subscription_plans WHERE slug = $1 LIMIT 1',
     ['trial']
-  );
+  )).rows[0];
+  
   if (!plan) {
     return;
   }
@@ -42,9 +43,10 @@ const ensureTrialSubscriptionForSchool = async (schoolId) => {
     typeof plan.trial_duration_days === 'number'
       ? new Date(Date.now() + plan.trial_duration_days * 86400000).toISOString()
       : null;
-  await dbRun(
+  
+  await query(
     `INSERT INTO subscriptions (school_id, plan_id, status, start_date, trial_ends_at)
-     VALUES (?, ?, ?, ?, ?)`,
+     VALUES ($1, $2, $3, $4, $5)`,
     [schoolId, plan.id, 'active', startDate, trialEnds]
   );
 };
@@ -86,33 +88,34 @@ router.post('/register-school', registerRateLimiter, async (req, res) => {
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    const existingUser = await dbGet('SELECT id FROM users WHERE email = ?', [normalizedEmail]);
+    const existingUser = (await query('SELECT id FROM users WHERE email = $1', [normalizedEmail])).rows[0];
     if (existingUser) {
       return res.status(409).json({ error: 'Email already in use' });
     }
 
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
-    const schoolResult = await dbRun(
-      'INSERT INTO schools (name, curriculum, level, principal) VALUES (?, ?, ?, ?)',
+    const schoolResult = await query(
+      'INSERT INTO schools (name, curriculum, level, principal) VALUES ($1, $2, $3, $4) RETURNING id',
       [schoolName, curriculum, curriculum, adminName]
     );
-    const schoolId = schoolResult.lastID;
+    const schoolId = schoolResult.rows[0].id; 
 
     await ensureTrialSubscriptionForSchool(schoolId);
 
-    const userResult = await dbRun(
-      'INSERT INTO users (name, email, password_hash, role, school_id) VALUES (?, ?, ?, ?, ?)',
+    // Using "role" in quotes as it's a reserved word in PostgreSQL
+    const userResult = await query(
+      'INSERT INTO users (name, email, password_hash, "role", school_id) VALUES ($1, $2, $3, $4, $5) RETURNING id',
       [adminName, normalizedEmail, passwordHash, 'admin', schoolId]
     );
-    const userId = userResult.lastID;
+    const userId = userResult.rows[0].id;
 
     const verificationToken = generateRandomToken();
     const verificationHash = hashToken(verificationToken);
     const verificationExpiresAt = addMilliseconds(EMAIL_VERIFICATION_TTL_MS);
 
-    await dbRun(
-      'INSERT INTO email_verification_tokens (user_id, token_hash, expires_at) VALUES (?, ?, ?)',
+    await query(
+      'INSERT INTO email_verification_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)',
       [userId, verificationHash, verificationExpiresAt]
     );
 
@@ -138,7 +141,8 @@ router.post('/login', loginRateLimiter, async (req, res) => {
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    const user = await dbGet('SELECT * FROM users WHERE email = ?', [normalizedEmail]);
+    // Using "role" in quotes
+    const user = (await query('SELECT id, name, email, password_hash, "role", school_id, is_verified, email_verified_at FROM users WHERE email = $1', [normalizedEmail])).rows[0];
     if (!user) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
@@ -148,24 +152,25 @@ router.post('/login', loginRateLimiter, async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
-    if (user.role !== 'super_admin' && Number(user.is_verified) !== 1) {
+    // CHECKING BOOLEAN (is_verified)
+    if (user.role !== 'super_admin' && user.is_verified !== true) {
       return res.status(403).json({ error: 'Email address has not been verified yet.' });
     }
 
-    await dbRun('DELETE FROM refresh_tokens WHERE user_id = ? AND expires_at <= ?', [user.id, nowIso()]);
+    await query('DELETE FROM refresh_tokens WHERE user_id = $1 AND expires_at <= $2', [user.id, nowIso()]);
 
     const refreshTokenValue = generateRandomToken(REFRESH_TOKEN_BYTES);
     const refreshTokenHash = hashToken(refreshTokenValue);
     const refreshTokenExpiresAt = addMilliseconds(JWT_REFRESH_TTL_MS);
 
-    await dbRun(
-      'INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES (?, ?, ?)',
+    await query(
+      'INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)',
       [user.id, refreshTokenHash, refreshTokenExpiresAt]
     );
 
     let school = null;
     if (user.role !== 'super_admin' && user.school_id) {
-      school = await dbGet('SELECT name, curriculum FROM schools WHERE id = ?', [user.school_id]);
+      school = (await query('SELECT name, curriculum FROM schools WHERE id = $1', [user.school_id])).rows[0];
     }
 
     const accessPayload = {
@@ -189,7 +194,7 @@ router.post('/login', loginRateLimiter, async (req, res) => {
         schoolId: user.school_id,
         schoolName: school?.name,
         schoolCurriculum: school?.curriculum,
-        emailVerified: Number(user.is_verified) === 1,
+        emailVerified: user.is_verified === true, // CHECKING BOOLEAN
         emailVerifiedAt: user.email_verified_at,
         avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face'
       }
@@ -208,20 +213,20 @@ router.post('/forgot-password', authRateLimiter, async (req, res) => {
     }
 
     const normalizedEmail = email.trim().toLowerCase();
-    const user = await dbGet('SELECT id, email FROM users WHERE email = ?', [normalizedEmail]);
+    const user = (await query('SELECT id, email FROM users WHERE email = $1', [normalizedEmail])).rows[0];
 
     if (!user) {
       return res.json({ message: 'If the email exists, reset instructions have been sent.' });
     }
 
-    await dbRun('DELETE FROM password_reset_tokens WHERE user_id = ?', [user.id]);
+    await query('DELETE FROM password_reset_tokens WHERE user_id = $1', [user.id]);
 
     const resetToken = generateRandomToken();
     const resetHash = hashToken(resetToken);
     const resetExpiresAt = addMilliseconds(PASSWORD_RESET_TTL_MS);
 
-    await dbRun(
-      'INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES (?, ?, ?)',
+    await query(
+      'INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)',
       [user.id, resetHash, resetExpiresAt]
     );
 
@@ -249,14 +254,14 @@ router.post('/reset-password', authRateLimiter, async (req, res) => {
     }
 
     const resetHash = hashToken(token);
-    const resetRecord = await dbGet(
-      'SELECT * FROM password_reset_tokens WHERE token_hash = ?',
+    const resetRecord = (await query(
+      'SELECT * FROM password_reset_tokens WHERE token_hash = $1',
       [resetHash]
-    );
+    )).rows[0];
 
     if (
       !resetRecord ||
-      Number(resetRecord.used) === 1 ||
+      resetRecord.used === true || // UPDATED: 1 -> true
       new Date(resetRecord.expires_at).getTime() < Date.now()
     ) {
       return res.status(400).json({ error: 'Invalid or expired reset token' });
@@ -264,9 +269,10 @@ router.post('/reset-password', authRateLimiter, async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
-    await dbRun('UPDATE users SET password_hash = ? WHERE id = ?', [passwordHash, resetRecord.user_id]);
-    await dbRun('UPDATE password_reset_tokens SET used = 1, used_at = ? WHERE id = ?', [nowIso(), resetRecord.id]);
-    await dbRun('UPDATE refresh_tokens SET revoked = 1, revoked_at = ? WHERE user_id = ?', [nowIso(), resetRecord.user_id]);
+    await query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, resetRecord.user_id]);
+    // UPDATED: 1 -> true
+    await query('UPDATE password_reset_tokens SET used = true, used_at = $1 WHERE id = $2', [nowIso(), resetRecord.id]);
+    await query('UPDATE refresh_tokens SET revoked = true, revoked_at = $1 WHERE user_id = $2', [nowIso(), resetRecord.user_id]);
 
     res.json({ message: 'Password has been reset successfully.' });
   } catch (error) {
@@ -284,16 +290,17 @@ router.post('/verify-email', authRateLimiter, async (req, res) => {
     }
 
     const verificationHash = hashToken(token.trim());
-    const verificationRecord = await dbGet(
-      'SELECT * FROM email_verification_tokens WHERE token_hash = ?',
+    const verificationRecord = (await query(
+      'SELECT * FROM email_verification_tokens WHERE token_hash = $1',
       [verificationHash]
-    );
+    )).rows[0];
 
     if (!verificationRecord) {
       return res.status(400).json({ error: 'Invalid or expired verification token' });
     }
 
-    if (Number(verificationRecord.used) === 1) {
+    // UPDATED: 1 -> true
+    if (verificationRecord.used === true) {
       return res.status(400).json({ error: 'Verification token has already been used' });
     }
 
@@ -303,10 +310,13 @@ router.post('/verify-email', authRateLimiter, async (req, res) => {
 
     const verifiedAt = nowIso();
 
-    await dbRun('UPDATE users SET is_verified = 1, email_verified_at = ? WHERE id = ?', [verifiedAt, verificationRecord.user_id]);
-    await dbRun('UPDATE email_verification_tokens SET used = 1, used_at = ? WHERE id = ?', [verifiedAt, verificationRecord.id]);
-    await dbRun(
-      'DELETE FROM email_verification_tokens WHERE user_id = ? AND used = 0 AND id != ?',
+    // UPDATED: 1 -> true (This was the line causing your error)
+    await query('UPDATE users SET is_verified = true, email_verified_at = $1 WHERE id = $2', [verifiedAt, verificationRecord.user_id]);
+    // UPDATED: 1 -> true
+    await query('UPDATE email_verification_tokens SET used = true, used_at = $1 WHERE id = $2', [verifiedAt, verificationRecord.id]);
+    // UPDATED: 0 -> false
+    await query(
+      'DELETE FROM email_verification_tokens WHERE user_id = $1 AND used = false AND id != $2',
       [verificationRecord.user_id, verificationRecord.id]
     );
 
@@ -326,20 +336,21 @@ router.post('/refresh-token', authRateLimiter, async (req, res) => {
     }
 
     const refreshHash = hashToken(refreshToken);
-    const tokenRecord = await dbGet(
-      'SELECT * FROM refresh_tokens WHERE token_hash = ?',
+    const tokenRecord = (await query(
+      'SELECT * FROM refresh_tokens WHERE token_hash = $1',
       [refreshHash]
-    );
+    )).rows[0];
 
     if (
       !tokenRecord ||
-      Number(tokenRecord.revoked) === 1 ||
+      tokenRecord.revoked === true || // UPDATED: 1 -> true
       new Date(tokenRecord.expires_at).getTime() < Date.now()
     ) {
       return res.status(401).json({ error: 'Invalid refresh token' });
     }
 
-    const user = await dbGet('SELECT id, email, role, school_id FROM users WHERE id = ?', [tokenRecord.user_id]);
+    // Using "role" in quotes
+    const user = (await query('SELECT id, email, "role", school_id FROM users WHERE id = $1', [tokenRecord.user_id])).rows[0];
 
     if (!user) {
       return res.status(401).json({ error: 'Invalid refresh token' });
@@ -355,9 +366,10 @@ router.post('/refresh-token', authRateLimiter, async (req, res) => {
     const nextRefreshHash = hashToken(nextRefreshValue);
     const nextRefreshExpiresAt = addMilliseconds(JWT_REFRESH_TTL_MS);
 
-    await dbRun('UPDATE refresh_tokens SET revoked = 1, revoked_at = ? WHERE id = ?', [nowIso(), tokenRecord.id]);
-    await dbRun(
-      'INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES (?, ?, ?)',
+    // UPDATED: 1 -> true
+    await query('UPDATE refresh_tokens SET revoked = true, revoked_at = $1 WHERE id = $2', [nowIso(), tokenRecord.id]);
+    await query(
+      'INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)',
       [user.id, nextRefreshHash, nextRefreshExpiresAt]
     );
 

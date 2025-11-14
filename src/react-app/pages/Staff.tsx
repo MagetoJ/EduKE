@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '../components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
+import { useApi, useAuth } from '../contexts/AuthContext'
 
 // Mock staff data
 const mockStaff = [
@@ -89,6 +90,8 @@ const initialStaffForm = {
 }
 
 export default function Staff() {
+  const { user } = useAuth()
+  const api = useApi()
   const [activeTab, setActiveTab] = useState('directory')
   const [staff, setStaff] = useState(mockStaff)
   const [leaveRequests, setLeaveRequests] = useState(mockLeaveRequests)
@@ -174,9 +177,8 @@ export default function Staff() {
 
     try {
       if (formData.role === 'teacher') {
-        const response = await fetch('/api/users', {
+        const response = await api('/api/users', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             name: `${formData.firstName} ${formData.lastName}`.trim(),
             email: formData.email,

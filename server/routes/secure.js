@@ -10,7 +10,7 @@ const {
   getNextGrade,
   getMonthName
 } = require('../utils');
-const { dbRun, dbGet, dbAll } = require('../database');
+const { query } = require('../db/connection');
 
 const router = express.Router();
 
@@ -38,8 +38,9 @@ const normalizeDateOnly = (value) => {
   return parsed.toISOString().split('T')[0];
 };
 
+// UPDATED: dbAll -> query, ? -> $1...
 const getAttendanceRoster = async ({ schoolId, classSection, date }) => {
-  let query = `
+  let querySql = `
     SELECT
       s.id,
       s.first_name,
@@ -49,16 +50,17 @@ const getAttendanceRoster = async ({ schoolId, classSection, date }) => {
       a.status AS attendance_status,
       a.recorded_at
     FROM students s
-    LEFT JOIN attendance a ON a.student_id = s.id AND a.date = ?
-    WHERE s.school_id = ?
+    LEFT JOIN attendance a ON a.student_id = s.id AND a.date = $1
+    WHERE s.school_id = $2
   `;
   const params = [date, schoolId];
   if (classSection) {
-    query += ' AND s.class_section = ?';
+    querySql += ' AND s.class_section = $3';
     params.push(classSection);
   }
-  query += ' ORDER BY s.last_name COLLATE NOCASE ASC, s.first_name COLLATE NOCASE ASC';
-  return dbAll(query, params);
+  querySql += ' ORDER BY s.last_name COLLATE NOCASE ASC, s.first_name COLLATE NOCASE ASC';
+  const result = await query(querySql, params);
+  return result.rows;
 };
 
 const formatAttendanceRows = (rows) =>
@@ -93,11 +95,12 @@ const formatCourseResourceRow = (row) => ({
     : null
 });
 
+// UPDATED: dbGet -> query(...).rows[0]
 const getCourseForAccess = async (courseId) =>
-  dbGet(
-    'SELECT id, school_id, teacher_id FROM courses WHERE id = ? LIMIT 1',
+  (await query(
+    'SELECT id, school_id, teacher_id FROM courses WHERE id = $1 LIMIT 1',
     [courseId]
-  );
+  )).rows[0];
 
 const parseGradeLevels = (value) => {
   if (typeof value !== 'string' || value.trim() === '') {
@@ -128,11 +131,12 @@ const serializeGradeLevels = (levels) => {
   return JSON.stringify(normalized);
 };
 
+// UPDATED: dbGet -> query(...).rows[0]
 const fetchSubscriptionForSchool = async (schoolId) => {
   if (!schoolId) {
     return null;
   }
-  const row = await dbGet(
+  const row = (await query(
     `SELECT
        sub.id AS subscription_id,
        sub.school_id,
@@ -159,10 +163,10 @@ const fetchSubscriptionForSchool = async (schoolId) => {
        sp.is_trial
      FROM subscriptions sub
      JOIN subscription_plans sp ON sp.id = sub.plan_id
-     WHERE sub.school_id = ?
+     WHERE sub.school_id = $1
      LIMIT 1`,
     [schoolId]
-  );
+  )).rows[0];
 
   if (!row) {
     return null;
@@ -205,16 +209,17 @@ const hasPlanFeature = (subscription, featureKey) => {
   return Boolean(subscription.features?.[featureKey]);
 };
 
+// UPDATED: dbGet -> query(...).rows[0]
 const usageWithinLimit = async (subscription, { type }) => {
   if (!subscription) {
     return { allowed: false, reason: 'Subscription not found for school.' };
   }
 
   if (type === 'student' && typeof subscription.studentLimit === 'number') {
-    const row = await dbGet(
-      'SELECT COUNT(*) AS count FROM students WHERE school_id = ? AND status != ?',
+    const row = (await query(
+      'SELECT COUNT(*) AS count FROM students WHERE school_id = $1 AND status != $2',
       [subscription.schoolId, 'Archived']
-    );
+    )).rows[0];
     if (Number(row?.count || 0) >= subscription.studentLimit) {
       return {
         allowed: false,
@@ -224,14 +229,14 @@ const usageWithinLimit = async (subscription, { type }) => {
   }
 
   if (type === 'staff' && typeof subscription.staffLimit === 'number') {
-    const row = await dbGet(
+    const row = (await query(
       `SELECT COUNT(*) AS count
          FROM users
-         WHERE school_id = ?
-           AND role NOT IN ('student', 'parent', 'super_admin')
-           AND status != ?`,
+         WHERE school_id = $1
+           AND "role" NOT IN ('student', 'parent', 'super_admin')
+           AND status != $2`,
       [subscription.schoolId, 'Archived']
-    );
+    )).rows[0];
     if (Number(row?.count || 0) >= subscription.staffLimit) {
       return {
         allowed: false,
@@ -274,18 +279,19 @@ const ensureSubscriptionLoaded = async (req) => {
   return subscription;
 };
 
+// UPDATED: dbGet, dbRun, lastID
 const assignDefaultSubscription = async (schoolId) => {
   if (!schoolId) {
     return null;
   }
-  const existing = await dbGet('SELECT id FROM subscriptions WHERE school_id = ? LIMIT 1', [schoolId]);
+  const existing = (await query('SELECT id FROM subscriptions WHERE school_id = $1 LIMIT 1', [schoolId])).rows[0];
   if (existing) {
     return existing.id;
   }
-  const plan = await dbGet(
-    'SELECT id, trial_duration_days FROM subscription_plans WHERE slug = ? LIMIT 1',
+  const plan = (await query(
+    'SELECT id, trial_duration_days FROM subscription_plans WHERE slug = $1 LIMIT 1',
     ['trial']
-  );
+  )).rows[0];
   if (!plan) {
     return null;
   }
@@ -294,18 +300,19 @@ const assignDefaultSubscription = async (schoolId) => {
     typeof plan.trial_duration_days === 'number'
       ? new Date(Date.now() + plan.trial_duration_days * 86400000).toISOString()
       : null;
-  const result = await dbRun(
+  const result = await query(
     `INSERT INTO subscriptions (school_id, plan_id, status, start_date, trial_ends_at)
-     VALUES (?, ?, ?, ?, ?)`,
+     VALUES ($1, $2, $3, $4, $5) RETURNING id`,
     [schoolId, plan.id, 'active', startDate, trialEnds]
   );
-  return result.lastID;
+  return result.rows[0].id;
 };
 
+// UPDATED: dbAll -> query(...).rows
 router.get('/subscription/plans', async (req, res) => {
   if (req.user.role !== 'super_admin') {
     try {
-      const plans = await dbAll(
+      const plans = (await query(
         `SELECT
            id,
            name,
@@ -329,7 +336,7 @@ router.get('/subscription/plans', async (req, res) => {
            WHEN 'pro' THEN 2
            ELSE 3
          END`
-      );
+      )).rows;
       const normalizedPlans = plans.map((plan) => ({
         id: plan.id,
         name: plan.name,
@@ -353,7 +360,7 @@ router.get('/subscription/plans', async (req, res) => {
   }
 
   try {
-    const plans = await dbAll(
+    const plans = (await query(
       `SELECT
          id,
          name,
@@ -377,7 +384,7 @@ router.get('/subscription/plans', async (req, res) => {
          WHEN 'pro' THEN 2
          ELSE 3
        END`
-    );
+    )).rows;
 
     const normalizedPlans = plans.map((plan) => ({
       id: plan.id,
@@ -416,6 +423,7 @@ router.get('/schools/:id/subscription', async (req, res) => {
   }
 });
 
+// UPDATED: dbGet, dbRun -> query
 router.put('/schools/:id/subscription', async (req, res) => {
   if (req.user.role !== 'super_admin') {
     return res.status(403).json({ error: 'Forbidden' });
@@ -427,7 +435,7 @@ router.put('/schools/:id/subscription', async (req, res) => {
       return res.status(400).json({ error: 'Plan identifier is required.' });
     }
 
-    const plan = await dbGet(
+    const plan = (await query(
       `SELECT
          id,
          slug,
@@ -435,21 +443,21 @@ router.put('/schools/:id/subscription', async (req, res) => {
          staff_limit,
          trial_duration_days
        FROM subscription_plans
-       WHERE ${planId ? 'id = ?' : 'slug = ?'}
+       WHERE ${planId ? `id = $1` : `slug = $1`}
        LIMIT 1`,
       [planId ?? planSlug]
-    );
+    )).rows[0];
 
     if (!plan) {
       return res.status(404).json({ error: 'Subscription plan not found.' });
     }
 
-    const usage = await dbGet(
+    const usage = (await query(
       `SELECT
-         (SELECT COUNT(*) FROM students WHERE school_id = ?) AS student_count,
-         (SELECT COUNT(*) FROM users WHERE school_id = ? AND role NOT IN ('student', 'parent', 'super_admin')) AS staff_count`,
+         (SELECT COUNT(*) FROM students WHERE school_id = $1) AS student_count,
+         (SELECT COUNT(*) FROM users WHERE school_id = $2 AND "role" NOT IN ('student', 'parent', 'super_admin')) AS staff_count`,
       [id, id]
-    );
+    )).rows[0];
 
     if (
       typeof plan.student_limit === 'number' &&
@@ -465,10 +473,10 @@ router.put('/schools/:id/subscription', async (req, res) => {
       return res.status(409).json({ error: 'Current staff count exceeds the selected plan limit.' });
     }
 
-    const subscription = await dbGet(
-      'SELECT id FROM subscriptions WHERE school_id = ? LIMIT 1',
+    const subscription = (await query(
+      'SELECT id FROM subscriptions WHERE school_id = $1 LIMIT 1',
       [id]
-    );
+    )).rows[0];
 
     const startDate = nowIso();
     const trialEnds =
@@ -478,20 +486,20 @@ router.put('/schools/:id/subscription', async (req, res) => {
     const normalizedStatus = typeof status === 'string' ? status : 'active';
 
     if (subscription) {
-      await dbRun(
+      await query(
         `UPDATE subscriptions
-           SET plan_id = ?,
-               status = ?,
-               start_date = ?,
+           SET plan_id = $1,
+               status = $2,
+               start_date = $3,
                end_date = NULL,
-               trial_ends_at = ?
-         WHERE id = ?`,
+               trial_ends_at = $4
+         WHERE id = $5`,
         [plan.id, normalizedStatus, startDate, trialEnds, subscription.id]
       );
     } else {
-      await dbRun(
+      await query(
         `INSERT INTO subscriptions (school_id, plan_id, status, start_date, trial_ends_at)
-         VALUES (?, ?, ?, ?, ?)`,
+         VALUES ($1, $2, $3, $4, $5)`,
         [id, plan.id, normalizedStatus, startDate, trialEnds]
       );
     }
@@ -503,29 +511,32 @@ router.put('/schools/:id/subscription', async (req, res) => {
   }
 });
 
+// UPDATED: dbRun -> query, .lastID -> .rows[0].id
 router.post('/schools', async (req, res) => {
   if (req.user.role !== 'super_admin') {
     return res.status(403).json({ error: 'Forbidden' });
   }
   try {
     const { name, address, phone, email, principal, logo } = req.body;
-    const result = await dbRun(
-      'INSERT INTO schools (name, address, phone, email, principal, logo) VALUES (?, ?, ?, ?, ?, ?)',
+    const result = await query(
+      'INSERT INTO schools (name, address, phone, email, principal, logo) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
       [name, address, phone, email, principal, logo]
     );
-    await assignDefaultSubscription(result.lastID);
-    res.json({ success: true, id: result.lastID });
+    await assignDefaultSubscription(result.rows[0].id);
+    res.json({ success: true, id: result.rows[0].id });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
+// UPDATED: dbAll -> query(...).rows
 router.get('/schools', async (req, res) => {
   if (req.user.role !== 'super_admin') {
     return res.status(403).json({ error: 'Forbidden' });
   }
   try {
-    const schools = await dbAll(`
+    // Note: Using "role" in SQL, which is fine for PostgreSQL if not quoted.
+    const schools = (await query(`
       SELECT
         s.id,
         s.name,
@@ -534,7 +545,7 @@ router.get('/schools', async (req, res) => {
         s.email,
         s.principal,
         (SELECT COUNT(*) FROM students WHERE school_id = s.id) AS students,
-        (SELECT COUNT(*) FROM users WHERE school_id = s.id AND role != 'student' AND role != 'parent') AS staff,
+        (SELECT COUNT(*) FROM users WHERE school_id = s.id AND "role" != 'student' AND "role" != 'parent') AS staff,
         (SELECT SUM(sf.amount_paid) FROM student_fees sf JOIN students st ON sf.student_id = st.id WHERE st.school_id = s.id) AS revenue,
         sub.status AS subscription_status,
         sub.start_date AS subscription_start_date,
@@ -546,13 +557,13 @@ router.get('/schools', async (req, res) => {
       FROM schools s
       LEFT JOIN subscriptions sub ON sub.school_id = s.id
       LEFT JOIN subscription_plans sp ON sp.id = sub.plan_id
-    `);
+    `)).rows;
 
     const formattedSchools = schools.map((school) => ({
       ...school,
       id: school.id.toString(),
       revenue: `$${(school.revenue || 0).toLocaleString()}`,
-      status: 'Active',
+      status: 'Active', // This status seems hardcoded, might need to review logic
       subscription: school.subscription_plan_name
         ? {
             planName: school.subscription_plan_name,
@@ -578,13 +589,14 @@ router.get('/schools', async (req, res) => {
   }
 });
 
+// UPDATED: dbGet -> query(...).rows[0]
 router.get('/schools/:id', async (req, res) => {
   if (req.user.role !== 'super_admin') {
     return res.status(403).json({ error: 'Forbidden' });
   }
   try {
     const { id } = req.params;
-    const school = await dbGet(
+    const school = (await query(
       `SELECT
         s.id,
         s.name,
@@ -597,7 +609,7 @@ router.get('/schools/:id', async (req, res) => {
         s.created_at,
         s.grade_levels,
         (SELECT COUNT(*) FROM students WHERE school_id = s.id) AS students,
-        (SELECT COUNT(*) FROM users WHERE school_id = s.id AND role != 'student' AND role != 'parent') AS staff,
+        (SELECT COUNT(*) FROM users WHERE school_id = s.id AND "role" != 'student' AND "role" != 'parent') AS staff,
         sub.status AS subscription_status,
         sub.start_date AS subscription_start_date,
         sub.trial_ends_at AS subscription_trial_ends_at,
@@ -610,9 +622,9 @@ router.get('/schools/:id', async (req, res) => {
       FROM schools s
       LEFT JOIN subscriptions sub ON sub.school_id = s.id
       LEFT JOIN subscription_plans sp ON sp.id = sub.plan_id
-      WHERE s.id = ?`,
+      WHERE s.id = $1`,
       [id]
-    );
+    )).rows[0];
 
     if (!school) {
       return res.status(404).json({ error: 'School not found' });
@@ -630,6 +642,7 @@ router.get('/schools/:id', async (req, res) => {
   }
 });
 
+// UPDATED: dbGet -> query(...).rows[0]
 router.get('/school/settings', async (req, res) => {
   try {
     let targetSchoolId;
@@ -647,7 +660,7 @@ router.get('/school/settings', async (req, res) => {
       targetSchoolId = Number(req.user.schoolId);
     }
 
-    const school = await dbGet(
+    const school = (await query(
       `SELECT
          id,
          name,
@@ -659,10 +672,10 @@ router.get('/school/settings', async (req, res) => {
          level,
          principal
        FROM schools
-       WHERE id = ?
+       WHERE id = $1
        LIMIT 1`,
       [targetSchoolId]
-    );
+    )).rows[0];
 
     if (!school) {
       return res.status(404).json({ error: 'School not found.' });
@@ -684,6 +697,7 @@ router.get('/school/settings', async (req, res) => {
   }
 });
 
+// UPDATED: dbRun -> query, dynamic params
 router.put('/school/settings', async (req, res) => {
   if (req.user.role !== 'admin' && req.user.role !== 'super_admin') {
     return res.status(403).json({ error: 'Forbidden' });
@@ -707,67 +721,53 @@ router.put('/school/settings', async (req, res) => {
     const updates = [];
     const params = [];
 
+    // Helper to build dynamic query
+    const addUpdate = (key, value) => {
+      // Use quotes for column names to be safe
+      updates.push(`"${key}" = $${params.length + 1}`);
+      params.push(value);
+    };
+
     if (typeof req.body.name === 'string') {
       const name = req.body.name.trim();
-      if (name.length > 0) {
-        updates.push('name = ?');
-        params.push(name);
-      }
+      if (name.length > 0) addUpdate('name', name);
     }
-
     if (typeof req.body.logo === 'string') {
-      const logo = req.body.logo.trim();
-      updates.push('logo = ?');
-      params.push(logo.length > 0 ? logo : null);
+      addUpdate('logo', req.body.logo.trim().length > 0 ? req.body.logo.trim() : null);
     }
-
     if (typeof req.body.primaryColor === 'string') {
-      const primaryColor = req.body.primaryColor.trim();
-      updates.push('primary_color = ?');
-      params.push(primaryColor.length > 0 ? primaryColor : null);
+      addUpdate('primary_color', req.body.primaryColor.trim().length > 0 ? req.body.primaryColor.trim() : null);
     }
-
     if (typeof req.body.accentColor === 'string') {
-      const accentColor = req.body.accentColor.trim();
-      updates.push('accent_color = ?');
-      params.push(accentColor.length > 0 ? accentColor : null);
+      addUpdate('accent_color', req.body.accentColor.trim().length > 0 ? req.body.accentColor.trim() : null);
     }
-
     if (Array.isArray(req.body.gradeLevels)) {
-      updates.push('grade_levels = ?');
-      params.push(serializeGradeLevels(req.body.gradeLevels));
+      addUpdate('grade_levels', serializeGradeLevels(req.body.gradeLevels));
     }
-
     if (typeof req.body.curriculum === 'string') {
-      const curriculum = req.body.curriculum.trim();
-      updates.push('curriculum = ?');
-      params.push(curriculum.length > 0 ? curriculum : null);
+      addUpdate('curriculum', req.body.curriculum.trim().length > 0 ? req.body.curriculum.trim() : null);
     }
-
     if (typeof req.body.level === 'string') {
-      const level = req.body.level.trim();
-      updates.push('level = ?');
-      params.push(level.length > 0 ? level : null);
+      addUpdate('level', req.body.level.trim().length > 0 ? req.body.level.trim() : null);
     }
-
     if (typeof req.body.principal === 'string') {
-      const principal = req.body.principal.trim();
-      updates.push('principal = ?');
-      params.push(principal.length > 0 ? principal : null);
+      addUpdate('principal', req.body.principal.trim().length > 0 ? req.body.principal.trim() : null);
     }
 
     if (updates.length === 0) {
       return res.status(400).json({ error: 'No updates provided.' });
     }
 
-    params.push(targetSchoolId);
+    params.push(targetSchoolId); // Add the ID for the WHERE clause
+    const whereClause = `WHERE id = $${params.length}`;
 
-    await dbRun(
-      `UPDATE schools SET ${updates.join(', ')} WHERE id = ?`,
+    await query(
+      `UPDATE schools SET ${updates.join(', ')} ${whereClause}`,
       params
     );
 
-    const updatedSchool = await dbGet(
+    // UPDATED: dbGet -> query(...).rows[0]
+    const updatedSchool = (await query(
       `SELECT
          id,
          name,
@@ -779,10 +779,10 @@ router.put('/school/settings', async (req, res) => {
          level,
          principal
        FROM schools
-       WHERE id = ?
+       WHERE id = $1
        LIMIT 1`,
       [targetSchoolId]
-    );
+    )).rows[0];
 
     res.json({
       schoolId: String(updatedSchool.id),
@@ -800,6 +800,7 @@ router.put('/school/settings', async (req, res) => {
   }
 });
 
+// UPDATED: dbGet, dbRun -> query
 router.post('/schools/:id/admin', async (req, res) => {
   if (req.user.role !== 'super_admin') {
     return res.status(403).json({ error: 'Forbidden' });
@@ -814,55 +815,56 @@ router.post('/schools/:id/admin', async (req, res) => {
       return res.status(400).json({ error: 'Invalid role specified.' });
     }
 
-    const school = await dbGet('SELECT id FROM schools WHERE id = ?', [id]);
+    const school = (await query('SELECT id FROM schools WHERE id = $1', [id])).rows[0];
     if (!school) {
       return res.status(404).json({ error: 'School not found' });
     }
 
     const normalizedEmail = email.trim().toLowerCase();
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
-    const existingUser = await dbGet('SELECT id FROM users WHERE email = ?', [normalizedEmail]);
+    const existingUser = (await query('SELECT id FROM users WHERE email = $1', [normalizedEmail])).rows[0];
     const targetSchoolId = role === 'super_admin' ? null : Number(id);
 
     if (existingUser) {
-      await dbRun(
+      await query(
         `UPDATE users
-           SET name = ?,
-               phone = ?,
-               role = ?,
-               school_id = ?,
-               password_hash = ?,
+           SET "name" = $1,
+               phone = $2,
+               "role" = $3,
+               school_id = $4,
+               password_hash = $5,
                is_verified = 1,
                email_verified_at = COALESCE(email_verified_at, CURRENT_TIMESTAMP)
-         WHERE id = ?`,
+         WHERE id = $6`,
         [name, phone ?? null, role, targetSchoolId, passwordHash, existingUser.id]
       );
       return res.json({ success: true, id: existingUser.id, updated: true });
     }
 
-    const result = await dbRun(
-      `INSERT INTO users (name, email, phone, password_hash, role, school_id, is_verified, email_verified_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    const result = await query(
+      `INSERT INTO users ("name", email, phone, password_hash, "role", school_id, is_verified, email_verified_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
       [name, normalizedEmail, phone ?? null, passwordHash, role, targetSchoolId, 1, nowIso()]
     );
 
-    res.json({ success: true, id: result.lastID });
+    res.json({ success: true, id: result.rows[0].id });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
+// UPDATED: dbAll -> query(...).rows
 router.get('/staff', async (req, res) => {
   if (!req.user.schoolId) {
     return res.status(400).json({ error: 'User is not associated with a school.' });
   }
   try {
-    const staff = await dbAll(
-      `SELECT id, name, email, phone, role, department, class_assigned, subject, status, created_at as joinDate 
+    const staff = (await query(
+      `SELECT id, name, email, phone, "role", department, class_assigned, subject, status, created_at as joinDate 
        FROM users 
-       WHERE school_id = ? AND role NOT IN ('student', 'parent', 'super_admin')`,
+       WHERE school_id = $1 AND "role" NOT IN ('student', 'parent', 'super_admin')`,
       [req.user.schoolId]
-    );
+    )).rows;
 
     const formattedStaff = staff.map((s) => ({
       id: s.id.toString(),
@@ -884,6 +886,7 @@ router.get('/staff', async (req, res) => {
   }
 });
 
+// UPDATED: dbRun -> query, .changes -> .rowCount
 router.put('/staff/:id', async (req, res) => {
   if (!req.user.schoolId) {
     return res.status(400).json({ error: 'User is not associated with a school.' });
@@ -892,39 +895,40 @@ router.put('/staff/:id', async (req, res) => {
     const { id } = req.params;
     const { name, email, phone, role, department, classAssigned, subject, status } = req.body;
 
-    const result = await dbRun(
+    const result = await query(
       `UPDATE users 
-       SET name = ?, email = ?, phone = ?, role = ?, department = ?, class_assigned = ?, subject = ?, status = ?
-       WHERE id = ? AND school_id = ?`,
+       SET "name" = $1, email = $2, phone = $3, "role" = $4, department = $5, class_assigned = $6, subject = $7, status = $8
+       WHERE id = $9 AND school_id = $10`,
       [name, email, phone, role, department ?? null, classAssigned ?? null, subject ?? null, status ?? 'Active', id, req.user.schoolId]
     );
 
-    if (result.changes === 0) {
+    if (result.rowCount === 0) {
       return res.status(404).json({ error: 'Staff member not found or user not authorized.' });
     }
-    res.json({ success: true, changes: result.changes });
+    res.json({ success: true, changes: result.rowCount });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
+// UPDATED: dbAll -> query(...).rows
 router.get('/students', async (req, res) => {
   if (!req.user.schoolId) {
     return res.status(400).json({ error: 'User is not associated with a school.' });
   }
   try {
-    const students = await dbAll(
+    const students = (await query(
       `SELECT 
          s.id, s.first_name, s.last_name, s.email, s.grade, s.class_section, s.status, s.phone,
          p.name as parentGuardian,
          COALESCE(SUM(sf.amount_due - sf.amount_paid), 0) as outstandingFees
        FROM students s
-       LEFT JOIN users p ON s.parent_id = p.id AND p.role = 'parent'
+       LEFT JOIN users p ON s.parent_id = p.id AND p."role" = 'parent'
        LEFT JOIN student_fees sf ON s.id = sf.student_id
-       WHERE s.school_id = ?
+       WHERE s.school_id = $1
        GROUP BY s.id, s.first_name, s.last_name, s.email, s.grade, s.class_section, s.status, s.phone, p.name`,
       [req.user.schoolId]
-    );
+    )).rows;
 
     const formattedStudents = students.map((s) => ({
       id: s.id.toString(),
@@ -944,6 +948,7 @@ router.get('/students', async (req, res) => {
   }
 });
 
+// UPDATED: dbRun -> query, .lastID -> .rows[0].id
 router.post('/students', async (req, res) => {
   if (!req.user.schoolId) {
     return res.status(400).json({ error: 'User is not associated with a school.' });
@@ -967,8 +972,8 @@ router.post('/students', async (req, res) => {
       parent_id
     } = req.body;
 
-    const result = await dbRun(
-      'INSERT INTO students (first_name, last_name, email, phone, date_of_birth, address, grade, enrollment_date, school_id, parent_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    const result = await query(
+      'INSERT INTO students (first_name, last_name, email, phone, date_of_birth, address, grade, enrollment_date, school_id, parent_id, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id',
       [
         first_name,
         last_name,
@@ -983,12 +988,13 @@ router.post('/students', async (req, res) => {
         'Active'
       ]
     );
-    res.json({ success: true, id: result.lastID });
+    res.json({ success: true, id: result.rows[0].id });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
+// UPDATED: dbRun -> query, .changes -> .rowCount
 router.put('/students/:id', async (req, res) => {
   if (!req.user.schoolId) {
     return res.status(400).json({ error: 'User is not associated with a school.' });
@@ -1003,22 +1009,23 @@ router.put('/students/:id', async (req, res) => {
     const [first_name, ...lastNameParts] = normalizedName.split(/\s+/);
     const last_name = lastNameParts.join(' ');
 
-    const result = await dbRun(
+    const result = await query(
       `UPDATE students 
-       SET first_name = ?, last_name = ?, email = ?, phone = ?, grade = ?, class_section = ?, status = ?
-       WHERE id = ? AND school_id = ?`,
+       SET first_name = $1, last_name = $2, email = $3, phone = $4, grade = $5, class_section = $6, status = $7
+       WHERE id = $8 AND school_id = $9`,
       [first_name, last_name || null, email, phone, grade, classSection ?? null, status ?? 'Active', id, req.user.schoolId]
     );
 
-    if (result.changes === 0) {
+    if (result.rowCount === 0) {
       return res.status(404).json({ error: 'Student not found or user not authorized.' });
     }
-    res.json({ success: true, changes: result.changes });
+    res.json({ success: true, changes: result.rowCount });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
+// UPDATED: dbRun -> query, dynamic params, .lastID -> .rows[0].id
 router.post('/users', async (req, res) => {
   if (!req.user.schoolId && req.body.role !== 'super_admin') {
     return res.status(400).json({ error: 'User is not associated with a school.' });
@@ -1041,30 +1048,33 @@ router.post('/users', async (req, res) => {
     const school_id = req.user.role === 'super_admin' && role === 'super_admin' ? null : req.user.schoolId;
 
     const columns = ['name', 'email', 'password_hash', 'role', 'phone', 'school_id', 'is_verified', 'email_verified_at'];
-    const placeholders = ['?', '?', '?', '?', '?', '?', '?', '?'];
     const verifiedAt = nowIso();
     const bindings = [name, email, passwordHash, role, phone ?? null, school_id, 1, verifiedAt];
 
     if (class_assigned !== undefined) {
       columns.push('class_assigned');
-      placeholders.push('?');
       bindings.push(class_assigned);
     }
     if (subject !== undefined) {
       columns.push('subject');
-      placeholders.push('?');
       bindings.push(subject);
     }
 
-    const query = `INSERT INTO users (${columns.join(', ')}) VALUES (${placeholders.join(', ')})`;
-    const result = await dbRun(query, bindings);
-    res.json({ success: true, id: result.lastID });
+    const placeholders = bindings.map((_, i) => `$${i + 1}`).join(', ');
+    // Quote reserved column names
+    const safeColumns = columns.map(c => ['role', 'name'].includes(c) ? `"${c}"` : c);
+    
+    const querySql = `INSERT INTO users (${safeColumns.join(', ')}) VALUES (${placeholders}) RETURNING id`;
+    const result = await query(querySql, bindings);
+
+    res.json({ success: true, id: result.rows[0].id });
   } catch (error) {
     console.error('User creation error:', error);
     res.status(500).json({ error: 'Failed to create user.' });
   }
 });
 
+// UPDATED: dbGet, dbAll -> query
 router.post('/parent/access', async (req, res) => {
   if (!(await requireFeature(req, res, 'parentPortal'))) {
     return;
@@ -1072,10 +1082,10 @@ router.post('/parent/access', async (req, res) => {
   try {
     const { student_id, student_password } = req.body;
 
-    const student = await dbGet(
-      'SELECT * FROM students WHERE id = ?',
+    const student = (await query(
+      'SELECT * FROM students WHERE id = $1',
       [student_id]
-    );
+    )).rows[0];
     if (!student) {
       return res.status(404).json({ error: 'Student not found' });
     }
@@ -1084,10 +1094,10 @@ router.post('/parent/access', async (req, res) => {
       return res.status(403).json({ error: 'Access denied to this student record.' });
     }
 
-    const studentUser = await dbGet(
-      'SELECT * FROM users WHERE email = ? AND role = ?',
+    const studentUser = (await query(
+      'SELECT * FROM users WHERE email = $1 AND "role" = $2',
       [student.email, 'student']
-    );
+    )).rows[0];
     if (!studentUser) {
       return res.status(401).json({ error: 'Student account not found or password not set.' });
     }
@@ -1097,30 +1107,30 @@ router.post('/parent/access', async (req, res) => {
       return res.status(401).json({ error: 'Invalid student ID or password' });
     }
 
-    const discipline = await dbAll(
-      'SELECT * FROM discipline WHERE student_id = ? ORDER BY date DESC',
+    const discipline = (await query(
+      'SELECT * FROM discipline WHERE student_id = $1 ORDER BY date DESC',
       [student_id]
-    );
+    )).rows;
 
-    const performance = await dbAll(
-      'SELECT * FROM performance WHERE student_id = ? ORDER BY date_recorded DESC',
+    const performance = (await query(
+      'SELECT * FROM performance WHERE student_id = $1 ORDER BY date_recorded DESC',
       [student_id]
-    );
+    )).rows;
 
-    const attendance = await dbAll(
-      'SELECT * FROM attendance WHERE student_id = ? ORDER BY date DESC LIMIT 50',
+    const attendance = (await query(
+      'SELECT * FROM attendance WHERE student_id = $1 ORDER BY date DESC LIMIT 50',
       [student_id]
-    );
+    )).rows;
 
-    const financial = await dbGet(
+    const financial = (await query(
       `SELECT 
         SUM(amount_due) as totalFees, 
         SUM(amount_paid) as feesPaid,
         SUM(amount_due - amount_paid) as feesDue
        FROM student_fees 
-       WHERE student_id = ?`,
+       WHERE student_id = $1`,
       [student_id]
-    );
+    )).rows[0];
 
     res.json({
       student: {
@@ -1145,25 +1155,27 @@ router.post('/parent/access', async (req, res) => {
   }
 });
 
+// UPDATED: dbGet -> query(...).rows[0]
 router.get('/academic-year', async (req, res) => {
   if (!req.user.schoolId) {
     return res.status(400).json({ error: 'User is not associated with a school.' });
   }
   try {
-    const activeYear = await dbGet(
-      'SELECT id, school_id, start_date, end_date, status FROM academic_years WHERE status = ? AND school_id = ? ORDER BY start_date DESC LIMIT 1',
+    const activeYear = (await query(
+      'SELECT id, school_id, start_date, end_date, status FROM academic_years WHERE status = $1 AND school_id = $2 ORDER BY start_date DESC LIMIT 1',
       ['active', req.user.schoolId]
-    );
-    const latestYear = await dbGet(
-      'SELECT id, school_id, start_date, end_date, status FROM academic_years WHERE status = ? AND school_id = ? ORDER BY end_date DESC LIMIT 1',
+    )).rows[0];
+    const latestYear = (await query(
+      'SELECT id, school_id, start_date, end_date, status FROM academic_years WHERE status = $1 AND school_id = $2 ORDER BY end_date DESC LIMIT 1',
       ['completed', req.user.schoolId]
-    );
+    )).rows[0];
     res.json({ activeYear, latestYear });
   } catch (error) {
     res.status(500).json({ error: 'Failed to load academic year.' });
   }
 });
 
+// UPDATED: dbGet, dbRun -> query
 router.post('/academic-year/start', async (req, res) => {
   if (!req.user.schoolId) {
     return res.status(400).json({ error: 'User is not associated with a school.' });
@@ -1172,23 +1184,24 @@ router.post('/academic-year/start', async (req, res) => {
     const { start_date } = req.body;
     const school_id = req.user.schoolId;
 
-    const existingActive = await dbGet(
-      'SELECT id FROM academic_years WHERE school_id = ? AND status = ?',
+    const existingActive = (await query(
+      'SELECT id FROM academic_years WHERE school_id = $1 AND status = $2',
       [school_id, 'active']
-    );
+    )).rows[0];
     if (existingActive) {
       return res.status(409).json({ error: 'An academic year is already active.' });
     }
-    const result = await dbRun(
-      'INSERT INTO academic_years (school_id, start_date, status) VALUES (?, ?, ?)',
+    const result = await query(
+      'INSERT INTO academic_years (school_id, start_date, status) VALUES ($1, $2, $3) RETURNING id',
       [school_id, start_date, 'active']
     );
-    res.json({ success: true, id: result.lastID });
+    res.json({ success: true, id: result.rows[0].id });
   } catch (error) {
     res.status(500).json({ error: 'Failed to start academic year.' });
   }
 });
 
+// UPDATED: dbGet, dbAll, dbRun -> query
 const runStudentPromotion = async (schoolId, startDate, endDate) => {
   const summary = {
     promoted: 0,
@@ -1197,16 +1210,16 @@ const runStudentPromotion = async (schoolId, startDate, endDate) => {
     updatedStudents: []
   };
 
-  const schoolRow = await dbGet(
-    'SELECT curriculum FROM schools WHERE id = ?',
+  const schoolRow = (await query(
+    'SELECT curriculum FROM schools WHERE id = $1',
     [schoolId]
-  );
+  )).rows[0];
   const schoolCurriculum = schoolRow?.curriculum || DEFAULT_CURRICULUM;
 
-  const students = await dbAll(
-    'SELECT id, grade, status FROM students WHERE school_id = ? AND status = ?',
+  const students = (await query(
+    'SELECT id, grade, status FROM students WHERE school_id = $1 AND status = $2',
     [schoolId, 'Active']
-  );
+  )).rows;
 
   for (const student of students) {
     const studentId = Number(student.id);
@@ -1217,10 +1230,10 @@ const runStudentPromotion = async (schoolId, startDate, endDate) => {
 
     let averageGrade = null;
     try {
-      const performanceRow = await dbGet(
-        'SELECT AVG(CAST(grade AS REAL)) as average_grade FROM performance WHERE student_id = ? AND date_recorded BETWEEN ? AND ?',
+      const performanceRow = (await query(
+        'SELECT AVG(CAST(grade AS REAL)) as average_grade FROM performance WHERE student_id = $1 AND date_recorded BETWEEN $2 AND $3',
         [studentId, startDate, endDate]
-      );
+      )).rows[0];
       if (performanceRow && performanceRow.average_grade !== null) {
         averageGrade = Number(performanceRow.average_grade);
       }
@@ -1232,18 +1245,18 @@ const runStudentPromotion = async (schoolId, startDate, endDate) => {
     const { nextGrade, status } = getNextGrade(schoolCurriculum, currentGrade);
 
     if (status === 'Graduated') {
-      await dbRun('UPDATE students SET status = ? WHERE id = ?', ['Graduated', studentId]);
+      await query('UPDATE students SET status = $1 WHERE id = $2', ['Graduated', studentId]);
       summary.graduated += 1;
       summary.updatedStudents.push({ id: studentId, grade: currentGrade ?? undefined, status: 'Graduated' });
       continue;
     }
 
     if (nextGrade && (averageGrade === null || averageGrade >= PROMOTION_THRESHOLD)) {
-      await dbRun('UPDATE students SET grade = ?, status = ? WHERE id = ?', [nextGrade, 'Active', studentId]);
+      await query('UPDATE students SET grade = $1, status = $2 WHERE id = $3', [nextGrade, 'Active', studentId]);
       summary.promoted += 1;
       summary.updatedStudents.push({ id: studentId, grade: nextGrade, status: 'Active' });
     } else {
-      await dbRun('UPDATE students SET status = ? WHERE id = ?', ['Retained', studentId]);
+      await query('UPDATE students SET status = $1 WHERE id = $2', ['Retained', studentId]);
       summary.retained += 1;
       summary.updatedStudents.push({ id: studentId, grade: currentGrade ?? undefined, status: 'Retained' });
     }
@@ -1251,6 +1264,7 @@ const runStudentPromotion = async (schoolId, startDate, endDate) => {
   return summary;
 };
 
+// UPDATED: dbGet, dbRun -> query
 router.post('/academic-year/end', async (req, res) => {
   const school_id = req.user.schoolId;
   const { year_id } = req.body;
@@ -1260,10 +1274,10 @@ router.post('/academic-year/end', async (req, res) => {
   }
 
   try {
-    const activeYear = await dbGet(
-      'SELECT id, start_date FROM academic_years WHERE id = ? AND school_id = ? AND status = ?',
+    const activeYear = (await query(
+      'SELECT id, start_date FROM academic_years WHERE id = $1 AND school_id = $2 AND status = $3',
       [year_id, school_id, 'active']
-    );
+    )).rows[0];
     if (!activeYear) {
       return res.status(404).json({ error: 'Active academic year not found.' });
     }
@@ -1272,8 +1286,8 @@ router.post('/academic-year/end', async (req, res) => {
 
     const promotionResult = await runStudentPromotion(school_id, startDate, endDate);
 
-    await dbRun(
-      'UPDATE academic_years SET end_date = ?, status = ? WHERE id = ?',
+    await query(
+      'UPDATE academic_years SET end_date = $1, status = $2 WHERE id = $3',
       [endDate, 'completed', year_id]
     );
     res.json({
@@ -1288,69 +1302,74 @@ router.post('/academic-year/end', async (req, res) => {
   }
 });
 
+// UPDATED: dbRun -> query
 router.post('/discipline', async (req, res) => {
   try {
     const { student_id, type, severity, description, date } = req.body;
     const teacher_id = req.user.id;
 
-    const result = await dbRun(
-      'INSERT INTO discipline (student_id, teacher_id, type, severity, description, date, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    const result = await query(
+      'INSERT INTO discipline (student_id, teacher_id, type, severity, description, date, status) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
       [student_id, teacher_id, type, severity, description, date, 'Pending']
     );
-    res.json({ success: true, id: result.lastID });
+    res.json({ success: true, id: result.rows[0].id });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
+// UPDATED: dbAll -> query(...).rows
 router.get('/discipline/:studentId', async (req, res) => {
   try {
     const { studentId } = req.params;
-    const result = await dbAll(
-      'SELECT * FROM discipline WHERE student_id = ? ORDER BY date DESC',
+    const result = (await query(
+      'SELECT * FROM discipline WHERE student_id = $1 ORDER BY date DESC',
       [studentId]
-    );
+    )).rows;
     res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
+// UPDATED: dbRun -> query
 router.post('/performance', async (req, res) => {
   try {
     const { student_id, subject, grade, term, comments } = req.body;
     const teacher_id = req.user.id;
 
-    const result = await dbRun(
-      'INSERT INTO performance (student_id, teacher_id, subject, grade, term, comments, date_recorded) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    const result = await query(
+      'INSERT INTO performance (student_id, teacher_id, subject, grade, term, comments, date_recorded) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
       [student_id, teacher_id, subject, grade, term, comments, new Date().toISOString()]
     );
-    res.json({ success: true, id: result.lastID });
+    res.json({ success: true, id: result.rows[0].id });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
+// UPDATED: dbAll -> query(...).rows
 router.get('/performance/:studentId', async (req, res) => {
   try {
     const { studentId } = req.params;
-    const result = await dbAll(
-      'SELECT * FROM performance WHERE student_id = ? ORDER BY date_recorded DESC',
+    const result = (await query(
+      'SELECT * FROM performance WHERE student_id = $1 ORDER BY date_recorded DESC',
       [studentId]
-    );
+    )).rows;
     res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
+// UPDATED: dbAll -> query(...).rows
 router.get('/courses/:courseId/resources', async (req, res) => {
   const courseId = Number(req.params.courseId);
   if (!Number.isInteger(courseId) || courseId <= 0) {
     return res.status(400).json({ error: 'Invalid course identifier.' });
   }
   try {
-    const course = await getCourseForAccess(courseId);
+    const course = await getCourseForAccess(courseId); // Already uses new query
     if (!course) {
       return res.status(404).json({ error: 'Course not found.' });
     }
@@ -1360,7 +1379,7 @@ router.get('/courses/:courseId/resources', async (req, res) => {
       }
     }
 
-    const rows = await dbAll(
+    const rows = (await query(
       `SELECT
          cr.id,
          cr.course_id,
@@ -1373,10 +1392,10 @@ router.get('/courses/:courseId/resources', async (req, res) => {
          u.name AS created_by_name
        FROM course_resources cr
        LEFT JOIN users u ON u.id = cr.created_by
-       WHERE cr.course_id = ?
+       WHERE cr.course_id = $1
        ORDER BY cr.created_at DESC`,
       [courseId]
-    );
+    )).rows;
 
     res.json({
       courseId: String(courseId),
@@ -1387,13 +1406,14 @@ router.get('/courses/:courseId/resources', async (req, res) => {
   }
 });
 
+// UPDATED: dbRun, dbGet -> query
 router.post('/courses/:courseId/resources', async (req, res) => {
   const courseId = Number(req.params.courseId);
   if (!Number.isInteger(courseId) || courseId <= 0) {
     return res.status(400).json({ error: 'Invalid course identifier.' });
   }
   try {
-    const course = await getCourseForAccess(courseId);
+    const course = await getCourseForAccess(courseId); // Already uses new query
     if (!course) {
       return res.status(404).json({ error: 'Course not found.' });
     }
@@ -1425,13 +1445,13 @@ router.post('/courses/:courseId/resources', async (req, res) => {
       return res.status(400).json({ error: 'Invalid user context.' });
     }
 
-    const insertResult = await dbRun(
+    const insertResult = await query(
       `INSERT INTO course_resources (course_id, title, description, resource_type, url, created_by)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
       [courseId, title, description, resourceType, url, userId]
     );
 
-    const inserted = await dbGet(
+    const inserted = (await query(
       `SELECT
          cr.id,
          cr.course_id,
@@ -1444,10 +1464,10 @@ router.post('/courses/:courseId/resources', async (req, res) => {
          u.name AS created_by_name
        FROM course_resources cr
        LEFT JOIN users u ON u.id = cr.created_by
-       WHERE cr.id = ?
+       WHERE cr.id = $1
        LIMIT 1`,
-      [insertResult.lastID]
-    );
+      [insertResult.rows[0].id]
+    )).rows[0];
 
     res.status(201).json({ resource: formatCourseResourceRow(inserted) });
   } catch (error) {
@@ -1455,6 +1475,7 @@ router.post('/courses/:courseId/resources', async (req, res) => {
   }
 });
 
+// UPDATED: dbRun -> query, .changes -> .rowCount
 router.delete('/courses/:courseId/resources/:resourceId', async (req, res) => {
   const courseId = Number(req.params.courseId);
   const resourceId = Number(req.params.resourceId);
@@ -1462,7 +1483,7 @@ router.delete('/courses/:courseId/resources/:resourceId', async (req, res) => {
     return res.status(400).json({ error: 'Invalid identifier.' });
   }
   try {
-    const course = await getCourseForAccess(courseId);
+    const course = await getCourseForAccess(courseId); // Already uses new query
     if (!course) {
       return res.status(404).json({ error: 'Course not found.' });
     }
@@ -1478,11 +1499,11 @@ router.delete('/courses/:courseId/resources/:resourceId', async (req, res) => {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
-    const result = await dbRun(
-      'DELETE FROM course_resources WHERE id = ? AND course_id = ?',
+    const result = await query(
+      'DELETE FROM course_resources WHERE id = $1 AND course_id = $2',
       [resourceId, courseId]
     );
-    if (result.changes === 0) {
+    if (result.rowCount === 0) {
       return res.status(404).json({ error: 'Resource not found.' });
     }
     res.json({ success: true });
@@ -1491,6 +1512,7 @@ router.delete('/courses/:courseId/resources/:resourceId', async (req, res) => {
   }
 });
 
+// UPDATED: dbGet -> query(...).rows[0]
 router.get('/teacher/attendance/roster', async (req, res) => {
   if (!req.user.schoolId) {
     return res.status(400).json({ error: 'User is not associated with a school.' });
@@ -1505,10 +1527,10 @@ router.get('/teacher/attendance/roster', async (req, res) => {
       return res.status(400).json({ error: 'Invalid date provided.' });
     }
 
-    const teacherRow = await dbGet(
-      'SELECT class_assigned, school_id FROM users WHERE id = ? LIMIT 1',
+    const teacherRow = (await query(
+      'SELECT class_assigned, school_id FROM users WHERE id = $1 LIMIT 1',
       [req.user.id]
-    );
+    )).rows[0];
     const schoolId = teacherRow?.school_id ?? req.user.schoolId;
     if (!schoolId) {
       return res.status(400).json({ error: 'School context not found.' });
@@ -1524,7 +1546,7 @@ router.get('/teacher/attendance/roster', async (req, res) => {
       classSection = req.query.classSection.trim();
     }
 
-    const rosterRows = await getAttendanceRoster({ schoolId, classSection, date: normalizedDate });
+    const rosterRows = await getAttendanceRoster({ schoolId, classSection, date: normalizedDate }); // Already uses new query
     const students = formatAttendanceRows(rosterRows);
 
     res.json({
@@ -1538,6 +1560,7 @@ router.get('/teacher/attendance/roster', async (req, res) => {
   }
 });
 
+// UPDATED: dbGet, dbAll, dbRun -> query
 router.post('/teacher/attendance', async (req, res) => {
   if (!req.user.schoolId) {
     return res.status(400).json({ error: 'User is not associated with a school.' });
@@ -1555,10 +1578,10 @@ router.post('/teacher/attendance', async (req, res) => {
       return res.status(400).json({ error: 'Attendance records are required.' });
     }
 
-    const teacherRow = await dbGet(
-      'SELECT class_assigned, school_id FROM users WHERE id = ? LIMIT 1',
+    const teacherRow = (await query(
+      'SELECT class_assigned, school_id FROM users WHERE id = $1 LIMIT 1',
       [req.user.id]
-    );
+    )).rows[0];
     const schoolId = teacherRow?.school_id ?? req.user.schoolId;
     if (!schoolId) {
       return res.status(400).json({ error: 'School context not found.' });
@@ -1574,13 +1597,13 @@ router.post('/teacher/attendance', async (req, res) => {
       classSection = overrideClassSection.trim();
     }
 
-    let allowedQuery = 'SELECT id FROM students WHERE school_id = ?';
+    let allowedQuerySql = 'SELECT id FROM students WHERE school_id = $1';
     const allowedParams = [schoolId];
     if (classSection) {
-      allowedQuery += ' AND class_section = ?';
+      allowedQuerySql += ' AND class_section = $2';
       allowedParams.push(classSection);
     }
-    const allowedRows = await dbAll(allowedQuery, allowedParams);
+    const allowedRows = (await query(allowedQuerySql, allowedParams)).rows;
     const allowedIds = new Set(allowedRows.map((row) => Number(row.id)));
     if (allowedIds.size === 0) {
       return res.status(409).json({ error: 'No students found for attendance.' });
@@ -1603,10 +1626,10 @@ router.post('/teacher/attendance', async (req, res) => {
         return res.status(400).json({ error: `Invalid attendance status: ${statusInput}` });
       }
       if (statusInput === 'Not Marked') {
-        await dbRun('DELETE FROM attendance WHERE student_id = ? AND date = ?', [studentId, normalizedDate]);
+        await query('DELETE FROM attendance WHERE student_id = $1 AND date = $2', [studentId, normalizedDate]);
       } else {
-        await dbRun(
-          'INSERT OR REPLACE INTO attendance (student_id, date, status, teacher_id) VALUES (?, ?, ?, ?)',
+        await query(
+          'INSERT INTO attendance (student_id, date, status, teacher_id) VALUES ($1, $2, $3, $4) ON CONFLICT (student_id, date) DO UPDATE SET status = $3, teacher_id = $4',
           [studentId, normalizedDate, statusInput, req.user.id]
         );
       }
@@ -1629,34 +1652,37 @@ router.post('/teacher/attendance', async (req, res) => {
   }
 });
 
+// UPDATED: dbRun -> query, .changes -> .rowCount
 router.post('/attendance', async (req, res) => {
   try {
     const { student_id, date, status } = req.body;
     const teacher_id = req.user.id;
 
-    const result = await dbRun(
-      'INSERT OR REPLACE INTO attendance (student_id, date, status, teacher_id) VALUES (?, ?, ?, ?)',
+    const result = await query(
+      'INSERT INTO attendance (student_id, date, status, teacher_id) VALUES ($1, $2, $3, $4) ON CONFLICT (student_id, date) DO UPDATE SET status = $3, teacher_id = $4',
       [student_id, date, status, teacher_id]
     );
-    res.json({ success: true, changes: result.changes });
+    res.json({ success: true, changes: result.rowCount });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
+// UPDATED: dbAll -> query(...).rows
 router.get('/attendance/:studentId', async (req, res) => {
   try {
     const { studentId } = req.params;
-    const result = await dbAll(
-      'SELECT * FROM attendance WHERE student_id = ? ORDER BY date DESC',
+    const result = (await query(
+      'SELECT * FROM attendance WHERE student_id = $1 ORDER BY date DESC',
       [studentId]
-    );
+    )).rows;
     res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
+// UPDATED: dbAll -> query(...).rows
 router.get('/reports/financial-summary', async (req, res) => {
   if (!req.user.schoolId || req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Forbidden' });
@@ -1666,24 +1692,25 @@ router.get('/reports/financial-summary', async (req, res) => {
   }
   try {
     const school_id = req.user.schoolId;
-    const rows = await dbAll(
+    // Note: STRFTIME is SQLite specific, for PostgreSQL this should be TO_CHAR
+    const rows = (await query(
       `SELECT 
-        STRFTIME('%Y-%m', T1.due_date) as month, 
-        SUM(T1.amount_paid) as Collected, 
-        SUM(T1.amount_due - T1.amount_paid) as Pending 
+        TO_CHAR(T1.due_date, 'YYYY-MM') as month, 
+        SUM(T1.amount_paid) as "Collected", 
+        SUM(T1.amount_due - T1.amount_paid) as "Pending" 
       FROM student_fees T1
       JOIN students T2 ON T1.student_id = T2.id 
-      WHERE T2.school_id = ?
+      WHERE T2.school_id = $1
       GROUP BY month 
       ORDER BY month DESC 
       LIMIT 6`,
       [school_id]
-    );
+    )).rows;
 
     const formattedData = rows.map((row) => ({
       name: getMonthName(row.month),
-      Collected: row.Collected,
-      Pending: row.Pending > 0 ? row.Pending : 0
+      Collected: parseFloat(row.Collected) || 0,
+      Pending: parseFloat(row.Pending) > 0 ? parseFloat(row.Pending) : 0
     })).reverse();
 
     res.json(formattedData);
@@ -1693,6 +1720,7 @@ router.get('/reports/financial-summary', async (req, res) => {
   }
 });
 
+// UPDATED: dbAll -> query(...).rows
 router.get('/reports/performance-summary', async (req, res) => {
   if (!req.user.schoolId || req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Forbidden' });
@@ -1702,17 +1730,17 @@ router.get('/reports/performance-summary', async (req, res) => {
   }
   try {
     const school_id = req.user.schoolId;
-    const rows = await dbAll(
+    const rows = (await query(
       `SELECT 
         T1.subject, 
         AVG(T1.grade) as average, 
         COUNT(DISTINCT T1.student_id) as students 
       FROM performance T1 
       JOIN students T2 ON T1.student_id = T2.id 
-      WHERE T2.school_id = ? 
+      WHERE T2.school_id = $1 
       GROUP BY T1.subject`,
       [school_id]
-    );
+    )).rows;
 
     const formattedData = rows.map((row) => ({
       ...row,
@@ -1726,28 +1754,30 @@ router.get('/reports/performance-summary', async (req, res) => {
   }
 });
 
+// UPDATED: dbAll -> query(...).rows
 router.get('/reports/school-analytics', async (req, res) => {
   if (req.user.role !== 'super_admin') {
     return res.status(403).json({ error: 'Forbidden' });
   }
   try {
-    const newSchoolsByMonth = await dbAll(
+    // Note: STRFTIME is SQLite specific, for PostgreSQL this should be TO_CHAR
+    const newSchoolsByMonth = (await query(
       `SELECT 
-        STRFTIME('%Y-%m', created_at) as month, 
+        TO_CHAR(created_at, 'YYYY-MM') as month, 
         COUNT(*) as newSchools 
       FROM schools 
       GROUP BY month 
       ORDER BY month ASC`
-    );
+    )).rows;
 
     let totalSchools = 0;
     const formattedData = newSchoolsByMonth.map((row) => {
-      totalSchools += row.newSchools;
+      totalSchools += parseInt(row.newschools, 10); // PostgreSQL returns lowercase
       return {
         month: getMonthName(row.month),
-        newSchools: row.newSchools,
+        newSchools: parseInt(row.newschools, 10),
         totalSchools,
-        activeSchools: totalSchools
+        activeSchools: totalSchools // This logic might need refinement based on 'status'
       };
     });
 
@@ -1763,7 +1793,9 @@ router.get('/reports/subscription-status', (req, res) => {
     return res.status(403).json({ error: 'Forbidden' });
   }
 
-  console.log('Serving mock data for /api/reports/subscription-status. Schema update required for live data.');
+  // This route is still using mock data as per the original file.
+  // To make it live, you would need to write a query similar to the other reports.
+  console.log('Serving mock data for /api/reports/subscription-status. A new query is required for live data.');
   res.json([
     { plan: 'Basic', subscribers: 85, revenue: 4250, status: 'Active' },
     { plan: 'Pro', subscribers: 45, revenue: 9000, status: 'Active' },
