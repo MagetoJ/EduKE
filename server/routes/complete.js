@@ -418,6 +418,244 @@ router.put('/leave-requests/:id/status', authorizeRole(['admin']), async (req, r
 });
 
 // ===================
+// SUBSCRIPTIONS (Super Admin)
+// ===================
+
+// Get all subscriptions
+router.get('/subscriptions', authorizeRole(['super_admin']), async (req, res) => {
+  try {
+    const result = await query(
+      `SELECT s.*, sch.name as school_name, sp.name as plan_name, sp.price
+       FROM subscriptions s
+       JOIN schools sch ON s.school_id = sch.id
+       JOIN subscription_plans sp ON s.plan_id = sp.id
+       ORDER BY s.created_at DESC`
+    );
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: 'Failed to fetch subscriptions' });
+  }
+});
+
+// Get subscription plans
+router.get('/subscription-plans', authorizeRole(['super_admin', 'admin']), async (req, res) => {
+  try {
+    const result = await query('SELECT * FROM subscription_plans ORDER BY price ASC');
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: 'Failed to fetch subscription plans' });
+  }
+});
+
+// Change school subscription (Super Admin)
+router.put('/subscriptions/:schoolId/change-plan', authorizeRole(['super_admin']), async (req, res) => {
+  try {
+    const { schoolId } = req.params;
+    const { plan_id } = req.body;
+    
+    // Get plan details
+    const plan = await query('SELECT * FROM subscription_plans WHERE id = $1', [plan_id]);
+    if (plan.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Plan not found' });
+    }
+    
+    // Check if subscription exists
+    const existing = await query('SELECT id FROM subscriptions WHERE school_id = $1', [schoolId]);
+    
+    if (existing.rows.length > 0) {
+      // Update existing subscription
+      const result = await query(
+        `UPDATE subscriptions 
+         SET plan_id = $1, status = 'active', updated_at = NOW()
+         WHERE school_id = $2
+         RETURNING *`,
+        [plan_id, schoolId]
+      );
+      res.json({ success: true, data: result.rows[0], message: 'Subscription updated successfully' });
+    } else {
+      // Create new subscription
+      const result = await query(
+        `INSERT INTO subscriptions (school_id, plan_id, status, start_date)
+         VALUES ($1, $2, 'active', NOW())
+         RETURNING *`,
+        [schoolId, plan_id]
+      );
+      res.status(201).json({ success: true, data: result.rows[0], message: 'Subscription created successfully' });
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, error: 'Failed to change subscription' });
+  }
+});
+
+// Cancel subscription (Super Admin)
+router.put('/subscriptions/:schoolId/cancel', authorizeRole(['super_admin']), async (req, res) => {
+  try {
+    const { schoolId } = req.params;
+    
+    await query(
+      `UPDATE subscriptions 
+       SET status = 'cancelled', end_date = NOW(), updated_at = NOW()
+       WHERE school_id = $1`,
+      [schoolId]
+    );
+    
+    res.json({ success: true, message: 'Subscription cancelled successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: 'Failed to cancel subscription' });
+  }
+});
+
+// Renew subscription (Super Admin)
+router.post('/subscriptions/:schoolId/renew', authorizeRole(['super_admin']), async (req, res) => {
+  try {
+    const { schoolId } = req.params;
+    const { plan_id, duration_months } = req.body;
+    
+    const newEndDate = new Date();
+    newEndDate.setMonth(newEndDate.getMonth() + (duration_months || 12));
+    
+    const result = await query(
+      `UPDATE subscriptions 
+       SET plan_id = $1, status = 'active', end_date = $2, updated_at = NOW()
+       WHERE school_id = $3
+       RETURNING *`,
+      [plan_id, newEndDate.toISOString(), schoolId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Subscription not found' });
+    }
+    
+    res.json({ success: true, data: result.rows[0], message: 'Subscription renewed successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: 'Failed to renew subscription' });
+  }
+});
+
+// Get school's current subscription
+router.get('/school/subscription', authorizeRole(['admin']), async (req, res) => {
+  try {
+    const { schoolId } = req;
+    const result = await query(
+      `SELECT s.*, sp.name as plan_name, sp.slug, sp.price, sp.max_students, sp.max_staff
+       FROM subscriptions s
+       JOIN subscription_plans sp ON s.plan_id = sp.id
+       WHERE s.school_id = $1 AND s.status IN ('active', 'trial')
+       ORDER BY s.created_at DESC
+       LIMIT 1`,
+      [schoolId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'No active subscription found' });
+    }
+    
+    res.json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ success: false, error: 'Failed to fetch subscription' });
+  }
+});
+
+// ===================
+// USER MANAGEMENT (Admin creating staff/teachers)
+// ===================
+
+// Create user/staff member by admin
+router.post('/users', authorizeRole(['admin']), async (req, res) => {
+  try {
+    const { schoolId } = req;
+    const { email, first_name, last_name, phone, role, department, subject, class_assigned } = req.body;
+    
+    // Check if email already exists
+    const existing = await query('SELECT id FROM users WHERE email = $1', [email]);
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ success: false, error: 'Email already in use' });
+    }
+    
+    const tempPassword = `temp${Math.random().toString(36).slice(-8)}`;
+    const password_hash = await bcrypt.hash(tempPassword, 10);
+    const name = `${first_name} ${last_name}`;
+    
+    const result = await query(
+      `INSERT INTO users (school_id, email, password_hash, first_name, last_name, name, phone, role, department, subject, class_assigned, status, is_verified)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'active', false)
+       RETURNING id, email, first_name, last_name, name, phone, role, status`,
+      [schoolId, email, password_hash, first_name, last_name, name, phone, role, department, subject, class_assigned]
+    );
+    
+    res.status(201).json({ 
+      success: true, 
+      data: result.rows[0], 
+      message: 'User created successfully. Credentials sent via email.',
+      tempPassword: tempPassword // In production, send via email instead
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: 'Failed to create user' });
+  }
+});
+
+// Update user by admin
+router.put('/users/:id', authorizeRole(['admin']), async (req, res) => {
+  try {
+    const { schoolId } = req;
+    const { id } = req.params;
+    const { first_name, last_name, phone, department, subject, class_assigned, status } = req.body;
+    
+    const result = await query(
+      `UPDATE users 
+       SET first_name = $1, last_name = $2, name = $3, phone = $4, department = $5, subject = $6, class_assigned = $7, status = $8, updated_at = NOW()
+       WHERE id = $9 AND school_id = $10
+       RETURNING *`,
+      [first_name, last_name, `${first_name} ${last_name}`, phone, department, subject, class_assigned, status, id, schoolId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+    
+    res.json({ success: true, data: result.rows[0], message: 'User updated successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: 'Failed to update user' });
+  }
+});
+
+// Delete user by admin
+router.delete('/users/:id', authorizeRole(['admin']), async (req, res) => {
+  try {
+    const { schoolId } = req;
+    const { id } = req.params;
+    
+    await query('UPDATE users SET status = $1, updated_at = NOW() WHERE id = $2 AND school_id = $3', ['inactive', id, schoolId]);
+    res.json({ success: true, message: 'User deactivated successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: 'Failed to delete user' });
+  }
+});
+
+// Get all users for school admin
+router.get('/users', authorizeRole(['admin']), async (req, res) => {
+  try {
+    const { schoolId } = req;
+    const { role } = req.query;
+    
+    let sql = "SELECT id, email, first_name, last_name, name, phone, role, status, avatar_url, department, subject, class_assigned FROM users WHERE school_id = $1";
+    const params = [schoolId];
+    
+    if (role) {
+      sql += " AND role = $2";
+      params.push(role);
+    }
+    
+    sql += " ORDER BY name";
+    
+    const result = await query(sql, params);
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: 'Failed to fetch users' });
+  }
+});
+
+// ===================
 // TIMETABLE
 // ===================
 
