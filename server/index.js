@@ -1,34 +1,98 @@
 const express = require('express');
 const bodyParser = require('body-parser');
+const cookieParser = require('cookie-parser');
 const cors = require('cors');
+require('dotenv').config();
+
+// Import PostgreSQL database connection
+const { getDatabaseInfo } = require('./db/connection');
+
+// Import routes
+const authRoutes = require('./routes/auth');
 const { publicRouter } = require('./routes/public');
 const { secureRouter } = require('./routes/secure');
+
+// Import middleware
 const { authenticateToken } = require('./middleware/auth');
-const { db } = require('./database');
+const { tenantContext } = require('./middleware/tenant');
 
 const app = express();
-app.use(cors());
+
+// Middleware
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  credentials: true
+}));
 app.use(bodyParser.json());
+app.use(cookieParser());
 
-app.use('/api', publicRouter);
-app.use('/api', authenticateToken, secureRouter);
-
-app.use((req, res) => {
-  res.status(404).json({ error: 'Not found' });
+// Health check endpoint
+app.get('/health', async (req, res) => {
+  try {
+    const dbInfo = await getDatabaseInfo();
+    res.json({
+      status: 'healthy',
+      database: dbInfo,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(503).json({
+      status: 'unhealthy',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
+// API Routes
+app.use('/api/auth', authRoutes);
+app.use('/api', tenantContext, publicRouter);
+app.use('/api', authenticateToken, tenantContext, secureRouter);
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ 
+    success: false,
+    error: 'Not found' 
+  });
+});
+
+// Error handler
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
   if (res.headersSent) {
     return next(err);
   }
   const status = typeof err.status === 'number' ? err.status : 500;
-  res.status(status).json({ error: status === 500 ? 'Internal server error' : err.message || 'Internal server error' });
+  res.status(status).json({ 
+    success: false,
+    error: status === 500 ? 'Internal server error' : err.message || 'Internal server error' 
+  });
 });
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;
-app.listen(PORT, () => {
-  console.log(`Node.js backend running on http://localhost:${PORT}`);
+
+// Start server with database info
+app.listen(PORT, async () => {
+  console.log('\n' + '='.repeat(60));
+  console.log('🚀 EduKE Server Started');
+  console.log('='.repeat(60));
+  console.log(`📍 Server: http://localhost:${PORT}`);
+  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  
+  try {
+    const dbInfo = await getDatabaseInfo();
+    console.log(`💾 Database: ${dbInfo.config}`);
+    console.log(`📊 Tables: ${dbInfo.tableCount} tables`);
+    if (dbInfo.database) {
+      console.log(`🗄️  Database Name: ${dbInfo.database}`);
+    }
+  } catch (error) {
+    console.error('❌ Database connection error:', error.message);
+  }
+  
+  console.log('='.repeat(60));
+  console.log('✅ Ready to accept requests!\n');
 });
 
-module.exports = { app, db };
+module.exports = { app };
