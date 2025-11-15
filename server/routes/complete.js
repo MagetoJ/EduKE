@@ -209,8 +209,7 @@ router.post('/fee-structures', authorizeRole(['admin']), async (req, res) => {
     // because the database expects 'academic_year_id' (an integer)
     
     const result = await query(
-      // This query is now correct and omits the academic_year
-      'INSERT INTO fee_structures (school_id, name, fee_type, amount, grade, frequency, description) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+      'INSERT INTO fee_structures (school_id, name, fee_type, amount, applicable_to, frequency, description) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
       [schoolId, name_column, fee_type_enum, amount, grade, frequency_column, description]
     );
     
@@ -259,9 +258,8 @@ router.put('/fee-structures/:id', authorizeRole(['admin']), async (req, res) => 
     const fee_type_enum = 'other'; // You can enhance this later
 
     const result = await query(
-      // 3. This query now updates the correct columns
       `UPDATE fee_structures 
-       SET name = $1, fee_type = $2, amount = $3, grade = $4, frequency = $5, description = $6, updated_at = NOW()
+       SET name = $1, fee_type = $2, amount = $3, applicable_to = $4, frequency = $5, description = $6, updated_at = NOW()
        WHERE id = $7 AND school_id = $8
        RETURNING *`,
       [name_column, fee_type_enum, amount, grade, frequency_column, description, id, schoolId]
@@ -365,7 +363,7 @@ router.get('/discipline', authorizeRole(['admin', 'teacher']), async (req, res) 
   try {
     const { schoolId } = req;
     const result = await query(
-      'SELECT d.*, s.first_name, s.last_name FROM discipline d JOIN students s ON d.student_id = s.id WHERE d.school_id = $1 ORDER BY d.incident_date DESC',
+      'SELECT d.*, s.first_name, s.last_name FROM discipline d JOIN students s ON d.student_id = s.id WHERE s.school_id = $1 ORDER BY d.date DESC',
       [schoolId]
     );
     res.json({ success: true, data: result.rows });
@@ -378,11 +376,11 @@ router.get('/discipline', authorizeRole(['admin', 'teacher']), async (req, res) 
 router.post('/discipline', authorizeRole(['admin', 'teacher']), async (req, res) => {
   try {
     const { schoolId, user } = req;
-    const { student_id, incident_type, description, action_taken, incident_date } = req.body;
+    const { student_id, type, severity, description, date } = req.body;
     
     const result = await query(
-      'INSERT INTO discipline (school_id, student_id, incident_type, description, action_taken, incident_date, reported_by) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-      [schoolId, student_id, incident_type, description, action_taken, incident_date, user.id]
+      'INSERT INTO discipline (student_id, teacher_id, type, severity, description, date) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+      [student_id, user.id, type, severity, description, date]
     );
     
     res.status(201).json({ success: true, data: result.rows[0], message: 'Discipline record created successfully' });

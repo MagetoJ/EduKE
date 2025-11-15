@@ -80,6 +80,7 @@ export default function Fees() {
   const [feeStructures, setFeeStructures] = useState<FeeStructure[]>([])
   const [studentFees, setStudentFees] = useState<StudentFee[]>([])
   const [feeCollection, setFeeCollection] = useState<FeeCollection[]>([])
+  const [academicYears, setAcademicYears] = useState<{ id: string; label: string }[]>([])
   
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -98,6 +99,29 @@ export default function Fees() {
 
 
   const isAdmin = user?.role === 'admin'
+
+  useEffect(() => {
+    const fetchAcademicYears = async () => {
+      try {
+        const response = await api('/api/academic-years')
+        const data = await response.json()
+        
+        if (data.success && Array.isArray(data.data)) {
+          const years = data.data.map((year: any) => ({
+            id: year.id.toString(),
+            label: `${year.start_date?.substring(0, 4) || 'Unknown'} - ${year.end_date?.substring(0, 4) || 'Unknown'}`
+          }))
+          setAcademicYears(years)
+        }
+      } catch (err) {
+        console.error('Error fetching academic years:', err)
+      }
+    }
+    
+    if (isAdmin) {
+      fetchAcademicYears()
+    }
+  }, [api, isAdmin])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -182,7 +206,8 @@ export default function Fees() {
         method: 'POST',
         body: JSON.stringify({
           ...addStructureForm,
-          amount: parseFloat(addStructureForm.amount)
+          amount: parseFloat(addStructureForm.amount),
+          term: addStructureForm.term.toLowerCase()
         }),
       })
       if (!response.ok) {
@@ -237,7 +262,8 @@ export default function Fees() {
         method: 'PUT',
         body: JSON.stringify({
           ...editStructureForm,
-          amount: parseFloat(editStructureForm.amount)
+          amount: parseFloat(editStructureForm.amount),
+          term: editStructureForm.term.toLowerCase()
         }),
       })
       if (!response.ok) {
@@ -365,7 +391,18 @@ export default function Fees() {
                     </div>
                      <div className="space-y-2">
                       <Label htmlFor="academic_year">Academic Year</Label>
-                      <Input id="academic_year" placeholder="e.g., 2024-2025" value={addStructureForm.academic_year} onChange={e => setAddStructureForm({...addStructureForm, academic_year: e.target.value})} />
+                      <Select value={addStructureForm.academic_year} onValueChange={(value) => setAddStructureForm({...addStructureForm, academic_year: value})}>
+                        <SelectTrigger id="academic_year">
+                          <SelectValue placeholder="Select academic year" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {academicYears.map((year) => (
+                            <SelectItem key={year.id} value={year.id}>
+                              {year.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                   {renderError(formError)}
@@ -428,7 +465,18 @@ export default function Fees() {
                   </div>
                    <div className="space-y-2">
                     <Label htmlFor="editAcademicYear">Academic Year</Label>
-                    <Input id="editAcademicYear" placeholder="e.g., 2024-2025" value={editStructureForm.academic_year} onChange={e => setEditStructureForm({...editStructureForm, academic_year: e.target.value})} />
+                    <Select value={editStructureForm.academic_year} onValueChange={(value) => setEditStructureForm({...editStructureForm, academic_year: value})}>
+                      <SelectTrigger id="editAcademicYear">
+                        <SelectValue placeholder="Select academic year" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {academicYears.map((year) => (
+                          <SelectItem key={year.id} value={year.id}>
+                            {year.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
                 {renderError(formError)}

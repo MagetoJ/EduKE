@@ -269,16 +269,21 @@ export function useApi() {
 
       let response = await executeRequest();
 
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         const newToken = await refreshSession();
         if (!newToken) {
-          throw new Error('Authentication failed');
-        }
-        response = await executeRequest(newToken);
-        if (response.status === 401 || response.status === 403) {
           logout();
           throw new Error('Authentication failed');
         }
+        response = await executeRequest(newToken);
+        if (response.status === 401) {
+          logout();
+          throw new Error('Authentication failed');
+        }
+      }
+
+      if (response.status === 403) {
+        throw new Error('Access denied');
       }
 
       return response;

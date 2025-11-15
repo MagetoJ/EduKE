@@ -93,8 +93,9 @@ export default function Staff() {
   const { user } = useAuth()
   const api = useApi()
   const [activeTab, setActiveTab] = useState('directory')
-  const [staff, setStaff] = useState(mockStaff)
-  const [leaveRequests, setLeaveRequests] = useState(mockLeaveRequests)
+  const [staff, setStaff] = useState([])
+  const [leaveRequests, setLeaveRequests] = useState([])
+  const [loading, setLoading] = useState(true)
   const [isStaffDialogOpen, setIsStaffDialogOpen] = useState(false)
   const [formData, setFormData] = useState(initialStaffForm)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -113,6 +114,37 @@ export default function Staff() {
     joinDate: '',
     status: ''
   })
+
+  useEffect(() => {
+    const fetchStaff = async () => {
+      try {
+        setLoading(true)
+        const response = await api('/api/staff')
+        const data = await response.json()
+        
+        if (response.ok && data.success) {
+          const mappedStaff = data.data.map((member: any) => ({
+            id: member.id.toString(),
+            name: member.name || `${member.first_name} ${member.last_name}`.trim(),
+            email: member.email,
+            phone: member.phone || '',
+            role: member.role ? member.role.charAt(0).toUpperCase() + member.role.slice(1) : 'Staff',
+            department: member.department || 'General',
+            joinDate: member.hire_date || new Date().toISOString(),
+            status: member.status ? member.status.charAt(0).toUpperCase() + member.status.slice(1) : 'Active',
+            avatar: member.avatar_url || 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&h=150&fit=crop&crop=face'
+          }))
+          setStaff(mappedStaff)
+        }
+      } catch (err) {
+        console.error('Error fetching staff:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    fetchStaff()
+  }, [api])
 
   useEffect(() => {
     if (!isStaffDialogOpen) {
@@ -198,24 +230,23 @@ export default function Staff() {
         }
       }
 
-      const roleLabel = formData.role ? formData.role.charAt(0).toUpperCase() + formData.role.slice(1) : 'Staff'
-
-      setStaff(prev => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          name: `${formData.firstName} ${formData.lastName}`.trim(),
-          email: formData.email,
-          phone: formData.phone,
-          role: roleLabel,
-          department: formData.department || 'General',
-          classAssigned: formData.role === 'teacher' ? formData.classAssigned : undefined,
-          subject: formData.role === 'teacher' ? formData.subject : undefined,
-          joinDate: formData.joinDate || new Date().toISOString(),
-          status: 'Active',
-          avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&h=150&fit=crop&crop=face'
-        }
-      ])
+      const response = await api('/api/staff')
+      const staffData = await response.json()
+      
+      if (response.ok && staffData.success) {
+        const mappedStaff = staffData.data.map((member: any) => ({
+          id: member.id.toString(),
+          name: member.name || `${member.first_name} ${member.last_name}`.trim(),
+          email: member.email,
+          phone: member.phone || '',
+          role: member.role ? member.role.charAt(0).toUpperCase() + member.role.slice(1) : 'Staff',
+          department: member.department || 'General',
+          joinDate: member.hire_date || new Date().toISOString(),
+          status: member.status ? member.status.charAt(0).toUpperCase() + member.status.slice(1) : 'Active',
+          avatar: member.avatar_url || 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&h=150&fit=crop&crop=face'
+        }))
+        setStaff(mappedStaff)
+      }
 
       setIsStaffDialogOpen(false)
     } catch (err) {
@@ -242,30 +273,57 @@ export default function Staff() {
     setIsEditStaffDialogOpen(true)
   }
 
-  const handleEditStaffSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const handleEditStaffSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!editingStaffId) {
       return
     }
 
-    setStaff(prev => prev.map(member => (
-      member.id === editingStaffId
-        ? {
-            ...member,
-            name: editStaffForm.name,
-            email: editStaffForm.email,
-            phone: editStaffForm.phone,
-            role: editStaffForm.role,
-            department: editStaffForm.department,
-            classAssigned: editStaffForm.role === 'Teacher' ? (editStaffForm.classAssigned || undefined) : undefined,
-            subject: editStaffForm.role === 'Teacher' ? (editStaffForm.subject || undefined) : undefined,
-            joinDate: editStaffForm.joinDate,
-            status: editStaffForm.status || member.status
-          }
-        : member
-    )))
-    setIsEditStaffDialogOpen(false)
-    setEditingStaffId(null)
+    try {
+      setError('')
+      const response = await api(`/api/staff/${editingStaffId}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          first_name: editStaffForm.name.split(' ')[0],
+          last_name: editStaffForm.name.split(' ').slice(1).join(' '),
+          email: editStaffForm.email,
+          phone: editStaffForm.phone,
+          department: editStaffForm.department,
+          class_assigned: editStaffForm.role === 'Teacher' ? editStaffForm.classAssigned : null,
+          subject: editStaffForm.role === 'Teacher' ? editStaffForm.subject : null,
+          status: editStaffForm.status.toLowerCase()
+        })
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to update staff member')
+      }
+
+      const updatedStaff = await api('/api/staff')
+      const updatedData = await updatedStaff.json()
+      
+      if (updatedStaff.ok && updatedData.success) {
+        const mappedStaff = updatedData.data.map((member: any) => ({
+          id: member.id.toString(),
+          name: member.name || `${member.first_name} ${member.last_name}`.trim(),
+          email: member.email,
+          phone: member.phone || '',
+          role: member.role ? member.role.charAt(0).toUpperCase() + member.role.slice(1) : 'Staff',
+          department: member.department || 'General',
+          joinDate: member.hire_date || new Date().toISOString(),
+          status: member.status ? member.status.charAt(0).toUpperCase() + member.status.slice(1) : 'Active',
+          avatar: member.avatar_url || 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&h=150&fit=crop&crop=face'
+        }))
+        setStaff(mappedStaff)
+      }
+
+      setIsEditStaffDialogOpen(false)
+      setEditingStaffId(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred.')
+    }
   }
 
   return (

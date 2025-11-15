@@ -50,11 +50,11 @@ router.get('/:id', authorizeRole(['admin', 'teacher', 'student']), async (req, r
 router.post('/', authorizeRole(['admin', 'teacher']), async (req, res) => {
   try {
     const { schoolId } = req;
-    const { course_id, title, description, due_date, max_score, assignment_type } = req.body;
+    const { course_id, title, description, due_date, total_marks } = req.body;
     
     const result = await query(
-      'INSERT INTO assignments (school_id, course_id, title, description, due_date, max_score, assignment_type, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
-      [schoolId, course_id, title, description, due_date, max_score, assignment_type, 'active']
+      'INSERT INTO assignments (course_id, title, description, due_date, total_marks) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [course_id, title, description, due_date, total_marks]
     );
     
     res.status(201).json({ success: true, data: result.rows[0], message: 'Assignment created successfully' });
@@ -69,12 +69,12 @@ router.put('/:id', authorizeRole(['admin', 'teacher']), async (req, res) => {
   try {
     const { schoolId } = req;
     const { id } = req.params;
-    const { title, description, due_date, max_score, assignment_type, status } = req.body;
+    const { title, description, due_date, total_marks } = req.body;
     
     const result = await query(
-      `UPDATE assignments SET title = $1, description = $2, due_date = $3, max_score = $4, assignment_type = $5, status = $6, updated_at = NOW()
-       WHERE id = $7 AND school_id = $8 RETURNING *`,
-      [title, description, due_date, max_score, assignment_type, status, id, schoolId]
+      `UPDATE assignments SET title = $1, description = $2, due_date = $3, total_marks = $4
+       WHERE id = $5 RETURNING *`,
+      [title, description, due_date, total_marks, id]
     );
     
     if (result.rows.length === 0) {
@@ -94,7 +94,7 @@ router.delete('/:id', authorizeRole(['admin', 'teacher']), async (req, res) => {
     const { schoolId } = req;
     const { id } = req.params;
     
-    await query('UPDATE assignments SET status = $1, updated_at = NOW() WHERE id = $2 AND school_id = $3', ['archived', id, schoolId]);
+    await query('DELETE FROM assignments WHERE id = $1', [id]);
     res.json({ success: true, message: 'Assignment deleted successfully' });
   } catch (err) {
     console.error('Error deleting assignment:', err);
