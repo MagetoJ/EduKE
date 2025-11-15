@@ -269,6 +269,60 @@ router.put('/school-admins/:id', authorizeRole(['super_admin']), async (req, res
   }
 });
 
+// Create a new admin for a school (Super Admin only)
+router.post('/admins', authorizeRole(['super_admin']), async (req, res) => {
+  try {
+    const bcrypt = require('bcrypt');
+    const { email, password, name, first_name, last_name, phone, school_id, status } = req.body;
+
+    if (!email || !password || !school_id) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Email, password, and school_id are required' 
+      });
+    }
+
+    const existing = await query('SELECT id FROM users WHERE email = $1', [email]);
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ 
+        success: false, 
+        error: 'User with this email already exists' 
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const displayName = name || `${first_name || ''} ${last_name || ''}`.trim();
+    
+    const result = await query(
+      `INSERT INTO users (
+        email, password_hash, name, first_name, last_name, phone, 
+        school_id, role, status, is_verified, email_verified_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true, NOW()) 
+      RETURNING id, email, name, first_name, last_name, phone, role, school_id, status`,
+      [
+        email, 
+        hashedPassword, 
+        displayName, 
+        first_name || '', 
+        last_name || '', 
+        phone || null,
+        school_id,
+        'admin',
+        status || 'active'
+      ]
+    );
+
+    res.status(201).json({ 
+      success: true, 
+      data: result.rows[0], 
+      message: 'Admin user created successfully' 
+    });
+  } catch (err) {
+    console.error('Error creating admin user:', err);
+    res.status(500).json({ success: false, error: 'Failed to create admin user' });
+  }
+});
+
 // Get schools analytics
 router.get('/schools/analytics', authorizeRole(['super_admin']), async (req, res) => {
   try {

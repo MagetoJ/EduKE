@@ -10,13 +10,7 @@ import { Label } from '../components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 
-// Mock student data
-const mockStudents = [
-  { id: '1', name: 'John Smith', email: 'john.smith@email.com', grade: 'Grade 10', class: '10A', status: 'Active', phone: '+1-555-0101', parentGuardian: 'Robert Smith', fees: '$1,200' },
-  { id: '2', name: 'Sarah Johnson', email: 'sarah.j@email.com', grade: 'Grade 11', class: '11B', status: 'Active', phone: '+1-555-0102', parentGuardian: 'Linda Johnson', fees: '$1,350' },
-  { id: '3', name: 'Michael Brown', email: 'michael.b@email.com', grade: 'Grade 9', class: '9A', status: 'Active', phone: '+1-555-0103', parentGuardian: 'David Brown', fees: '$1,100' },
-  { id: '4', name: 'Emma Davis', email: 'emma.d@email.com', grade: 'Grade 12', class: '12A', status: 'Active', phone: '+1-555-0104', parentGuardian: 'Jennifer Davis', fees: '$1,500' },
-]
+
 
 const CURRICULUM_LEVELS: Record<string, string[]> = {
   cbc: [
@@ -99,7 +93,8 @@ export default function Students() {
   const { user } = useAuth()
   const api = useApi()
   const [gradeLevels, setGradeLevels] = useState<string[]>(CURRICULUM_LEVELS.cbc)
-  const [students, setStudents] = useState(mockStudents)
+  const [students, setStudents] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
 
   const [isEnrollmentDialogOpen, setIsEnrollmentDialogOpen] = useState(false)
   const [formData, setFormData] = useState({
@@ -152,6 +147,39 @@ export default function Students() {
       setGradeLevels(CURRICULUM_LEVELS.cbc)
     }
   }, [user?.schoolCurriculum])
+
+  useEffect(() => {
+    const fetchStudents = async () => {
+      try {
+        setIsLoading(true)
+        const response = await api('/api/students')
+        const data = await response.json()
+        
+        if (response.ok && data.success) {
+          const mappedStudents = data.data.map((student: any) => ({
+            id: student.id.toString(),
+            name: `${student.first_name} ${student.last_name}`.trim(),
+            email: student.email || '',
+            grade: student.grade || '',
+            class: student.class_section || '',
+            status: student.status ? student.status.charAt(0).toUpperCase() + student.status.slice(1) : 'Active',
+            phone: student.phone || '',
+            parentGuardian: student.parent_name || '',
+            fees: '0'
+          }))
+          setStudents(mappedStudents)
+        }
+      } catch (err) {
+        console.error('Error fetching students:', err)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    
+    if (user) {
+      fetchStudents()
+    }
+  }, [api, user])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target
@@ -265,7 +293,7 @@ export default function Students() {
     }
   }
 
-  const openEditDialog = (student: typeof mockStudents[number]) => {
+  const openEditDialog = (student: any) => {
     setEditFormData({
       id: student.id,
       name: student.name,

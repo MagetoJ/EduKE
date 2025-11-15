@@ -28,10 +28,10 @@ export default function StudentDashboard() {
       }
 
       try {
-        const response = await apiFetch(`/api/discipline/${user.id}`)
+        const response = await apiFetch('/api/discipline')
         if (response.ok) {
-          const data: DisciplineRecord[] = await response.json()
-          setDisciplineData(data)
+          const data = await response.json()
+          setDisciplineData(data.data || [])
         }
       } catch (error) {
         console.error('Error fetching discipline data:', error)
@@ -43,40 +43,7 @@ export default function StudentDashboard() {
     fetchDisciplineData()
   }, [apiFetch, user])
 
-  const mockDisciplineData: DisciplineRecord[] = [
-    {
-      id: 1,
-      student_id: 1,
-      teacher_id: null,
-      date: '2024-01-15',
-      type: 'Late to class',
-      severity: 'Minor',
-      status: 'Resolved',
-      description: 'Arrived 10 minutes late to Mathematics class'
-    },
-    {
-      id: 2,
-      student_id: 1,
-      teacher_id: null,
-      date: '2024-01-20',
-      type: 'Incomplete homework',
-      severity: 'Minor',
-      status: 'Warning issued',
-      description: 'Failed to submit Science homework assignment'
-    },
-    {
-      id: 3,
-      student_id: 1,
-      teacher_id: null,
-      date: '2024-02-05',
-      type: 'Disruptive behavior',
-      severity: 'Moderate',
-      status: 'Parent notified',
-      description: 'Talking during class time'
-    }
-  ]
-
-  const displayData = disciplineData.length > 0 ? disciplineData : mockDisciplineData
+  const displayData = disciplineData
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {

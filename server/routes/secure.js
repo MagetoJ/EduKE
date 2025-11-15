@@ -960,4 +960,68 @@ secureRouter.get('/reports/subscription-status', authorizeRole(['super_admin']),
   }
 });
 
+secureRouter.get('/staff/:id/attendance', authorizeRole(['admin']), async (req, res) => {
+  try {
+    const { schoolId } = req;
+    const { id } = req.params;
+    const { startDate, endDate } = req.query;
+
+    let whereClause = 'WHERE a.recorded_by = $1 AND u.school_id = $2';
+    const params = [id, schoolId];
+
+    if (startDate) {
+      params.push(startDate);
+      whereClause += ` AND a.recorded_at >= $${params.length}`;
+    }
+
+    if (endDate) {
+      params.push(endDate);
+      whereClause += ` AND a.recorded_at <= $${params.length}`;
+    }
+
+    const result = await query(
+      `SELECT 
+        a.id, a.student_id, a.date, a.status, a.recorded_at,
+        s.first_name, s.last_name, s.grade
+       FROM attendance a
+       LEFT JOIN students s ON a.student_id = s.id
+       LEFT JOIN users u ON a.recorded_by = u.id
+       ${whereClause}
+       ORDER BY a.recorded_at DESC`,
+      params
+    );
+
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error('Error fetching staff attendance:', err);
+    res.status(500).json({ success: false, error: 'Failed to fetch attendance records' });
+  }
+});
+
+secureRouter.get('/staff/:id/leave', authorizeRole(['admin']), async (req, res) => {
+  try {
+    const { schoolId } = req;
+    const { id } = req.params;
+
+    const result = await query(
+      `SELECT 
+        lr.id, lr.user_id, lr.leave_type_id, lr.start_date, lr.end_date,
+        lr.reason, lr.status, lr.created_at, lr.updated_at,
+        lt.name as leave_type_name,
+        u.first_name, u.last_name, u.email
+       FROM leave_requests lr
+       LEFT JOIN leave_types lt ON lr.leave_type_id = lt.id
+       LEFT JOIN users u ON lr.user_id = u.id
+       WHERE lr.user_id = $1 AND u.school_id = $2
+       ORDER BY lr.start_date DESC`,
+      [id, schoolId]
+    );
+
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error('Error fetching staff leave records:', err);
+    res.status(500).json({ success: false, error: 'Failed to fetch leave records' });
+  }
+});
+
 module.exports = { secureRouter };

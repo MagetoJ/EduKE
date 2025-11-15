@@ -1,48 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Calendar, Clock, MapPin, User, Plus } from 'lucide-react'
+import { Calendar, Clock, MapPin, User, Plus, Loader2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
-import { useAuth } from '../contexts/AuthContext'
-
-// Mock timetable data
-const mockTimetable = {
-  'Monday': [
-    { time: '8:00-9:00', subject: 'Mathematics', teacher: 'Dr. Sarah Wilson', room: 'Room 101' },
-    { time: '9:00-10:00', subject: 'English', teacher: 'Ms. Emily Parker', room: 'Room 205' },
-    { time: '10:30-11:30', subject: 'Science', teacher: 'Mr. James Anderson', room: 'Lab 1' },
-    { time: '11:30-12:30', subject: 'History', teacher: 'Dr. Michael Brown', room: 'Room 302' },
-    { time: '1:30-2:30', subject: 'Art', teacher: 'Ms. Lisa Thompson', room: 'Art Studio' }
-  ],
-  'Tuesday': [
-    { time: '8:00-9:00', subject: 'Science', teacher: 'Mr. James Anderson', room: 'Lab 1' },
-    { time: '9:00-10:00', subject: 'Mathematics', teacher: 'Dr. Sarah Wilson', room: 'Room 101' },
-    { time: '10:30-11:30', subject: 'Physical Education', teacher: 'Coach Robert', room: 'Gymnasium' },
-    { time: '11:30-12:30', subject: 'English', teacher: 'Ms. Emily Parker', room: 'Room 205' },
-    { time: '1:30-2:30', subject: 'Computer Science', teacher: 'Mr. David Kim', room: 'Computer Lab' }
-  ],
-  'Wednesday': [
-    { time: '8:00-9:00', subject: 'History', teacher: 'Dr. Michael Brown', room: 'Room 302' },
-    { time: '9:00-10:00', subject: 'Mathematics', teacher: 'Dr. Sarah Wilson', room: 'Room 101' },
-    { time: '10:30-11:30', subject: 'English', teacher: 'Ms. Emily Parker', room: 'Room 205' },
-    { time: '11:30-12:30', subject: 'Science', teacher: 'Mr. James Anderson', room: 'Lab 1' },
-    { time: '1:30-2:30', subject: 'Music', teacher: 'Ms. Jennifer Lee', room: 'Music Room' }
-  ],
-  'Thursday': [
-    { time: '8:00-9:00', subject: 'English', teacher: 'Ms. Emily Parker', room: 'Room 205' },
-    { time: '9:00-10:00', subject: 'Science', teacher: 'Mr. James Anderson', room: 'Lab 1' },
-    { time: '10:30-11:30', subject: 'Mathematics', teacher: 'Dr. Sarah Wilson', room: 'Room 101' },
-    { time: '11:30-12:30', subject: 'Geography', teacher: 'Ms. Anna Clark', room: 'Room 203' },
-    { time: '1:30-2:30', subject: 'Physical Education', teacher: 'Coach Robert', room: 'Gymnasium' }
-  ],
-  'Friday': [
-    { time: '8:00-9:00', subject: 'Mathematics', teacher: 'Dr. Sarah Wilson', room: 'Room 101' },
-    { time: '9:00-10:00', subject: 'Art', teacher: 'Ms. Lisa Thompson', room: 'Art Studio' },
-    { time: '10:30-11:30', subject: 'Science', teacher: 'Mr. James Anderson', room: 'Lab 1' },
-    { time: '11:30-12:30', subject: 'English', teacher: 'Ms. Emily Parker', room: 'Room 205' },
-    { time: '1:30-2:30', subject: 'Library Period', teacher: 'Ms. Maria Garcia', room: 'Library' }
-  ]
-}
+import { useAuth, useApi } from '../contexts/AuthContext'
 
 const weekDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
 const timeSlots = ['8:00-9:00', '9:00-10:00', '10:30-11:30', '11:30-12:30', '1:30-2:30']
@@ -126,9 +87,53 @@ const CURRICULUM_LEVELS: Record<string, string[]> = {
 
 export default function Timetable() {
   const { user } = useAuth()
+  const api = useApi()
   const [gradeOptions, setGradeOptions] = useState<string[]>(CURRICULUM_LEVELS.cbc)
   const [selectedGrade, setSelectedGrade] = useState(CURRICULUM_LEVELS.cbc[0] ?? '')
   const [selectedClass, setSelectedClass] = useState('10A')
+  const [timetable, setTimetable] = useState<Record<string, any[]>>({})
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchTimetable = async () => {
+      try {
+        setIsLoading(true)
+        const response = await api('/api/timetable')
+        const data = await response.json()
+        
+        if (response.ok && data.success) {
+          const organized: Record<string, any[]> = {}
+          const days = weekDays
+          days.forEach(day => {
+            organized[day] = []
+          })
+          
+          if (data.data && Array.isArray(data.data)) {
+            data.data.forEach((entry: any) => {
+              const day = entry.day_of_week || 'Monday'
+              if (!organized[day]) {
+                organized[day] = []
+              }
+              organized[day].push(entry)
+            })
+          }
+          
+          setTimetable(organized)
+        }
+      } catch (err) {
+        console.error('Error fetching timetable:', err)
+        weekDays.forEach(day => {
+          if (!timetable[day]) timetable[day] = []
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    
+    if (user && api) {
+      fetchTimetable()
+    }
+  }, [api, user])
 
   useEffect(() => {
     if (user?.schoolCurriculum) {
@@ -277,7 +282,7 @@ export default function Timetable() {
                   
                   {/* Classes for each day */}
                   {weekDays.map(day => {
-                    const classInfo = mockTimetable[day as keyof typeof mockTimetable][index]
+                    const classInfo = timetable[day]?.[index]
                     
                     return (
                       <div key={`${day}-${timeSlot}`} className="min-h-[80px]">
@@ -322,7 +327,7 @@ export default function Timetable() {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {mockTimetable.Monday.map((classInfo, index) => (
+            {(timetable['Monday'] || []).map((classInfo: any, index: number) => (
               <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                 <div className="flex items-center space-x-4">
                   <div className="text-center">

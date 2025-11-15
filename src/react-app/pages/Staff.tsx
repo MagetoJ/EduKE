@@ -10,70 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { useApi, useAuth } from '../contexts/AuthContext'
 
-// Mock staff data
-const mockStaff = [
-  {
-    id: '1',
-    name: 'Dr. Sarah Wilson',
-    email: 'sarah.wilson@school.edu',
-    phone: '+1-555-0201',
-    role: 'Teacher',
-    department: 'Mathematics',
-    classAssigned: 'Grade 10 - Section A',
-    subject: 'Mathematics',
-    joinDate: '2019-08-15',
-    status: 'Active',
-    avatar: 'https://images.unsplash.com/photo-1494790108755-2616b2b5aac1?w=150&h=150&fit=crop&crop=face'
-  },
-  {
-    id: '2',
-    name: 'Mr. James Anderson',
-    email: 'james.anderson@school.edu',
-    phone: '+1-555-0202',
-    role: 'Teacher',
-    department: 'Science',
-    classAssigned: 'Grade 11 - Section B',
-    subject: 'Science',
-    joinDate: '2020-01-12',
-    status: 'Active',
-    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face'
-  },
-  {
-    id: '3',
-    name: 'Ms. Lisa Thompson',
-    email: 'lisa.thompson@school.edu',
-    phone: '+1-555-0203',
-    role: 'Administrator',
-    department: 'Administration',
-    joinDate: '2018-03-20',
-    status: 'Active',
-    avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face'
-  }
-]
 
-// Mock leave requests
-const mockLeaveRequests = [
-  {
-    id: '1',
-    staffName: 'Dr. Sarah Wilson',
-    type: 'Sick Leave',
-    startDate: '2024-03-15',
-    endDate: '2024-03-17',
-    days: 3,
-    reason: 'Medical appointment and recovery',
-    status: 'Pending'
-  },
-  {
-    id: '2',
-    staffName: 'Mr. James Anderson',
-    type: 'Annual Leave',
-    startDate: '2024-03-20',
-    endDate: '2024-03-25',
-    days: 5,
-    reason: 'Family vacation',
-    status: 'Pending'
-  }
-]
 
 const initialStaffForm = {
   firstName: '',
@@ -144,6 +81,32 @@ export default function Staff() {
     }
     
     fetchStaff()
+  }, [api])
+
+  useEffect(() => {
+    const fetchLeaveRequests = async () => {
+      try {
+        const response = await api('/api/leave-requests')
+        const data = await response.json()
+        
+        if (response.ok && data.success) {
+          const mappedRequests = data.data.map((request: any) => ({
+            id: request.id.toString(),
+            staffName: request.staff_name || `${request.first_name} ${request.last_name}`.trim(),
+            type: request.leave_type_name || 'Leave',
+            startDate: request.start_date,
+            endDate: request.end_date,
+            reason: request.reason || '',
+            status: request.status ? request.status.charAt(0).toUpperCase() + request.status.slice(1) : 'Pending'
+          }))
+          setLeaveRequests(mappedRequests)
+        }
+      } catch (err) {
+        console.error('Error fetching leave requests:', err)
+      }
+    }
+    
+    fetchLeaveRequests()
   }, [api])
 
   useEffect(() => {
@@ -256,7 +219,7 @@ export default function Staff() {
     }
   }
 
-  const openStaffEdit = (member: typeof mockStaff[number]) => {
+  const openStaffEdit = (member: any) => {
     setEditStaffForm({
       id: member.id,
       name: member.name,
