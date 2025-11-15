@@ -1,73 +1,104 @@
-import { useMemo } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useParams } from 'react-router'
 import { CalendarDays, ClipboardCheck, Timer, Upload } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
+import { useApi } from '../contexts/AuthContext'
 
-const assignmentProfiles = [
-  {
-    id: '1',
-    title: 'Algebraic Equations Quiz',
-    course: 'Advanced Mathematics',
-    dueDate: 'Mar 15, 2024 • 11:59 PM',
-    status: 'Active',
-    totalStudents: 28,
-    submissions: 18,
-    description: 'Short quiz covering linear and quadratic equations with emphasis on problem solving speed.',
-    instructions: 'Students must show all working steps. Calculators are allowed. Upload scanned solutions as PDF.',
-    grading: 'Each question carries equal marks. Partial credit is awarded for clear working.',
-    submissionsList: [
-      { id: '1', studentName: 'John Smith', status: 'Submitted', score: '45/50', submittedAt: 'Mar 14, 2024 • 2:15 PM' },
-      { id: '2', studentName: 'Sarah Johnson', status: 'Submitted', score: '47/50', submittedAt: 'Mar 14, 2024 • 3:40 PM' },
-      { id: '3', studentName: 'Michael Brown', status: 'Pending', score: '-', submittedAt: '-' },
-      { id: '4', studentName: 'Emma Davis', status: 'Submitted', score: '48/50', submittedAt: 'Mar 14, 2024 • 4:05 PM' }
-    ]
-  },
-  {
-    id: '2',
-    title: 'Cell Division Lab Report',
-    course: 'Biology',
-    dueDate: 'Mar 18, 2024 • 5:00 PM',
-    status: 'Active',
-    totalStudents: 25,
-    submissions: 12,
-    description: 'Detailed laboratory report on mitosis observations with photographic evidence and analysis.',
-    instructions: 'Attach lab photos and label each stage of mitosis. Provide reflection on anomalies observed.',
-    grading: 'Rubric includes accuracy, analysis depth, and presentation clarity.',
-    submissionsList: [
-      { id: '2-1', studentName: 'Sarah Johnson', status: 'Submitted', score: '88%', submittedAt: 'Mar 17, 2024 • 1:20 PM' },
-      { id: '2-2', studentName: 'Emma Davis', status: 'Pending', score: '-', submittedAt: '-' }
-    ]
-  },
-  {
-    id: '3',
-    title: 'Shakespeare Essay',
-    course: 'English Literature',
-    dueDate: 'Mar 12, 2024 • 11:59 PM',
-    status: 'Completed',
-    totalStudents: 30,
-    submissions: 30,
-    description: 'Literary analysis essay comparing themes across three Shakespearean plays.',
-    instructions: 'Minimum 1500 words with citations. Upload as DOCX or PDF.',
-    grading: 'Focus on thesis clarity, textual evidence, and critical insight.',
-    submissionsList: [
-      { id: '3-1', studentName: 'John Smith', status: 'Graded', score: '94%', submittedAt: 'Mar 11, 2024 • 9:00 PM' },
-      { id: '3-2', studentName: 'Michael Brown', status: 'Graded', score: '88%', submittedAt: 'Mar 11, 2024 • 6:45 PM' }
-    ]
-  }
-]
+// --- Types based on your API ---
+type Assignment = {
+  id: string;
+  title: string;
+  course_name: string;
+  due_date: string;
+  status: string;
+  description: string;
+  max_score: number;
+  // Fields from mock data not in your API: instructions, grading
+}
+
+type Submission = {
+  id: string;
+  first_name: string;
+  last_name: string;
+  status: string;
+  score: string | null;
+  submitted_at: string;
+}
+
+// Mock data removed
 
 export function AssignmentDetail() {
-  const { id } = useParams()
-  const assignment = useMemo(() => assignmentProfiles.find((item) => item.id === id) ?? assignmentProfiles[0], [id])
+  const { id } = useParams<{ id: string }>()
+  const api = useApi()
+
+  const [assignment, setAssignment] = useState<Assignment | null>(null)
+  const [submissions, setSubmissions] = useState<Submission[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!id) {
+      setError("No assignment ID found.")
+      setIsLoading(false)
+      return
+    }
+
+    const fetchAssignmentData = async () => {
+      setIsLoading(true)
+      setError(null)
+      try {
+        const [assignmentRes, submissionsRes] = await Promise.all([
+          api(`/api/assignments/${id}`),
+          api(`/api/assignments/${id}/submissions`)
+        ])
+
+        if (!assignmentRes.ok) {
+          throw new Error('Failed to fetch assignment details')
+        }
+        if (!submissionsRes.ok) {
+          throw new Error('Failed to fetch submissions')
+        }
+
+        const assignmentData = await assignmentRes.json()
+        const submissionsData = await submissionsRes.json()
+
+        setAssignment(assignmentData.data)
+        setSubmissions(submissionsData.data)
+
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'An unknown error occurred')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchAssignmentData()
+  }, [id, api])
+
+  if (isLoading) {
+    return <p>Loading assignment details...</p>
+  }
+
+  if (error) {
+    return <p className="text-red-500">{error}</p>
+  }
+
+  if (!assignment) {
+    return <p>Assignment not found.</p>
+  }
+  
+  // Calculate submission counts
+  const totalStudents = submissions.length; // Or you need to get this from course
+  const submissionCount = submissions.filter(s => s.status === 'submitted' || s.status === 'graded').length;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2">
         <h1 className="text-3xl font-bold text-gray-900">{assignment.title}</h1>
-        <p className="text-gray-600">{assignment.course}</p>
+        <p className="text-gray-600">{assignment.course_name}</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -80,7 +111,7 @@ export function AssignmentDetail() {
             <Badge variant={assignment.status === 'Completed' ? 'secondary' : 'outline'} className="w-fit">{assignment.status}</Badge>
             <div>
               <p className="text-sm text-gray-600">Submissions</p>
-              <p className="text-lg font-semibold text-gray-900">{assignment.submissions} / {assignment.totalStudents}</p>
+              <p className="text-lg font-semibold text-gray-900">{submissionCount} / {totalStudents}</p>
             </div>
           </CardContent>
         </Card>
@@ -93,7 +124,7 @@ export function AssignmentDetail() {
           <CardContent className="space-y-3">
             <div className="flex items-center space-x-2 text-gray-900">
               <CalendarDays className="w-4 h-4" />
-              <span>{assignment.dueDate}</span>
+              <span>{new Date(assignment.due_date).toLocaleString()}</span>
             </div>
             <div className="flex items-center space-x-2 text-gray-600">
               <Timer className="w-4 h-4" />
@@ -130,14 +161,10 @@ export function AssignmentDetail() {
             <p className="text-sm font-medium text-gray-500">Overview</p>
             <p className="text-gray-700 leading-relaxed">{assignment.description}</p>
           </div>
-          <div>
-            <p className="text-sm font-medium text-gray-500">Instructions</p>
-            <p className="text-gray-700 leading-relaxed">{assignment.instructions}</p>
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-500">Grading Notes</p>
-            <p className="text-gray-700 leading-relaxed">{assignment.grading}</p>
-          </div>
+          {/* Note: 'instructions' and 'grading' are not in your database schema for assignments. 
+            You must add these columns to the 'assignments' table and update the 
+            GET /api/assignments/:id endpoint to return them.
+          */}
         </CardContent>
       </Card>
 
@@ -154,15 +181,15 @@ export function AssignmentDetail() {
               <CardDescription>Track completion and grading</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {assignment.submissionsList.map((submission) => (
+              {submissions.map((submission) => (
                 <div key={submission.id} className="flex flex-col md:flex-row md:items-center md:justify-between p-4 border rounded-lg">
                   <div>
-                    <p className="font-medium text-gray-900">{submission.studentName}</p>
-                    <p className="text-sm text-gray-600">Submitted {submission.submittedAt}</p>
+                    <p className="font-medium text-gray-900">{submission.first_name} {submission.last_name}</p>
+                    <p className="text-sm text-gray-600">Submitted {new Date(submission.submitted_at).toLocaleString()}</p>
                   </div>
                   <div className="flex items-center gap-6 mt-3 md:mt-0">
-                    <Badge variant={submission.status === 'Submitted' || submission.status === 'Graded' ? 'secondary' : 'outline'}>{submission.status}</Badge>
-                    <p className="text-lg font-semibold text-gray-900">{submission.score}</p>
+                    <Badge variant={submission.status === 'submitted' || submission.status === 'graded' ? 'secondary' : 'outline'}>{submission.status}</Badge>
+                    <p className="text-lg font-semibold text-gray-900">{submission.score || '-'}</p>
                   </div>
                 </div>
               ))}
@@ -179,15 +206,15 @@ export function AssignmentDetail() {
             <CardContent className="grid gap-6 md:grid-cols-3">
               <div>
                 <p className="text-sm text-gray-600">Average Score</p>
-                <p className="text-2xl font-semibold text-gray-900">42/50</p>
+                <p className="text-2xl font-semibold text-gray-900">- / {assignment.max_score}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-600">On-time Submissions</p>
-                <p className="text-2xl font-semibold text-blue-600">16</p>
+                <p className="text-2xl font-semibold text-blue-600">{submissionCount}</p>
               </div>
               <div>
-                <p className="text-sm text-gray-600">Late Submissions</p>
-                <p className="text-2xl font-semibold text-red-600">2</p>
+                <p className="text-sm text-gray-600">Pending</p>
+                <p className="text-2xl font-semibold text-red-600">{totalStudents - submissionCount}</p>
               </div>
             </CardContent>
           </Card>

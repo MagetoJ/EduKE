@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { BookOpen, FileText, Award, Download } from 'lucide-react'
+import { useEffect, useState, FormEvent } from 'react'
+import { BookOpen, FileText, Award, Download, AlertCircle, Loader2 } from 'lucide-react' // Added Loader2
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
@@ -7,188 +7,76 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '../components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
-import { useAuth } from '../contexts/AuthContext'
+import { useAuth, useApi } from '../contexts/AuthContext'
 import { useNavigate } from 'react-router'
 
+// --- Types based on your API routes ---
+type Course = {
+  id: string;
+  name: string;
+  code: string;
+  teacher_name: string;
+  grade: string;
+}
 
-// Mock courses data
-const mockCourses = [
-  {
-    id: '1',
-    name: 'Advanced Mathematics',
-    code: 'MATH-401',
-    teacher: 'Dr. Sarah Wilson',
-    grade: 'Grade 10',
-    students: 28,
-    schedule: 'Mon, Wed, Fri - 9:00 AM'
-  },
-  {
-    id: '2',
-    name: 'Biology',
-    code: 'BIO-301',
-    teacher: 'Mr. James Anderson',
-    grade: 'Grade 10',
-    students: 25,
-    schedule: 'Tue, Thu - 10:30 AM'
-  },
-  {
-    id: '3',
-    name: 'English Literature',
-    code: 'ENG-201',
-    teacher: 'Ms. Emily Parker',
-    grade: 'Grade 9',
-    students: 30,
-    schedule: 'Mon, Wed, Fri - 11:00 AM'
-  }
-]
+type Assignment = {
+  id: string;
+  title: string;
+  course_name: string;
+  due_date: string;
+  status: string;
+  course_id: string;
+}
 
-// Mock assignments data
-const mockAssignments = [
-  {
-    id: '1',
-    title: 'Algebraic Equations Quiz',
-    course: 'Advanced Mathematics',
-    dueDate: '2024-03-15',
-    submissions: 18,
-    totalStudents: 28,
-    status: 'Active'
-  },
-  {
-    id: '2',
-    title: 'Cell Division Lab Report',
-    course: 'Biology',
-    dueDate: '2024-03-18',
-    submissions: 12,
-    totalStudents: 25,
-    status: 'Active'
-  },
-  {
-    id: '3',
-    title: 'Shakespeare Essay',
-    course: 'English Literature',
-    dueDate: '2024-03-12',
-    submissions: 30,
-    totalStudents: 30,
-    status: 'Completed'
-  }
-]
-
-// Mock exams data
-const mockExams = [
-  {
-    id: '1',
-    title: 'Mid-term Mathematics Exam',
-    course: 'Advanced Mathematics',
-    date: '2024-03-20',
-    duration: '2 hours',
-    totalMarks: 100,
-    status: 'Scheduled'
-  },
-  {
-    id: '2',
-    title: 'Biology Chapter Test',
-    course: 'Biology',
-    date: '2024-03-22',
-    duration: '1.5 hours',
-    totalMarks: 75,
-    status: 'Scheduled'
-  },
-  {
-    id: '3',
-    title: 'Literature Analysis Exam',
-    course: 'English Literature',
-    date: '2024-03-10',
-    duration: '2 hours',
-    totalMarks: 100,
-    status: 'Completed'
-  }
-]
+type Exam = {
+  id: string;
+  title: string;
+  course_name: string;
+  exam_date: string;
+  duration_minutes: number;
+  total_marks: number;
+  status: string;
+  course_id: string;
+}
 
 const CURRICULUM_LEVELS: Record<string, string[]> = {
-  cbc: [
-    'PP1',
-    'PP2',
-    'Grade 1',
-    'Grade 2',
-    'Grade 3',
-    'Grade 4',
-    'Grade 5',
-    'Grade 6',
-    'Grade 7',
-    'Grade 8',
-    'Grade 9',
-    'Grade 10',
-    'Grade 11',
-    'Grade 12'
-  ],
-  '844': [
-    'Grade 1',
-    'Grade 2',
-    'Grade 3',
-    'Grade 4',
-    'Grade 5',
-    'Grade 6',
-    'Grade 7',
-    'Grade 8',
-    'Form 1',
-    'Form 2',
-    'Form 3',
-    'Form 4'
-  ],
-  british: [
-    'Year 1',
-    'Year 2',
-    'Year 3',
-    'Year 4',
-    'Year 5',
-    'Year 6',
-    'Year 7',
-    'Year 8',
-    'Year 9',
-    'Year 10',
-    'Year 11',
-    'Year 12',
-    'Year 13'
-  ],
-  american: [
-    'Kindergarten',
-    'Grade 1',
-    'Grade 2',
-    'Grade 3',
-    'Grade 4',
-    'Grade 5',
-    'Grade 6',
-    'Grade 7',
-    'Grade 8',
-    'Grade 9',
-    'Grade 10',
-    'Grade 11',
-    'Grade 12'
-  ],
-  ib: [
-    'PYP 1',
-    'PYP 2',
-    'PYP 3',
-    'PYP 4',
-    'PYP 5',
-    'MYP 1',
-    'MYP 2',
-    'MYP 3',
-    'MYP 4',
-    'MYP 5',
-    'DP 1',
-    'DP 2'
-  ]
+  cbc: [ 'PP1', 'PP2', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12' ],
+  '844': [ 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Form 1', 'Form 2', 'Form 3', 'Form 4' ],
+  british: [ 'Year 1', 'Year 2', 'Year 3', 'Year 4', 'Year 5', 'Year 6', 'Year 7', 'Year 8', 'Year 9', 'Year 10', 'Year 11', 'Year 12', 'Year 13' ],
+  american: [ 'Kindergarten', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12' ],
+  ib: [ 'PYP 1', 'PYP 2', 'PYP 3', 'PYP 4', 'PYP 5', 'MYP 1', 'MYP 2', 'MYP 3', 'MYP 4', 'MYP 5', 'DP 1', 'DP 2' ]
 }
 
 export default function Academics() {
   const { user } = useAuth()
+  const api = useApi()
   const navigate = useNavigate()
+  
   const [gradeLevels, setGradeLevels] = useState<string[]>(CURRICULUM_LEVELS.cbc)
   const [activeTab, setActiveTab] = useState('courses')
+  
+  // --- State for fetched data ---
+  const [courses, setCourses] = useState<Course[]>([])
+  const [assignments, setAssignments] = useState<Assignment[]>([])
+  const [exams, setExams] = useState<Exam[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  // --- State for dialogs ---
   const [isAssignmentDialogOpen, setIsAssignmentDialogOpen] = useState(false)
   const [isExamDialogOpen, setIsExamDialogOpen] = useState(false)
   const [isCourseDialogOpen, setIsCourseDialogOpen] = useState(false)
+
+  // --- State for form data ---
+  const [courseForm, setCourseForm] = useState({ name: '', code: '', teacher_id: '', grade: '', description: '' })
+  const [assignmentForm, setAssignmentForm] = useState({ title: '', course_id: '', due_date: '', max_score: '100', assignment_type: 'homework' })
+  const [examForm, setExamForm] = useState({ name: '', course_id: '', exam_date: '', total_marks: '100', duration_minutes: '60' })
+  
+  const [formError, setFormError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // --- Staff list for dropdowns ---
+  const [staff, setStaff] = useState<{ id: string, name: string }[]>([])
 
   useEffect(() => {
     if (user?.schoolCurriculum) {
@@ -199,7 +87,153 @@ export default function Academics() {
     }
   }, [user?.schoolCurriculum])
 
+  // --- Data Fetching Effect (MODIFIED) ---
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!user) return; // Ensure user exists
+      
+      setIsLoading(true)
+      setError(null)
+      
+      try {
+        // Fetch common data
+        const [coursesRes, assignmentsRes, examsRes] = await Promise.all([
+          api('/api/courses'),
+          api('/api/assignments'),
+          api('/api/exams')
+        ])
+
+        if (!coursesRes.ok) throw new Error(`Failed to fetch courses: ${coursesRes.statusText}`)
+        if (!assignmentsRes.ok) throw new Error(`Failed to fetch assignments: ${assignmentsRes.statusText}`)
+        if (!examsRes.ok) throw new Error(`Failed to fetch exams: ${examsRes.statusText}`)
+
+        const coursesData = await coursesRes.json()
+        const assignmentsData = await assignmentsRes.json()
+        const examsData = await examsRes.json()
+
+        setCourses(coursesData.data || [])
+        setAssignments(assignmentsData.data || [])
+        setExams(examsData.data || [])
+
+        // Conditionally fetch staff data only for admins
+        if (user.role === 'admin') {
+          const staffRes = await api('/api/staff')
+          if (!staffRes.ok) throw new Error(`Failed to fetch staff: ${staffRes.statusText}`)
+          const staffData = await staffRes.json()
+          setStaff(staffData.data ? staffData.data.filter((s: any) => s.role === 'teacher') : [])
+        }
+
+      } catch (err) {
+        // This catch block will now be reached if useApi is fixed
+        setError(err instanceof Error ? err.message : 'An unknown error occurred')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchData()
+  }, [api, user]) // Added user to dependency array
+
   const canManage = user?.role === 'admin' || user?.role === 'teacher'
+
+  // --- Form Submit Handlers (No changes) ---
+
+  const handleCourseSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+    setFormError(null)
+    try {
+      const response = await api('/api/courses', {
+        method: 'POST',
+        body: JSON.stringify(courseForm),
+      })
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to create course')
+      }
+      const newCourse = await response.json()
+      setCourses(prev => [newCourse.data, ...prev])
+      setIsCourseDialogOpen(false)
+      setCourseForm({ name: '', code: '', teacher_id: '', grade: '', description: '' })
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Failed to save')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleAssignmentSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+    setFormError(null)
+    try {
+      const response = await api('/api/assignments', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...assignmentForm,
+          max_score: parseInt(assignmentForm.max_score) || 100
+        }),
+      })
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to create assignment')
+      }
+      const newAssignment = await response.json()
+      // Add course_name to the new assignment for UI consistency
+      const course = courses.find(c => c.id === newAssignment.data.course_id.toString())
+      newAssignment.data.course_name = course?.name || 'Unknown Course'
+      setAssignments(prev => [newAssignment.data, ...prev])
+      setIsAssignmentDialogOpen(false)
+      setAssignmentForm({ title: '', course_id: '', due_date: '', max_score: '100', assignment_type: 'homework' })
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Failed to save')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleExamSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+    setFormError(null)
+    try {
+      const response = await api('/api/exams', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...examForm,
+          total_marks: parseInt(examForm.total_marks) || 100,
+          duration_minutes: parseInt(examForm.duration_minutes) || 60
+        }),
+      })
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to create exam')
+      }
+      const newExam = await response.json()
+      // Add course_name to the new exam for UI consistency
+      const course = courses.find(c => c.id === newExam.data.course_id.toString())
+      newExam.data.course_name = course?.name || 'Unknown Course'
+      setExams(prev => [newExam.data, ...prev])
+      setIsExamDialogOpen(false)
+      setExamForm({ name: '', course_id: '', exam_date: '', total_marks: '100', duration_minutes: '60' })
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Failed to save')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+  
+  const renderError = (err: string | null) => err && (
+    <div className="flex items-center gap-2 text-sm text-red-600 p-3 bg-red-50 rounded-md">
+      <AlertCircle className="w-4 h-4" /> {err}
+    </div>
+  )
+
+  const renderLoading = () => (
+    <div className="flex items-center justify-center p-8 text-gray-600">
+      <Loader2 className="w-6 h-6 animate-spin mr-2" />
+      Loading data...
+    </div>
+  )
 
   return (
     <div className="space-y-6">
@@ -212,8 +246,8 @@ export default function Academics() {
         <div className="flex space-x-2">
           {canManage && (
             <>
-              {user.role === 'admin' && (
-                <Dialog open={isCourseDialogOpen} onOpenChange={setIsCourseDialogOpen}>
+              {user?.role === 'admin' && (
+                <Dialog open={isCourseDialogOpen} onOpenChange={(open) => { setIsCourseDialogOpen(open); setFormError(null); }}>
                   <DialogTrigger asChild>
                     <Button variant="outline">
                       <BookOpen className="w-4 h-4 mr-2" />
@@ -221,84 +255,83 @@ export default function Academics() {
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="max-w-2xl">
-                    <DialogHeader>
-                      <DialogTitle>Add New Course</DialogTitle>
-                      <DialogDescription>
-                        Create a new course for the academic year
-                      </DialogDescription>
-                    </DialogHeader>
-                    
-                    <div className="grid gap-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="courseName">Course Name</Label>
-                          <Input id="courseName" placeholder="Enter course name" />
+                    <form onSubmit={handleCourseSubmit}>
+                      <DialogHeader>
+                        <DialogTitle>Add New Course</DialogTitle>
+                        <DialogDescription>
+                          Create a new course for the academic year
+                        </DialogDescription>
+                      </DialogHeader>
+                      
+                      <div className="grid gap-4 py-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="courseName">Course Name</Label>
+                            <Input id="courseName" placeholder="Enter course name" value={courseForm.name} onChange={(e) => setCourseForm({...courseForm, name: e.target.value})} />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="courseCode">Course Code</Label>
+                            <Input id="courseCode" placeholder="e.g., MATH-401" value={courseForm.code} onChange={(e) => setCourseForm({...courseForm, code: e.target.value})} />
+                          </div>
                         </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="courseCode">Course Code</Label>
-                          <Input id="courseCode" placeholder="e.g., MATH-401" />
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="teacher">Assigned Teacher</Label>
+                            <Select value={courseForm.teacher_id} onValueChange={(value) => setCourseForm({...courseForm, teacher_id: value})}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select teacher" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {staff.map(s => (
+                                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="grade">Grade Level</Label>
+                            <Select value={courseForm.grade} onValueChange={(value) => setCourseForm({...courseForm, grade: value})}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select grade" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {gradeLevels.map(grade => (
+                                  <SelectItem key={grade} value={grade}>
+                                    {grade}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
                         </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="description">Description</Label>
+                          <textarea 
+                            id="description" 
+                            className="min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                            placeholder="Course description..."
+                            value={courseForm.description} onChange={(e) => setCourseForm({...courseForm, description: e.target.value})}
+                          />
+                        </div>
+                        {renderError(formError)}
                       </div>
                       
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="teacher">Assigned Teacher</Label>
-                          <Select>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select teacher" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="sarah">Dr. Sarah Wilson</SelectItem>
-                              <SelectItem value="james">Mr. James Anderson</SelectItem>
-                              <SelectItem value="emily">Ms. Emily Parker</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="grade">Grade Level</Label>
-                          <Select>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select grade" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {gradeLevels.map(grade => (
-                                <SelectItem key={grade} value={grade}>
-                                  {grade}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="schedule">Schedule</Label>
-                        <Input id="schedule" placeholder="e.g., Mon, Wed, Fri - 9:00 AM" />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="description">Description</Label>
-                        <textarea 
-                          id="description" 
-                          className="min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                          placeholder="Course description..."
-                        />
-                      </div>
-                    </div>
-                    
-                    <DialogFooter>
-                      <Button variant="outline" onClick={() => setIsCourseDialogOpen(false)}>
-                        Cancel
-                      </Button>
-                      <Button onClick={() => setIsCourseDialogOpen(false)}>
-                        Create Course
-                      </Button>
-                    </DialogFooter>
+                      <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setIsCourseDialogOpen(false)} disabled={isSubmitting}>
+                          Cancel
+                        </Button>
+                        <Button type="submit" disabled={isSubmitting}>
+                          {isSubmitting ? 'Creating...' : 'Create Course'}
+                        </Button>
+                      </DialogFooter>
+                    </form>
                   </DialogContent>
                 </Dialog>
               )}
 
-              <Dialog open={isAssignmentDialogOpen} onOpenChange={setIsAssignmentDialogOpen}>
+              <Dialog open={isAssignmentDialogOpen} onOpenChange={(open) => { setIsAssignmentDialogOpen(open); setFormError(null); }}>
                 <DialogTrigger asChild>
                   <Button variant="outline">
                     <FileText className="w-4 h-4 mr-2" />
@@ -306,82 +339,76 @@ export default function Academics() {
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="max-w-2xl">
-                  <DialogHeader>
-                    <DialogTitle>Create Assignment</DialogTitle>
-                    <DialogDescription>
-                      Create a new assignment for your students
-                    </DialogDescription>
-                  </DialogHeader>
-                  
-                  <div className="grid gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="assignmentTitle">Assignment Title</Label>
-                      <Input id="assignmentTitle" placeholder="Enter assignment title" />
+                  <form onSubmit={handleAssignmentSubmit}>
+                    <DialogHeader>
+                      <DialogTitle>Create Assignment</DialogTitle>
+                      <DialogDescription>
+                        Create a new assignment for your students
+                      </DialogDescription>
+                    </DialogHeader>
+                    
+                    <div className="grid gap-4 py-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="assignmentTitle">Assignment Title</Label>
+                        <Input id="assignmentTitle" placeholder="Enter assignment title" value={assignmentForm.title} onChange={(e) => setAssignmentForm({...assignmentForm, title: e.target.value})} />
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="course">Course</Label>
+                          <Select value={assignmentForm.course_id} onValueChange={(value) => setAssignmentForm({...assignmentForm, course_id: value})}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select course" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {courses.map(course => (
+                                <SelectItem key={course.id} value={course.id}>{course.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="dueDate">Due Date</Label>
+                          <Input id="dueDate" type="datetime-local" value={assignmentForm.due_date} onChange={(e) => setAssignmentForm({...assignmentForm, due_date: e.target.value})} />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="max_score">Total Marks</Label>
+                          <Input id="max_score" type="number" placeholder="100" value={assignmentForm.max_score} onChange={(e) => setAssignmentForm({...assignmentForm, max_score: e.target.value})} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="assignment_type">Type</Label>
+                          <Select value={assignmentForm.assignment_type} onValueChange={(value) => setAssignmentForm({...assignmentForm, assignment_type: value})}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="homework">Homework</SelectItem>
+                              <SelectItem value="project">Project</SelectItem>
+                              <SelectItem value="quiz">Quiz</SelectItem>
+                              <SelectItem value="lab">Lab Report</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      {renderError(formError)}
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="course">Course</Label>
-                        <Select>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select course" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="math">Advanced Mathematics</SelectItem>
-                            <SelectItem value="bio">Biology</SelectItem>
-                            <SelectItem value="eng">English Literature</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="dueDate">Due Date</Label>
-                        <Input id="dueDate" type="datetime-local" />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="totalMarks">Total Marks</Label>
-                        <Input id="totalMarks" type="number" placeholder="100" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="assignmentType">Type</Label>
-                        <Select>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select type" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="homework">Homework</SelectItem>
-                            <SelectItem value="project">Project</SelectItem>
-                            <SelectItem value="quiz">Quiz</SelectItem>
-                            <SelectItem value="lab">Lab Report</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="instructions">Instructions</Label>
-                      <textarea 
-                        id="instructions" 
-                        className="min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                        placeholder="Assignment instructions and requirements..."
-                      />
-                    </div>
-                  </div>
-                  
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsAssignmentDialogOpen(false)}>
-                      Cancel
-                    </Button>
-                    <Button onClick={() => setIsAssignmentDialogOpen(false)}>
-                      Create Assignment
-                    </Button>
-                  </DialogFooter>
+                    <DialogFooter>
+                      <Button type="button" variant="outline" onClick={() => setIsAssignmentDialogOpen(false)} disabled={isSubmitting}>
+                        Cancel
+                      </Button>
+                      <Button type="submit" disabled={isSubmitting}>
+                        {isSubmitting ? 'Creating...' : 'Create Assignment'}
+                      </Button>
+                    </DialogFooter>
+                  </form>
                 </DialogContent>
               </Dialog>
 
-              <Dialog open={isExamDialogOpen} onOpenChange={setIsExamDialogOpen}>
+              <Dialog open={isExamDialogOpen} onOpenChange={(open) => { setIsExamDialogOpen(open); setFormError(null); }}>
                 <DialogTrigger asChild>
                   <Button>
                     <Award className="w-4 h-4 mr-2" />
@@ -389,76 +416,85 @@ export default function Academics() {
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="max-w-2xl">
-                  <DialogHeader>
-                    <DialogTitle>Schedule Examination</DialogTitle>
-                    <DialogDescription>
-                      Schedule a new examination for students
-                    </DialogDescription>
-                  </DialogHeader>
-                  
-                  <div className="grid gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="examTitle">Exam Title</Label>
-                      <Input id="examTitle" placeholder="Enter exam title" />
+                  <form onSubmit={handleExamSubmit}>
+                    <DialogHeader>
+                      <DialogTitle>Schedule Examination</DialogTitle>
+                      <DialogDescription>
+                        Schedule a new examination for students
+                      </DialogDescription>
+                    </DialogHeader>
+                    
+                    <div className="grid gap-4 py-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="examTitle">Exam Title</Label>
+                        <Input id="examTitle" placeholder="Enter exam title" value={examForm.name} onChange={(e) => setExamForm({...examForm, name: e.target.value})} />
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="examCourse">Course</Label>
+                          <Select value={examForm.course_id} onValueChange={(value) => setExamForm({...examForm, course_id: value})}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select course" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {courses.map(course => (
+                                <SelectItem key={course.id} value={course.id}>{course.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="examDate">Exam Date & Time</Label>
+                          <Input id="examDate" type="datetime-local" value={examForm.exam_date} onChange={(e) => setExamForm({...examForm, exam_date: e.target.value})} />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="duration">Duration (minutes)</Label>
+                          <Input id="duration" type="number" placeholder="120" value={examForm.duration_minutes} onChange={(e) => setExamForm({...examForm, duration_minutes: e.target.value})} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="examMarks">Total Marks</Label>
+                          <Input id="examMarks" type="number" placeholder="100" value={examForm.total_marks} onChange={(e) => setExamForm({...examForm, total_marks: e.target.value})} />
+                        </div>
+                      </div>
+
+                      {/* File uploads are complex and not handled by this form submit.
+                          You would need a separate file upload handler.
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="questionPaper">Question Paper</Label>
+                          <Input id="questionPaper" type="file" accept=".pdf,.doc,.docx" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="answerKey">Answer Key</Label>
+                          <Input id="answerKey" type="file" accept=".pdf,.doc,.docx" />
+                        </div>
+                      </div>
+                      */}
+                      {renderError(formError)}
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="examCourse">Course</Label>
-                        <Select>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select course" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="math">Advanced Mathematics</SelectItem>
-                            <SelectItem value="bio">Biology</SelectItem>
-                            <SelectItem value="eng">English Literature</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="examDate">Exam Date & Time</Label>
-                        <Input id="examDate" type="datetime-local" />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="duration">Duration (minutes)</Label>
-                        <Input id="duration" type="number" placeholder="120" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="examMarks">Total Marks</Label>
-                        <Input id="examMarks" type="number" placeholder="100" />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="questionPaper">Question Paper</Label>
-                        <Input id="questionPaper" type="file" accept=".pdf,.doc,.docx" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="answerKey">Answer Key</Label>
-                        <Input id="answerKey" type="file" accept=".pdf,.doc,.docx" />
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsExamDialogOpen(false)}>
-                      Cancel
-                    </Button>
-                    <Button onClick={() => setIsExamDialogOpen(false)}>
-                      Schedule Exam
-                    </Button>
-                  </DialogFooter>
+                    <DialogFooter>
+                      <Button type="button" variant="outline" onClick={() => setIsExamDialogOpen(false)} disabled={isSubmitting}>
+                        Cancel
+                      </Button>
+                      <Button type="submit" disabled={isSubmitting}>
+                        {isSubmitting ? 'Scheduling...' : 'Schedule Exam'}
+                      </Button>
+                    </DialogFooter>
+                  </form>
                 </DialogContent>
               </Dialog>
             </>
           )}
         </div>
       </div>
+      
+      {/* Show main error block if data fetching failed */}
+      {renderError(error)}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList>
@@ -469,152 +505,161 @@ export default function Academics() {
         </TabsList>
 
         <TabsContent value="courses" className="space-y-6">
-          <div className="grid gap-4">
-            {mockCourses.map((course) => (
-              <Card key={course.id} className="hover:shadow-md transition-shadow">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg flex items-center justify-center">
-                        <BookOpen className="w-6 h-6 text-white" />
+          {isLoading ? renderLoading() : (
+            <div className="grid gap-4">
+              {courses.map((course) => (
+                <Card key={course.id} className="hover:shadow-md transition-shadow">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg flex items-center justify-center">
+                          <BookOpen className="w-6 h-6 text-white" />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-gray-900">{course.name}</h3>
+                          <p className="text-sm text-gray-600">{course.code} • {course.grade}</p>
+                        </div>
                       </div>
-                      
-                      <div>
-                        <h3 className="font-semibold text-gray-900">{course.name}</h3>
-                        <p className="text-sm text-gray-600">{course.code} • {course.grade}</p>
+                      <div className="flex items-center space-x-8">
+                        <div className="text-center">
+                          <p className="text-sm font-medium text-gray-900">{course.teacher_name}</p>
+                          <p className="text-xs text-gray-500">Instructor</p>
+                        </div>
+                        {/* NOTE: Your API does not return student count or schedule.
+                        You must update your backend 'GET /api/courses' in secure.js
+                        to include this data if you want to display it.
+                        <div className="text-center">
+                          <p className="text-sm font-medium text-gray-900">{course.students}</p>
+                          <p className="text-xs text-gray-500">Students</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-sm font-medium text-gray-900">{course.schedule}</p>
+                          <p className="text-xs text-gray-500">Schedule</p>
+                        </div>
+                        */}
+                        <Button variant="outline" size="sm" onClick={() => navigate(`/dashboard/academics/courses/${course.id}`)}>
+                          View Details
+                        </Button>
                       </div>
                     </div>
-
-                    <div className="flex items-center space-x-8">
-                      <div className="text-center">
-                        <p className="text-sm font-medium text-gray-900">{course.teacher}</p>
-                        <p className="text-xs text-gray-500">Instructor</p>
-                      </div>
-                      
-                      <div className="text-center">
-                        <p className="text-sm font-medium text-gray-900">{course.students}</p>
-                        <p className="text-xs text-gray-500">Students</p>
-                      </div>
-                      
-                      <div className="text-center">
-                        <p className="text-sm font-medium text-gray-900">{course.schedule}</p>
-                        <p className="text-xs text-gray-500">Schedule</p>
-                      </div>
-
-                      <Button variant="outline" size="sm" onClick={() => navigate(`/dashboard/academics/courses/${course.id}`)}>
-                        View Details
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="assignments" className="space-y-6">
-          <div className="grid gap-4">
-            {mockAssignments.map((assignment) => (
-              <Card key={assignment.id} className="hover:shadow-md transition-shadow">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
-                        <FileText className="w-6 h-6 text-white" />
+          {isLoading ? renderLoading() : (
+            <div className="grid gap-4">
+              {assignments.map((assignment) => (
+                <Card key={assignment.id} className="hover:shadow-md transition-shadow">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
+                          <FileText className="w-6 h-6 text-white" />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-gray-900">{assignment.title}</h3>
+                          <p className="text-sm text-gray-600">{assignment.course_name}</p>
+                        </div>
                       </div>
-                      
-                      <div>
-                        <h3 className="font-semibold text-gray-900">{assignment.title}</h3>
-                        <p className="text-sm text-gray-600">{assignment.course}</p>
+
+                      <div className="flex items-center space-x-8">
+                        <div className="text-center">
+                          <p className="text-sm font-medium text-gray-900">{new Date(assignment.due_date).toLocaleDateString()}</p>
+                          <p className="text-xs text-gray-500">Due Date</p>
+                        </div>
+                        
+                        {/*
+                        NOTE: Your API does not return submission counts.
+                        You must update your backend 'GET /api/assignments' in assignments.js
+                        to include this data if you want to display it.
+                        <div className="text-center">
+                          <p className="text-sm font-medium text-gray-900">{assignment.submissions}/{assignment.totalStudents}</p>
+                          <p className="text-xs text-gray-500">Submissions</p>
+                        </div>
+                        */}
+
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                          assignment.status === 'active' 
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {assignment.status}
+                        </span>
+
+                        <Button variant="outline" size="sm" onClick={() => navigate(`/dashboard/academics/assignments/${assignment.id}`)}>
+                          View Submissions
+                        </Button>
                       </div>
                     </div>
-
-                    <div className="flex items-center space-x-8">
-                      <div className="text-center">
-                        <p className="text-sm font-medium text-gray-900">{assignment.dueDate}</p>
-                        <p className="text-xs text-gray-500">Due Date</p>
-                      </div>
-                      
-                      <div className="text-center">
-                        <p className="text-sm font-medium text-gray-900">{assignment.submissions}/{assignment.totalStudents}</p>
-                        <p className="text-xs text-gray-500">Submissions</p>
-                      </div>
-
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                        assignment.status === 'Active' 
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {assignment.status}
-                      </span>
-
-                      <Button variant="outline" size="sm" onClick={() => navigate(`/dashboard/academics/assignments/${assignment.id}`)}>
-                        View Submissions
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="exams" className="space-y-6">
-          <div className="grid gap-4">
-            {mockExams.map((exam) => (
-              <Card key={exam.id} className="hover:shadow-md transition-shadow">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
-                        <Award className="w-6 h-6 text-white" />
+          {isLoading ? renderLoading() : (
+            <div className="grid gap-4">
+              {exams.map((exam) => (
+                <Card key={exam.id} className="hover:shadow-md transition-shadow">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
+                          <Award className="w-6 h-6 text-white" />
+                        </div>
+                        
+                        <div>
+                          <h3 className="font-semibold text-gray-900">{exam.title}</h3>
+                          <p className="text-sm text-gray-600">{exam.course_name}</p>
+                        </div>
                       </div>
-                      
-                      <div>
-                        <h3 className="font-semibold text-gray-900">{exam.title}</h3>
-                        <p className="text-sm text-gray-600">{exam.course}</p>
+
+                      <div className="flex items-center space-x-8">
+                        <div className="text-center">
+                          <p className="text-sm font-medium text-gray-900">{new Date(exam.exam_date).toLocaleDateString()}</p>
+                          <p className="text-xs text-gray-500">Exam Date</p>
+                        </div>
+                        
+                        <div className="text-center">
+                          <p className="text-sm font-medium text-gray-900">{exam.duration_minutes} mins</p>
+                          <p className="text-xs text-gray-500">Duration</p>
+                        </div>
+                        
+                        <div className="text-center">
+                          <p className="text-sm font-medium text-gray-900">{exam.total_marks}</p>
+                          <p className="text-xs text-gray-500">Total Marks</p>
+                        </div>
+
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                          exam.status === 'Scheduled' // You may need to adjust this logic
+                            ? 'bg-blue-100 text-blue-800'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {exam.status || 'Scheduled'}
+                        </span>
+
+                        <div className="flex space-x-2">
+                          <Button variant="outline" size="sm">
+                            <Download className="w-4 h-4 mr-1" />
+                            Papers
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => navigate(`/dashboard/academics/exams/${exam.id}`)}>
+                            View Results
+                          </Button>
+                        </div>
                       </div>
                     </div>
-
-                    <div className="flex items-center space-x-8">
-                      <div className="text-center">
-                        <p className="text-sm font-medium text-gray-900">{exam.date}</p>
-                        <p className="text-xs text-gray-500">Exam Date</p>
-                      </div>
-                      
-                      <div className="text-center">
-                        <p className="text-sm font-medium text-gray-900">{exam.duration}</p>
-                        <p className="text-xs text-gray-500">Duration</p>
-                      </div>
-                      
-                      <div className="text-center">
-                        <p className="text-sm font-medium text-gray-900">{exam.totalMarks}</p>
-                        <p className="text-xs text-gray-500">Total Marks</p>
-                      </div>
-
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                        exam.status === 'Scheduled' 
-                          ? 'bg-blue-100 text-blue-800'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {exam.status}
-                      </span>
-
-                      <div className="flex space-x-2">
-                        <Button variant="outline" size="sm">
-                          <Download className="w-4 h-4 mr-1" />
-                          Papers
-                        </Button>
-                        <Button variant="outline" size="sm">
-                          View Results
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="grading" className="space-y-6">

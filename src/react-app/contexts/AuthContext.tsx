@@ -144,21 +144,11 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     []
   );
 
-  const logout = useCallback(async () => {
-    try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-      await fetch(`${API_URL}/api/auth/logout`, {
-        method: 'POST',
-        credentials: 'include'
-      });
-    } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
-      clearAuthStorage();
-      setToken(null);
-      setRefreshToken(null);
-      setUserState(null);
-    }
+  const logout = useCallback(() => {
+    clearAuthStorage();
+    setToken(null);
+    setRefreshToken(null);
+    setUserState(null);
   }, []);
 
   const refreshSession = useCallback(async () => {
