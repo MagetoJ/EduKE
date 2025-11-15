@@ -1,8 +1,8 @@
-import { useEffect, useState, FormEvent } from 'react'
-import { Plus, DollarSign, Search, Filter, Calendar, CheckCircle, AlertCircle, Clock } from 'lucide-react'
+import { useEffect, useState, FormEvent, useMemo } from 'react'
+import { Plus, DollarSign, CheckCircle, AlertCircle, Clock, Loader2 } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
 import { Label } from '../components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
@@ -11,39 +11,63 @@ import { useAuth, useApi } from '../contexts/AuthContext'
 import { useNavigate } from 'react-router'
 
 // --- Types based on API/Schema ---
+// Note: The form uses 'fee_type' and 'term'
+// The DB returns 'name' and 'frequency'
+// We will handle this mapping
 type FeeStructure = {
   id: string;
-  fee_type: string; // 'name' in mock data
+  name: string; // From DB
+  fee_type: string; // From Form
   amount: number;
   grade: string;
-  term: string; // 'type' in mock data
+  frequency: string; // From DB
+  term: string; // From Form
   academic_year: string;
-  // 'status' is in mock data but not in 'fee_structures' table
 }
 
 type StudentFee = {
   id: string;
-  description: string; // Not in API, but fee_type is.
+  student_id: string;
+  description: string;
   fee_type: string;
   amount_due: number;
   amount_paid: number;
   due_date: string;
   payment_status: string;
-  first_name: string;
-  last_name: string;
+  first_name?: string; 
+  last_name?: string;
 }
 
 type FeeCollection = {
   studentId: string;
   studentName: string;
-  grade: string; // Not in API, would need to join with students
+  grade: string;
   totalDue: number;
   paid: number;
   outstanding: number;
-  lastPayment: string; // Not in API
+  lastPayment: string;
 }
 
-// Mock data removed
+// Type for our edit form
+type FeeStructureForm = {
+  id: string;
+  fee_type: string;
+  amount: string;
+  grade: string;
+  term: string;
+  academic_year: string;
+  description: string;
+}
+
+const EMPTY_FORM: FeeStructureForm = {
+  id: '',
+  fee_type: '',
+  amount: '',
+  grade: 'All Grades',
+  term: '',
+  academic_year: '',
+  description: ''
+}
 
 export default function Fees() {
   const { user } = useAuth()
@@ -51,7 +75,6 @@ export default function Fees() {
   const navigate = useNavigate()
   
   const [activeTab, setActiveTab] = useState(user?.role === 'admin' ? 'structure' : 'fees')
-  const [isFeeStructureDialogOpen, setIsFeeStructureDialogOpen] = useState(false)
   
   // --- State for fetched data ---
   const [feeStructures, setFeeStructures] = useState<FeeStructure[]>([])
@@ -61,16 +84,18 @@ export default function Fees() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   
-  // --- State for forms ---
+  // --- State for dialogs and forms ---
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
-  const [feeStructureForm, setFeeStructureForm] = useState({
-    fee_type: '',
-    amount: '',
-    grade: 'All Grades',
-    term: '',
-    academic_year: ''
-  })
+  
+  // "Add" dialog
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  const [addStructureForm, setAddStructureForm] = useState(EMPTY_FORM)
+
+  // "Edit" dialog
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [editStructureForm, setEditStructureForm] = useState<FeeStructureForm>(EMPTY_FORM)
+
 
   const isAdmin = user?.role === 'admin'
 
@@ -80,50 +105,61 @@ export default function Fees() {
       setError(null)
       try {
         if (isAdmin) {
-          // Admin fetches all structures and all student fees
           const [structuresRes, collectionRes] = await Promise.all([
             api('/api/fee-structures'),
             api('/api/fees')
           ])
 
-          if (!structuresRes.ok) throw new Error('Failed to fetch fee structures')
+          if (!structuresRes.ok) {
+            const errData = await structuresRes.json()
+            throw new Error(`Failed to fetch fee structures: ${errData.error || structuresRes.statusText}`)
+          }
           const structuresData = await structuresRes.json()
-          setFeeStructures(structuresData.data || [])
+          // Map DB names to form names for consistency
+          const mappedStructures = structuresData.data.map((fee: any) => ({
+            ...fee,
+            fee_type: fee.name, // Map DB 'name' to 'fee_type'
+            term: fee.frequency // Map DB 'frequency' to 'term'
+          }))
+          setFeeStructures(mappedStructures || [])
 
-          if (!collectionRes.ok) throw new Error('Failed to fetch fee collection')
+          if (!collectionRes.ok) {
+            const errData = await collectionRes.json()
+            throw new Error(`Failed to fetch fee collection: ${errData.error || collectionRes.statusText}`)
+          }
           const collectionData = await collectionRes.json()
           
-          // --- Aggregate FeeCollection data (Temporary client-side solution) ---
-          // Your backend GET /api/fees returns individual fee items.
-          // The UI expects data aggregated by student.
-          // This aggregation should be moved to a new backend endpoint for production.
           const collectionMap: Record<string, FeeCollection> = {}
           const rawFees: StudentFee[] = collectionData.data || []
           
           rawFees.forEach(fee => {
-            const studentId = fee.student_id.toString() // Assuming student_id is on the fee
-            if (!collectionMap[studentId]) {
-              collectionMap[studentId] = {
-                studentId: studentId,
-                studentName: `${fee.first_name} ${fee.last_name}`,
-                grade: 'N/A', // <-- This is missing. You need to join with students.
-                totalDue: 0,
-                paid: 0,
-                outstanding: 0,
-                lastPayment: 'N/A' // This is missing.
+            if (fee.student_id) { 
+              const studentId = String(fee.student_id)
+              
+              if (!collectionMap[studentId]) {
+                collectionMap[studentId] = {
+                  studentId: studentId,
+                  studentName: `${fee.first_name || 'N/A'} ${fee.last_name || ''}`.trim(),
+                  grade: 'N/A', 
+                  totalDue: 0,
+                  paid: 0,
+                  outstanding: 0,
+                  lastPayment: 'N/A' 
+                }
               }
+              collectionMap[studentId].totalDue += Number(fee.amount_due) || 0
+              collectionMap[studentId].paid += Number(fee.amount_paid) || 0
+              collectionMap[studentId].outstanding = collectionMap[studentId].totalDue - collectionMap[studentId].paid
             }
-            collectionMap[studentId].totalDue += Number(fee.amount_due)
-            collectionMap[studentId].paid += Number(fee.amount_paid)
-            collectionMap[studentId].outstanding = collectionMap[studentId].totalDue - collectionMap[studentId].paid
           })
           setFeeCollection(Object.values(collectionMap))
-          // --- End of aggregation ---
 
         } else {
-          // Parent/Student fetches only their own fees
           const feesRes = await api('/api/fees')
-          if (!feesRes.ok) throw new Error('Failed to fetch fees')
+          if (!feesRes.ok) {
+             const errData = await feesRes.json()
+            throw new Error(`Failed to fetch fees: ${errData.error || feesRes.statusText}`)
+          }
           const feesData = await feesRes.json()
           setStudentFees(feesData.data || [])
         }
@@ -136,7 +172,8 @@ export default function Fees() {
     fetchData()
   }, [api, isAdmin])
 
-  const handleFeeStructureSubmit = async (e: FormEvent) => {
+  // --- "ADD" FORM HANDLER ---
+  const handleAddSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
     setFormError(null)
@@ -144,8 +181,8 @@ export default function Fees() {
       const response = await api('/api/fee-structures', {
         method: 'POST',
         body: JSON.stringify({
-          ...feeStructureForm,
-          amount: parseFloat(feeStructureForm.amount)
+          ...addStructureForm,
+          amount: parseFloat(addStructureForm.amount)
         }),
       })
       if (!response.ok) {
@@ -153,15 +190,113 @@ export default function Fees() {
         throw new Error(data.error || 'Failed to create fee structure')
       }
       const newStructure = await response.json()
-      setFeeStructures(prev => [newStructure.data, ...prev])
-      setIsFeeStructureDialogOpen(false)
-      setFeeStructureForm({ fee_type: '', amount: '', grade: 'All Grades', term: '', academic_year: '' })
+      // Map DB response to our form state
+      const mappedData = {
+        ...newStructure.data,
+        fee_type: newStructure.data.name,
+        term: newStructure.data.frequency
+      }
+      setFeeStructures(prev => [mappedData, ...prev])
+      setIsAddDialogOpen(false)
+      setAddStructureForm(EMPTY_FORM)
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Failed to save')
     } finally {
       setIsSubmitting(false)
     }
   }
+  
+  // --- "EDIT" FORM HANDLERS ---
+  const handleOpenEditDialog = (fee: FeeStructure) => {
+    setFormError(null);
+    setEditStructureForm({
+      id: fee.id,
+      fee_type: fee.fee_type, // This is 'name' from the DB
+      amount: String(fee.amount),
+      grade: fee.grade,
+      term: fee.term, // This is 'frequency' from the DB
+      academic_year: (fee as any).academic_year || '', // This field doesn't exist yet
+      description: (fee as any).description || ''
+    });
+    setIsEditDialogOpen(true);
+  }
+
+  const handleEditSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+    setFormError(null)
+    
+    if (!editStructureForm.id) {
+      setFormError("No ID found, cannot update.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    try {
+      const response = await api(`/api/fee-structures/${editStructureForm.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          ...editStructureForm,
+          amount: parseFloat(editStructureForm.amount)
+        }),
+      })
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to update fee structure')
+      }
+      const updatedStructure = await response.json()
+      
+      // Map DB response to our form state
+      const mappedData = {
+        ...updatedStructure.data,
+        fee_type: updatedStructure.data.name,
+        term: updatedStructure.data.frequency
+      }
+
+      // Find and replace the item in state
+      setFeeStructures(prev => 
+        prev.map(fee => fee.id === mappedData.id ? mappedData : fee)
+      )
+      
+      setIsEditDialogOpen(false)
+      setEditStructureForm(EMPTY_FORM)
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Failed to save')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+
+  // --- Summary calculations (for Parent/Student view) ---
+  const feeSummary = useMemo(() => {
+    if (isAdmin) return { totalDue: 0, totalPaid: 0, outstanding: 0 }
+    
+    return studentFees.reduce((acc, fee) => {
+      const due = Number(fee.amount_due) || 0
+      const paid = Number(fee.amount_paid) || 0
+      
+      acc.totalDue += due
+      acc.totalPaid += paid
+      if (fee.payment_status !== 'paid') {
+        acc.outstanding += (due - paid)
+      }
+      return acc
+    }, { totalDue: 0, totalPaid: 0, outstanding: 0 })
+  }, [studentFees, isAdmin])
+  
+  const renderLoading = () => (
+    <div className="flex items-center justify-center p-8 text-gray-600">
+      <Loader2 className="w-6 h-6 animate-spin mr-2" />
+      Loading data...
+    </div>
+  )
+  
+  const renderError = (err: string | null) => err && (
+    <div className="flex items-center gap-2 text-sm text-red-600 p-3 bg-red-50 rounded-md">
+      <AlertCircle className="w-4 h-4" /> {err}
+    </div>
+  )
 
   const renderAdminView = () => (
     <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
@@ -170,6 +305,8 @@ export default function Fees() {
         <TabsTrigger value="collection">Fee Collection</TabsTrigger>
         <TabsTrigger value="reports">Reports</TabsTrigger>
       </TabsList>
+      
+      {renderError(error)}
 
       <TabsContent value="structure" className="space-y-6">
         <div className="flex items-center justify-between">
@@ -178,7 +315,8 @@ export default function Fees() {
             <p className="text-gray-600">Configure fee types and amounts for different grades</p>
           </div>
           
-          <Dialog open={isFeeStructureDialogOpen} onOpenChange={setIsFeeStructureDialogOpen}>
+          {/* --- "ADD" DIALOG TRIGGER --- */}
+          <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); setFormError(null); }}>
             <DialogTrigger asChild>
               <Button>
                 <Plus className="w-4 h-4 mr-2" />
@@ -186,7 +324,7 @@ export default function Fees() {
               </Button>
             </DialogTrigger>
             <DialogContent>
-              <form onSubmit={handleFeeStructureSubmit}>
+              <form onSubmit={handleAddSubmit}>
                 <DialogHeader>
                   <DialogTitle>Add Fee Structure</DialogTitle>
                   <DialogDescription>Create a new fee type for students</DialogDescription>
@@ -195,25 +333,26 @@ export default function Fees() {
                 <div className="grid gap-4 py-4">
                   <div className="space-y-2">
                     <Label htmlFor="feeName">Fee Name</Label>
-                    <Input id="feeName" placeholder="e.g., Tuition Fee" value={feeStructureForm.fee_type} onChange={e => setFeeStructureForm({...feeStructureForm, fee_type: e.target.value})} />
+                    <Input id="feeName" placeholder="e.g., Tuition Fee" value={addStructureForm.fee_type} onChange={e => setAddStructureForm({...addStructureForm, fee_type: e.target.value})} />
                   </div>
                   
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="amount">Amount ($)</Label>
-                      <Input id="amount" type="number" placeholder="1200" value={feeStructureForm.amount} onChange={e => setFeeStructureForm({...feeStructureForm, amount: e.target.value})} />
+                      <Input id="amount" type="number" placeholder="1200" value={addStructureForm.amount} onChange={e => setAddStructureForm({...addStructureForm, amount: e.target.value})} />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="type">Payment Type</Label>
-                      <Select value={feeStructureForm.term} onValueChange={(value) => setFeeStructureForm({...feeStructureForm, term: value})}>
+                      <Select value={addStructureForm.term} onValueChange={(value) => setAddStructureForm({...addStructureForm, term: value})}>
                         <SelectTrigger>
                           <SelectValue placeholder="Select type" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Monthly">Monthly</SelectItem>
-                          <SelectItem value="Semester">Semester</SelectItem>
-                          <SelectItem value="Annual">Annual</SelectItem>
-                          <SelectItem value="One-time">One-time</SelectItem>
+                          <SelectItem value="monthly">Monthly</SelectItem>
+                          <SelectItem value="semester">Semester</SelectItem>
+                          <SelectItem value="annual">Annual</SelectItem>
+                          <SelectItem value="one-time">One-time</SelectItem>
+                          <SelectItem value="quarterly">Quarterly</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -222,18 +361,18 @@ export default function Fees() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="applicable">Applicable To (Grade)</Label>
-                      <Input id="applicable" placeholder="e.g., All Grades, Grade 9" value={feeStructureForm.grade} onChange={e => setFeeStructureForm({...feeStructureForm, grade: e.target.value})} />
+                      <Input id="applicable" placeholder="e.g., All Grades, Grade 9" value={addStructureForm.grade} onChange={e => setAddStructureForm({...addStructureForm, grade: e.target.value})} />
                     </div>
                      <div className="space-y-2">
                       <Label htmlFor="academic_year">Academic Year</Label>
-                      <Input id="academic_year" placeholder="e.g., 2024-2025" value={feeStructureForm.academic_year} onChange={e => setFeeStructureForm({...feeStructureForm, academic_year: e.target.value})} />
+                      <Input id="academic_year" placeholder="e.g., 2024-2025" value={addStructureForm.academic_year} onChange={e => setAddStructureForm({...addStructureForm, academic_year: e.target.value})} />
                     </div>
                   </div>
-                  {formError && <p className="text-sm text-red-500">{formError}</p>}
+                  {renderError(formError)}
                 </div>
                 
                 <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsFeeStructureDialogOpen(false)} disabled={isSubmitting}>
+                  <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)} disabled={isSubmitting}>
                     Cancel
                   </Button>
                   <Button type="submit" disabled={isSubmitting}>
@@ -245,8 +384,73 @@ export default function Fees() {
           </Dialog>
         </div>
 
-        {isLoading ? <p>Loading fee structures...</p> : error ? <p className="text-red-500">{error}</p> : (
+        {/* --- "EDIT" DIALOG (Mostly hidden) --- */}
+        <Dialog open={isEditDialogOpen} onOpenChange={(open) => { setIsEditDialogOpen(open); setFormError(null); }}>
+          <DialogContent>
+            <form onSubmit={handleEditSubmit}>
+              <DialogHeader>
+                <DialogTitle>Edit Fee Structure</DialogTitle>
+                <DialogDescription>Update the details for this fee item.</DialogDescription>
+              </DialogHeader>
+              
+              <div className="grid gap-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="editFeeName">Fee Name</Label>
+                  <Input id="editFeeName" placeholder="e.g., Tuition Fee" value={editStructureForm.fee_type} onChange={e => setEditStructureForm({...editStructureForm, fee_type: e.target.value})} />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="editAmount">Amount ($)</Label>
+                    <Input id="editAmount" type="number" placeholder="1200" value={editStructureForm.amount} onChange={e => setEditStructureForm({...editStructureForm, amount: e.target.value})} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="editType">Payment Type</Label>
+                    <Select value={editStructureForm.term} onValueChange={(value) => setEditStructureForm({...editStructureForm, term: value})}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="monthly">Monthly</SelectItem>
+                        <SelectItem value="semester">Semester</SelectItem>
+                        <SelectItem value="annual">Annual</SelectItem>
+                        <SelectItem value="one-time">One-time</SelectItem>
+                        <SelectItem value="quarterly">Quarterly</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="editApplicable">Applicable To (Grade)</Label>
+                    <Input id="editApplicable" placeholder="e.g., All Grades, Grade 9" value={editStructureForm.grade} onChange={e => setEditStructureForm({...editStructureForm, grade: e.target.value})} />
+                  </div>
+                   <div className="space-y-2">
+                    <Label htmlFor="editAcademicYear">Academic Year</Label>
+                    <Input id="editAcademicYear" placeholder="e.g., 2024-2025" value={editStructureForm.academic_year} onChange={e => setEditStructureForm({...editStructureForm, academic_year: e.target.value})} />
+                  </div>
+                </div>
+                {renderError(formError)}
+              </div>
+              
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)} disabled={isSubmitting}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? 'Updating...' : 'Update Fee Structure'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+
+        {/* --- FEE STRUCTURES LIST --- */}
+        {isLoading ? renderLoading() : (
           <div className="grid gap-4">
+            {feeStructures.length === 0 && !error && <p className="text-sm text-gray-500">No fee structures created yet.</p>}
             {feeStructures.map((fee) => (
               <Card key={fee.id}>
                 <CardContent className="p-6">
@@ -271,7 +475,10 @@ export default function Fees() {
                         Active
                       </span>
                       
-                      <Button variant="outline" size="sm">Edit</Button>
+                      {/* --- "EDIT" BUTTON (Now working) --- */}
+                      <Button variant="outline" size="sm" onClick={() => handleOpenEditDialog(fee)}>
+                        Edit
+                      </Button>
                     </div>
                   </div>
                 </CardContent>
@@ -282,20 +489,23 @@ export default function Fees() {
       </TabsContent>
 
       <TabsContent value="collection" className="space-y-6">
-        {/* ... (Header and summary cards remain the same) ... */}
+        <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold">Fee Collection Overview</h2>
+        </div>
         
         <div className="space-y-4">
-          {isLoading ? <p>Loading fee collections...</p> : error ? <p className="text-red-500">{error}</p> : (
-            mockFeeCollection.map((student) => (
-              <Card key={student.id}>
+          {isLoading ? renderLoading() : 
+            feeCollection.length === 0 && !error && <p className="text-sm text-gray-500">No fee collections found.</p>}
+            {feeCollection.map((student) => (
+              <Card key={student.studentId}>
                 <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between">
                     <div>
                       <h3 className="font-semibold text-gray-900">{student.studentName}</h3>
-                      <p className="text-sm text-gray-600">{student.grade}</p>
+                      <p className="text-sm text-gray-600">Grade: {student.grade}</p>
                     </div>
                     
-                    <div className="flex items-center space-x-8">
+                    <div className="flex items-center space-x-8 mt-4 md:mt-0">
                       <div className="text-center">
                         <p className="text-sm font-medium text-gray-900">${student.totalDue}</p>
                         <p className="text-xs text-gray-500">Total Due</p>
@@ -315,7 +525,7 @@ export default function Fees() {
                         <p className="text-xs text-gray-500">Last Payment</p>
                       </div>
 
-                      <Button variant="outline" size="sm" onClick={() => navigate(`/dashboard/students/${student.id}`)}>
+                      <Button variant="outline" size="sm" onClick={() => navigate(`/dashboard/students/${student.studentId}`)}>
                         View Details
                       </Button>
                     </div>
@@ -323,26 +533,67 @@ export default function Fees() {
                 </CardContent>
               </Card>
             ))
-          )}
+          }
         </div>
       </TabsContent>
-      {/* ... (Reports Tab remains the same) ... */}
+      
+      <TabsContent value="reports" className="space-y-6">
+          <Card>
+            <CardHeader>
+                <CardTitle>Financial Reports</CardTitle>
+                <CardDescription>Generate and view financial summaries</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <p>Financial reporting tools will be available here.</p>
+            </CardContent>
+          </Card>
+      </TabsContent>
     </Tabs>
   )
 
   const renderParentStudentView = () => (
     <div className="space-y-6">
-      {/* ... (Header and summary cards remain the same) ... */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle>Total Due</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold">${feeSummary.totalDue.toFixed(2)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Total Paid</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold text-green-600">${feeSummary.totalPaid.toFixed(2)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Outstanding</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className={`text-3xl font-bold ${feeSummary.outstanding > 0 ? 'text-red-600' : 'text-gray-900'}`}>
+              ${feeSummary.outstanding.toFixed(2)}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+      
+      {renderError(error)}
 
       <Card>
         <CardHeader>
           <CardTitle>Fee Details</CardTitle>
         </CardHeader>
         <CardContent>
-          {isLoading ? <p>Loading fees...</p> : error ? <p className="text-red-500">{error}</p> : (
+          {isLoading ? renderLoading() : (
             <div className="space-y-4">
+              {studentFees.length === 0 && !error && <p>No fee records found.</p>}
               {studentFees.map((fee) => (
-                <div key={fee.id} className="flex items-center justify-between p-4 border rounded-lg">
+                <div key={fee.id} className="flex flex-col md:flex-row md:items-center md:justify-between p-4 border rounded-lg">
                   <div className="flex items-center space-x-4">
                     <div className={`w-3 h-3 rounded-full ${
                       fee.payment_status === 'paid' ? 'bg-green-500' :
@@ -355,7 +606,7 @@ export default function Fees() {
                     </div>
                   </div>
 
-                  <div className="flex items-center space-x-6">
+                  <div className="flex items-center space-x-6 mt-4 md:mt-0">
                     <div className="text-right">
                       <p className="font-semibold">${fee.amount_due}</p>
                       <p className="text-sm text-gray-500">Due: {new Date(fee.due_date).toLocaleDateString()}</p>

@@ -192,19 +192,32 @@ router.get('/fee-structures', authorizeRole(['admin']), async (req, res) => {
 });
 
 // Create fee structure
+// This is the corrected function
+// This is the corrected function
 router.post('/fee-structures', authorizeRole(['admin']), async (req, res) => {
   try {
     const { schoolId } = req;
+    
     const { fee_type, amount, grade, term, academic_year, description } = req.body;
+
+    // Map form fields to database columns
+    const name_column = fee_type;      // The form's "fee_type" is the database's "name"
+    const frequency_column = term; // The form's "term" is the database's "frequency"
+    const fee_type_enum = 'other'; // Defaulting this enum, as the form doesn't provide it
+
+    // Note: We are now IGNORING 'academic_year' from the form,
+    // because the database expects 'academic_year_id' (an integer)
     
     const result = await query(
-      'INSERT INTO fee_structures (school_id, fee_type, amount, grade, term, academic_year, description) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-      [schoolId, fee_type, amount, grade, term, academic_year, description]
+      // This query is now correct and omits the academic_year
+      'INSERT INTO fee_structures (school_id, name, fee_type, amount, grade, frequency, description) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+      [schoolId, name_column, fee_type_enum, amount, grade, frequency_column, description]
     );
     
     res.status(201).json({ success: true, data: result.rows[0], message: 'Fee structure created successfully' });
   } catch (err) {
-    res.status(500).json({ success: false, error: 'Failed to create fee structure' });
+    console.error('Error creating fee structure:', err); 
+    res.status(500).json({ success: false, error: err.message || 'Failed to create fee structure' });
   }
 });
 
@@ -229,6 +242,41 @@ router.post('/assign-fees', authorizeRole(['admin']), async (req, res) => {
   }
 });
 
+// Add this new function to server/routes/complete.js
+
+// Update fee structure
+router.put('/fee-structures/:id', authorizeRole(['admin']), async (req, res) => {
+  try {
+    const { schoolId } = req;
+    const { id } = req.params;
+
+    // 1. Get 'fee_type' (the name) and 'term' (the frequency) from the form
+    const { fee_type, amount, grade, term, description } = req.body;
+
+    // 2. Map them to your database column names
+    const name_column = fee_type;
+    const frequency_column = term;
+    const fee_type_enum = 'other'; // You can enhance this later
+
+    const result = await query(
+      // 3. This query now updates the correct columns
+      `UPDATE fee_structures 
+       SET name = $1, fee_type = $2, amount = $3, grade = $4, frequency = $5, description = $6, updated_at = NOW()
+       WHERE id = $7 AND school_id = $8
+       RETURNING *`,
+      [name_column, fee_type_enum, amount, grade, frequency_column, description, id, schoolId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Fee structure not found' });
+    }
+    
+    res.json({ success: true, data: result.rows[0], message: 'Fee structure updated successfully' });
+  } catch (err) {
+    console.error('Error updating fee structure:', err);
+    res.status(500).json({ success: false, error: err.message || 'Failed to update fee structure' });
+  }
+});
 // ===================
 // MESSAGES
 // ===================

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, Calendar, Clock, CheckCircle, XCircle, FileText } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
@@ -6,51 +6,18 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '../components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Textarea } from '../components/ui/textarea'
-import { useAuth } from '../contexts/AuthContext'
-
-// Mock leave requests data
-const mockLeaveRequests = [
-  {
-    id: '1',
-    staffName: 'Dr. Sarah Wilson',
-    type: 'Sick Leave',
-    startDate: '2024-03-15',
-    endDate: '2024-03-17',
-    days: 3,
-    reason: 'Medical appointment and recovery',
-    status: 'Pending',
-    submittedDate: '2024-03-10'
-  },
-  {
-    id: '2',
-    staffName: 'Mr. James Anderson',
-    type: 'Annual Leave',
-    startDate: '2024-03-20',
-    endDate: '2024-03-25',
-    days: 5,
-    reason: 'Family vacation',
-    status: 'Approved',
-    submittedDate: '2024-03-08'
-  },
-  {
-    id: '3',
-    staffName: 'Ms. Lisa Thompson',
-    type: 'Maternity Leave',
-    startDate: '2024-04-01',
-    endDate: '2024-06-30',
-    days: 91,
-    reason: 'Maternity leave',
-    status: 'Approved',
-    submittedDate: '2024-02-15'
-  }
-]
+import { useAuth, useApi } from '../contexts/AuthContext'
 
 export default function Leave() {
   const { user } = useAuth()
-  const [leaveRequests, setLeaveRequests] = useState(mockLeaveRequests)
+  const api = useApi()
+  const [leaveRequests, setLeaveRequests] = useState([])
+  const [leaveTypes, setLeaveTypes] = useState([])
   const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
   const [newRequest, setNewRequest] = useState({
-    type: '',
+    leave_type_id: '',
     startDate: '',
     endDate: '',
     reason: ''
@@ -59,54 +26,140 @@ export default function Leave() {
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin'
   const isTeacher = user?.role === 'teacher'
 
-  const handleLeaveAction = (requestId: string, action: 'approve' | 'deny') => {
-    setLeaveRequests(prev =>
-      prev.map(request =>
-        request.id === requestId
-          ? { ...request, status: action === 'approve' ? 'Approved' : 'Denied' }
-          : request
-      )
-    )
+  // Fetch leave requests and types on mount
+  useEffect(() => {
+    fetchLeaveRequests()
+    fetchLeaveTypes()
+  }, [])
+
+  const fetchLeaveRequests = async () => {
+    try {
+      setIsLoading(true)
+      const response = await api('/api/leave-requests')
+      const data = await response.json()
+      
+      if (data.success) {
+        setLeaveRequests(data.data)
+      }
+    } catch (err) {
+      console.error('Error fetching leave requests:', err)
+      setError('Failed to load leave requests')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const handleSubmitRequest = () => {
-    if (!newRequest.type || !newRequest.startDate || !newRequest.endDate || !newRequest.reason) return
+  const fetchLeaveTypes = async () => {
+    try {
+      const response = await api('/api/leave-types')
+      const data = await response.json()
+      
+      if (data.success) {
+        setLeaveTypes(data.data)
+      }
+    } catch (err) {
+      console.error('Error fetching leave types:', err)
+    }
+  }
 
-    const start = new Date(newRequest.startDate)
-    const end = new Date(newRequest.endDate)
-    const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+  const handleLeaveAction = async (requestId: string, action: 'approve' | 'deny') => {
+    try {
+      setIsLoading(true)
+      const response = await api(`/api/leave-requests/${requestId}/status`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          status: action === 'approve' ? 'approved' : 'rejected',
+          admin_remarks: action === 'approve' ? 'Approved' : 'Denied'
+        })
+      })
 
-    const request = {
-      id: Date.now().toString(),
-      staffName: user?.name || 'Unknown',
-      type: newRequest.type,
-      startDate: newRequest.startDate,
-      endDate: newRequest.endDate,
-      days,
-      reason: newRequest.reason,
-      status: 'Pending',
-      submittedDate: new Date().toISOString().split('T')[0]
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        // Update the local state
+        setLeaveRequests(prev =>
+          prev.map(request =>
+            request.id === requestId
+              ? { ...request, status: action === 'approve' ? 'approved' : 'rejected' }
+              : request
+          )
+        )
+      } else {
+        setError(data.error || `Failed to ${action} leave request`)
+      }
+    } catch (err) {
+      console.error(`Error ${action}ing leave request:`, err)
+      setError(`Failed to ${action} leave request`)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleSubmitRequest = async () => {
+    if (!newRequest.leave_type_id || !newRequest.startDate || !newRequest.endDate || !newRequest.reason) {
+      setError('Please fill in all fields')
+      return
     }
 
-    setLeaveRequests(prev => [request, ...prev])
-    setNewRequest({ type: '', startDate: '', endDate: '', reason: '' })
-    setIsRequestDialogOpen(false)
+    try {
+      setIsLoading(true)
+      setError('')
+
+      const response = await api('/api/leave-requests', {
+        method: 'POST',
+        body: JSON.stringify({
+          leave_type_id: parseInt(newRequest.leave_type_id),
+          start_date: newRequest.startDate,
+          end_date: newRequest.endDate,
+          reason: newRequest.reason
+        })
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        // Add the new request to the list
+        setLeaveRequests(prev => [data.data, ...prev])
+        
+        // Reset form
+        setNewRequest({ leave_type_id: '', startDate: '', endDate: '', reason: '' })
+        setIsRequestDialogOpen(false)
+        
+        // Optionally refetch to ensure sync
+        fetchLeaveRequests()
+      } else {
+        setError(data.error || 'Failed to submit leave request')
+      }
+    } catch (err) {
+      console.error('Error submitting leave request:', err)
+      setError('Failed to submit leave request')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Approved': return 'text-green-600 bg-green-50'
-      case 'Denied': return 'text-red-600 bg-red-50'
+    switch (status.toLowerCase()) {
+      case 'approved': return 'text-green-600 bg-green-50'
+      case 'rejected':
+      case 'denied': return 'text-red-600 bg-red-50'
       default: return 'text-yellow-600 bg-yellow-50'
     }
   }
 
   const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'Approved': return <CheckCircle className="w-4 h-4" />
-      case 'Denied': return <XCircle className="w-4 h-4" />
+    switch (status.toLowerCase()) {
+      case 'approved': return <CheckCircle className="w-4 h-4" />
+      case 'rejected':
+      case 'denied': return <XCircle className="w-4 h-4" />
       default: return <Clock className="w-4 h-4" />
     }
+  }
+
+  const calculateDays = (startDate: string, endDate: string) => {
+    const start = new Date(startDate)
+    const end = new Date(endDate)
+    return Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
   }
 
   return (
@@ -137,16 +190,29 @@ export default function Leave() {
               <div className="space-y-4">
                 <div>
                   <Label htmlFor="type">Leave Type</Label>
-                  <Select value={newRequest.type} onValueChange={(value) => setNewRequest(prev => ({ ...prev, type: value }))}>
+                  <Select 
+                    value={newRequest.leave_type_id} 
+                    onValueChange={(value) => setNewRequest(prev => ({ ...prev, leave_type_id: value }))}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select leave type" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Annual Leave">Annual Leave</SelectItem>
-                      <SelectItem value="Sick Leave">Sick Leave</SelectItem>
-                      <SelectItem value="Maternity Leave">Maternity Leave</SelectItem>
-                      <SelectItem value="Paternity Leave">Paternity Leave</SelectItem>
-                      <SelectItem value="Emergency Leave">Emergency Leave</SelectItem>
+                      {leaveTypes.map((type) => (
+                        <SelectItem key={type.id} value={type.id.toString()}>
+                          {type.name}
+                        </SelectItem>
+                      ))}
+                      {/* Fallback options if leave types aren't loaded */}
+                      {leaveTypes.length === 0 && (
+                        <>
+                          <SelectItem value="1">Annual Leave</SelectItem>
+                          <SelectItem value="2">Sick Leave</SelectItem>
+                          <SelectItem value="3">Maternity Leave</SelectItem>
+                          <SelectItem value="4">Paternity Leave</SelectItem>
+                          <SelectItem value="5">Emergency Leave</SelectItem>
+                        </>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -182,13 +248,25 @@ export default function Leave() {
                     rows={3}
                   />
                 </div>
+
+                {error && <p className="text-sm text-red-500">{error}</p>}
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsRequestDialogOpen(false)}>
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setIsRequestDialogOpen(false)
+                    setError('')
+                  }}
+                  disabled={isLoading}
+                >
                   Cancel
                 </Button>
-                <Button onClick={handleSubmitRequest}>
-                  Submit Request
+                <Button 
+                  onClick={handleSubmitRequest}
+                  disabled={isLoading}
+                >
+                  {isLoading ? 'Submitting...' : 'Submit Request'}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -197,68 +275,87 @@ export default function Leave() {
       </div>
 
       <div className="grid gap-6">
-        {leaveRequests.map((request) => (
-          <Card key={request.id}>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-primary/10 rounded-lg">
-                    <FileText className="w-5 h-5 text-primary" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-lg">{request.staffName}</CardTitle>
-                    <p className="text-sm text-muted-foreground">{request.type}</p>
-                  </div>
-                </div>
-                <div className={`flex items-center space-x-2 px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(request.status)}`}>
-                  {getStatusIcon(request.status)}
-                  <span>{request.status}</span>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <div className="flex items-center space-x-2">
-                  <Calendar className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-sm">
-                    {request.startDate} to {request.endDate}
-                  </span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Clock className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-sm">{request.days} days</span>
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  Submitted: {request.submittedDate}
-                </div>
-              </div>
-              <p className="text-sm text-muted-foreground mb-4">
-                <strong>Reason:</strong> {request.reason}
-              </p>
+        {isLoading && leaveRequests.length === 0 && (
+          <div className="text-center py-8 text-gray-500">
+            Loading leave requests...
+          </div>
+        )}
 
-              {isAdmin && request.status === 'Pending' && (
-                <div className="flex space-x-2">
-                  <Button
-                    size="sm"
-                    onClick={() => handleLeaveAction(request.id, 'approve')}
-                    className="bg-green-600 hover:bg-green-700"
-                  >
-                    <CheckCircle className="w-4 h-4 mr-1" />
-                    Approve
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={() => handleLeaveAction(request.id, 'deny')}
-                  >
-                    <XCircle className="w-4 h-4 mr-1" />
-                    Deny
-                  </Button>
+        {!isLoading && leaveRequests.length === 0 && (
+          <div className="text-center py-8 text-gray-500">
+            No leave requests yet
+          </div>
+        )}
+
+        {leaveRequests.map((request) => {
+          const days = calculateDays(request.start_date, request.end_date)
+          const statusDisplay = request.status.charAt(0).toUpperCase() + request.status.slice(1)
+          
+          return (
+            <Card key={request.id}>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2 bg-primary/10 rounded-lg">
+                      <FileText className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg">{request.staff_name || user?.name}</CardTitle>
+                      <p className="text-sm text-muted-foreground">{request.leave_type_name}</p>
+                    </div>
+                  </div>
+                  <div className={`flex items-center space-x-2 px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(request.status)}`}>
+                    {getStatusIcon(request.status)}
+                    <span>{statusDisplay}</span>
+                  </div>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                  <div className="flex items-center space-x-2">
+                    <Calendar className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm">
+                      {new Date(request.start_date).toLocaleDateString()} to {new Date(request.end_date).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Clock className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm">{days} days</span>
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    Submitted: {new Date(request.created_at).toLocaleDateString()}
+                  </div>
+                </div>
+                <p className="text-sm text-muted-foreground mb-4">
+                  <strong>Reason:</strong> {request.reason}
+                </p>
+
+                {isAdmin && request.status === 'pending' && (
+                  <div className="flex space-x-2">
+                    <Button
+                      size="sm"
+                      onClick={() => handleLeaveAction(request.id, 'approve')}
+                      className="bg-green-600 hover:bg-green-700"
+                      disabled={isLoading}
+                    >
+                      <CheckCircle className="w-4 h-4 mr-1" />
+                      Approve
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => handleLeaveAction(request.id, 'deny')}
+                      disabled={isLoading}
+                    >
+                      <XCircle className="w-4 h-4 mr-1" />
+                      Deny
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )
+        })}
       </div>
     </div>
   )
