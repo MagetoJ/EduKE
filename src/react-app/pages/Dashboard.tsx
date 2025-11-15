@@ -71,7 +71,7 @@ export default function Dashboard() {
             throw new Error('Failed to load schools')
           }
           const data = await response.json()
-          setSchools(data.data || [])
+          setSchools(Array.isArray(data) ? data : (data.data || []))
         } else if (user.role === 'admin') {
           const [studentsResponse, staffResponse] = await Promise.all([
             apiFetch('/api/students'),

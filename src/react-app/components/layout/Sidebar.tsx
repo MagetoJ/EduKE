@@ -39,6 +39,12 @@ const navItems: NavItem[] = [
     roles: ['super_admin']
   },
   {
+    title: 'School Admins',
+    href: '/dashboard/school-admins',
+    icon: UserCheck,
+    roles: ['super_admin']
+  },
+  {
     title: 'Subscriptions',
     href: '/dashboard/subscriptions',
     icon: CreditCard,

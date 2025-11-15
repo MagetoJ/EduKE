@@ -10,6 +10,7 @@ import Dashboard from "./pages/Dashboard";
 import Students from "./pages/Students";
 import { StudentProfile } from "./pages/StudentProfile";
 import Schools from "./pages/Schools";
+import SchoolAdmins from "./pages/SchoolAdmins";
 import { SchoolProfile } from "./pages/SchoolProfile";
 import { Reports } from "./pages/Reports";
 import { Settings } from "./pages/Settings";
@@ -80,6 +81,7 @@ function AppRoutes() {
         <Route path="students/:id" element={<StudentProfile />} />
         <Route path="schools" element={<Schools />} />
         <Route path="schools/:id" element={<SchoolProfile />} />
+        <Route path="school-admins" element={<SchoolAdmins />} />
         <Route path="reports" element={<Reports />} />
         <Route path="staff" element={<Staff />} />
         <Route path="staff/:id" element={<StaffProfile />} />
