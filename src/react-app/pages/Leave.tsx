@@ -8,10 +8,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Textarea } from '../components/ui/textarea'
 import { useAuth, useApi } from '../contexts/AuthContext'
 
+// Add this type definition
+type LeaveRequest = {
+  id: string;
+  staff_name: string;
+  leave_type_name: string;
+  start_date: string;
+  end_date: string;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected';
+  admin_remarks?: string;
+};
+
 export default function Leave() {
   const { user } = useAuth()
   const api = useApi()
-  const [leaveRequests, setLeaveRequests] = useState([])
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([])
   const [leaveTypes, setLeaveTypes] = useState([])
   const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)

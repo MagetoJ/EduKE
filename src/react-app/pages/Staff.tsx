@@ -10,7 +10,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { useApi, useAuth } from '../contexts/AuthContext'
 
-
+// Add this type definition
+type StaffMember = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: string;
+  department: string;
+  status: string;
+  avatar_url?: string;
+  employee_id: string;
+  hire_date: string;
+  subject?: string;
+  class_assigned?: string;
+};
 
 const initialStaffForm = {
   firstName: '',
@@ -30,8 +44,8 @@ export default function Staff() {
   const { user } = useAuth()
   const api = useApi()
   const [activeTab, setActiveTab] = useState('directory')
-  const [staff, setStaff] = useState([])
-  const [leaveRequests, setLeaveRequests] = useState([])
+  const [staff, setStaff] = useState<StaffMember[]>([])
+  const [leaveRequests, setLeaveRequests] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [isStaffDialogOpen, setIsStaffDialogOpen] = useState(false)
   const [formData, setFormData] = useState(initialStaffForm)

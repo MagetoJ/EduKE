@@ -4,7 +4,7 @@ import react from "@vitejs/plugin-react";
 import { mochaPlugins } from "@getmocha/vite-plugins";
 
 export default defineConfig({
-  plugins: [...mochaPlugins(process.env), react()],
+  plugins: [...mochaPlugins(process.env as any), react()],
   server: {
     allowedHosts: true,
     proxy: {
