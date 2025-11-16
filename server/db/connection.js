@@ -3,16 +3,15 @@ require('dotenv').config();
 
 // Database configuration
 const getDbConfig = () => {
-  // If USE_PRODUCTION_DB is true or DATABASE_URL is set, use production
-  if (process.env.USE_PRODUCTION_DB === 'true' || (process.env.DATABASE_URL && !process.env.DB_HOST)) {
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  if (isProduction) {
     return {
       connectionString: process.env.DATABASE_URL,
-      ssl: {
-        rejectUnauthorized: false // Required for Render and most cloud providers
-      }
+      ssl: { rejectUnauthorized: false } // Required for Render and most cloud providers
     };
   }
-  
+
   // Use local database configuration
   return {
     host: process.env.DB_HOST || 'localhost',
