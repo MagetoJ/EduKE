@@ -41,6 +41,7 @@ interface StatusAggregate {
   status: string;
   subscribers: number;
   revenue: number;
+  [key: string]: any; // <-- ADD THIS LINE
 }
 
 export function SubscriptionStatusChart() {

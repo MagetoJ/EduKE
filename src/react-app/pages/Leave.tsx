@@ -18,6 +18,7 @@ type LeaveRequest = {
   reason: string;
   status: 'pending' | 'approved' | 'rejected';
   admin_remarks?: string;
+  created_at: string; // <-- ADD THIS LINE
 };
 
 export default function Leave() {

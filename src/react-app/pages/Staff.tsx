@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '../components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
-import { useApi, useAuth } from '../contexts/AuthContext'
+import { useApi } from '../contexts/AuthContext'
 
 // Add this type definition
 type StaffMember = {
@@ -46,7 +46,6 @@ export default function Staff() {
   const [activeTab, setActiveTab] = useState('directory')
   const [staff, setStaff] = useState<StaffMember[]>([])
   const [leaveRequests, setLeaveRequests] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
   const [isStaffDialogOpen, setIsStaffDialogOpen] = useState(false)
   const [formData, setFormData] = useState(initialStaffForm)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -590,7 +589,7 @@ export default function Staff() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-4">
                       <img
-                        src={member.avatar}
+                        src={member.avatar_url}
                         alt={member.name}
                         className="w-12 h-12 rounded-full"
                       />
@@ -618,12 +617,12 @@ export default function Staff() {
                       
                       <div className="flex items-center space-x-2 text-gray-600">
                         <Calendar className="w-4 h-4" />
-                        <span className="text-sm">Joined {new Date(member.joinDate).getFullYear()}</span>
+                        <span className="text-sm">Joined {new Date(member.hire_date).getFullYear()}</span>
                       </div>
 
-                      {member.classAssigned && (
+                      {member.class_assigned && (
                         <div className="text-center">
-                          <p className="text-sm font-medium text-gray-900">{member.classAssigned}</p>
+                          <p className="text-sm font-medium text-gray-900">{member.class_assigned}</p>
                           <p className="text-xs text-gray-500">Class</p>
                         </div>
                       )}
