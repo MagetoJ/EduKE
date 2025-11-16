@@ -11,12 +11,13 @@ export interface User {
   schoolName?: string;
   schoolCurriculum?: string;
   avatar?: string;
+  must_change_password?: boolean;
 }
 
 interface AuthContextType {
   user: User | null;
   setUser: (user: User | null) => void;
-  login: (email: string, password: string, remember?: boolean) => Promise<void>;
+  login: (email: string, password: string, remember?: boolean) => Promise<string | void>;
   logout: () => void;
   isLoading: boolean;
   token: string | null;
@@ -207,7 +208,8 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           schoolId: data.data.user.school_id ? String(data.data.user.school_id) : undefined,
           schoolName: data.data.user.school_name,
           schoolCurriculum: data.data.user.curriculum,
-          avatar: data.data.user.avatar
+          avatar: data.data.user.avatar,
+          must_change_password: data.data.user.must_change_password
         };
 
         setStoragePreference(storageType);
@@ -216,6 +218,14 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setRefreshToken('stored-in-cookie');
         setUserState(normalizedUser);
         writeAuthToStorage(storageType, data.data.accessToken, 'stored-in-cookie', normalizedUser);
+
+        // --- ADD THIS LOGIC ---
+        // Check if user must change password
+        if (normalizedUser.must_change_password) {
+          return 'redirect_change_password'; // Return a special flag
+        }
+        // --- END ADDED LOGIC ---
+
       } finally {
         setIsLoading(false);
       }

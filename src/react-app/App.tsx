@@ -6,6 +6,7 @@ import RegisterSchool from "./pages/RegisterSchool";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import VerifyEmail from "./pages/VerifyEmail";
+import ForcePasswordChange from "./pages/ForcePasswordChange";
 import Dashboard from "./pages/Dashboard";
 import Students from "./pages/Students";
 import { StudentProfile } from "./pages/StudentProfile";
@@ -66,6 +67,7 @@ function AppRoutes() {
 
   return (
     <Routes>
+      <Route path="/change-password" element={<ProtectedRoute><ForcePasswordChange /></ProtectedRoute>} />
       <Route path="/login" element={<Navigate to="/dashboard" />} />
       <Route path="/" element={<Navigate to="/dashboard" />} />
       <Route

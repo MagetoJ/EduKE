@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS schools (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
   level TEXT,
   curriculum TEXT,
@@ -11,11 +11,11 @@ CREATE TABLE IF NOT EXISTS schools (
   primary_color TEXT,
   accent_color TEXT,
   grade_levels TEXT,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS subscription_plans (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
   slug TEXT NOT NULL UNIQUE,
   description TEXT,
@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS subscription_plans (
   include_leave_management INTEGER NOT NULL DEFAULT 0,
   include_ai_analytics INTEGER NOT NULL DEFAULT 0,
   is_trial INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS subscriptions (
@@ -268,18 +268,35 @@ CREATE TABLE IF NOT EXISTS fee_payments (
   FOREIGN KEY (fee_structure_id) REFERENCES fee_structures(id)
 );
 
+CREATE TABLE IF NOT EXISTS leave_types (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  school_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT,
+  requires_approval INTEGER NOT NULL DEFAULT 1,
+  max_days_per_year INTEGER,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (school_id) REFERENCES schools(id)
+);
+
 CREATE TABLE IF NOT EXISTS leave_requests (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  staff_id INTEGER NOT NULL,
+  school_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  leave_type_id INTEGER NOT NULL,
   start_date TEXT NOT NULL,
   end_date TEXT NOT NULL,
   reason TEXT,
-  status TEXT DEFAULT 'Pending',
-  reviewed_by INTEGER,
-  reviewed_at TEXT,
+  status TEXT DEFAULT 'pending',
+  admin_remarks TEXT,
+  approved_by INTEGER,
+  approved_at TEXT,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (staff_id) REFERENCES users(id),
-  FOREIGN KEY (reviewed_by) REFERENCES users(id)
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (school_id) REFERENCES schools(id),
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (leave_type_id) REFERENCES leave_types(id),
+  FOREIGN KEY (approved_by) REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS announcements (
@@ -300,8 +317,10 @@ CREATE TABLE IF NOT EXISTS messages (
   school_id INTEGER NOT NULL,
   sender_id INTEGER NOT NULL,
   recipient_id INTEGER,
-  subject TEXT,
-  body TEXT,
+  title TEXT,
+  content TEXT,
+  recipient_type TEXT,
+  is_announcement INTEGER DEFAULT 0,
   status TEXT DEFAULT 'Sent',
   sent_at TEXT DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (school_id) REFERENCES schools(id),
@@ -322,6 +341,31 @@ CREATE TABLE IF NOT EXISTS timetables (
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (school_id) REFERENCES schools(id),
   FOREIGN KEY (teacher_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS timetable_periods (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  school_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  start_time TEXT NOT NULL,
+  end_time TEXT NOT NULL,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (school_id) REFERENCES schools(id)
+);
+
+CREATE TABLE IF NOT EXISTS timetable_entries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  school_id INTEGER NOT NULL,
+  course_id INTEGER NOT NULL,
+  period_id INTEGER NOT NULL,
+  day_of_week TEXT NOT NULL,
+  grade TEXT NOT NULL,
+  room TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (school_id) REFERENCES schools(id),
+  FOREIGN KEY (course_id) REFERENCES courses(id),
+  FOREIGN KEY (period_id) REFERENCES timetable_periods(id)
 );
 
 CREATE TABLE IF NOT EXISTS password_reset_tokens (

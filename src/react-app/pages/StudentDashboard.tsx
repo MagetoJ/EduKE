@@ -28,7 +28,7 @@ export default function StudentDashboard() {
       }
 
       try {
-        const response = await apiFetch('/api/discipline')
+        const response = await apiFetch('/api/my-discipline')
         if (response.ok) {
           const data = await response.json()
           setDisciplineData(data.data || [])

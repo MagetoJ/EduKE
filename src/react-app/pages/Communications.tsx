@@ -1,478 +1,358 @@
-import { useState, useEffect } from 'react'
-import { Plus, Send, MessageSquare, Megaphone, Calendar, Users, Search } from 'lucide-react'
+import { useEffect, useState, FormEvent } from 'react'
+import { Send, Megaphone, User, Users, AlertCircle, Loader2 } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
 import { Label } from '../components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from '../components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
+import { Textarea } from '../components/ui/textarea'
 import { useAuth, useApi } from '../contexts/AuthContext'
+
+// --- Type Definitions ---
+type Message = {
+  id: string;
+  subject: string;
+  body: string;
+  created_at: string;
+  sender_name: string;
+  is_announcement: boolean;
+  is_read: boolean;
+}
+
+type UserOption = {
+  id: string;
+  name: string;
+  role: string;
+  email: string;
+}
+
+// Mock data removed
 
 export default function Communications() {
   const { user } = useAuth()
   const api = useApi()
-  const [activeTab, setActiveTab] = useState('announcements')
-  const [isAnnouncementDialogOpen, setIsAnnouncementDialogOpen] = useState(false)
-  const [isMessageDialogOpen, setIsMessageDialogOpen] = useState(false)
-  const [announcements, setAnnouncements] = useState<any[]>([])
-  const [messages, setMessages] = useState<any[]>([])
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState('')
-  
-  // Announcement form state
-  const [announcementForm, setAnnouncementForm] = useState({
-    title: '',
-    content: '',
-    audience: '',
-    priority: ''
-  })
-  
-  // Message form state
-  const [messageForm, setMessageForm] = useState({
-    recipient: '',
-    subject: '',
-    content: ''
-  })
 
-  const canCreateContent = user?.role === 'admin' || user?.role === 'teacher'
+  // --- State for Data ---
+  const [messages, setMessages] = useState<Message[]>([])
+  const [recipients, setRecipients] = useState<UserOption[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  // Fetch messages on component mount
+  // --- State for Dialogs ---
+  const [isAnnouncementOpen, setIsAnnouncementOpen] = useState(false)
+  const [isMessageOpen, setIsMessageOpen] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
+
+  // --- State for Forms ---
+  const [announcementForm, setAnnouncementForm] = useState({ subject: '', body: '' })
+  const [messageForm, setMessageForm] = useState({ recipient: '', subject: '', body: '' })
+
+  // --- Data Fetching ---
   useEffect(() => {
-    fetchMessages()
-  }, [])
-
-  const fetchMessages = async () => {
-    try {
+    const loadData = async () => {
       setIsLoading(true)
-      const response = await api('/api/messages')
-      const data = await response.json()
-      
-      if (data.success) {
-        setMessages(data.data)
+      setError(null)
+      try {
+        // Fetch messages, staff, and students in parallel
+        const [msgRes, staffRes, studentRes] = await Promise.all([
+          api('/api/messages'),
+          api('/api/staff'),
+          api('/api/students')
+        ])
+
+        if (!msgRes.ok) throw new Error('Failed to fetch messages')
+        const msgData = await msgRes.json()
+        setMessages(msgData.data || [])
+
+        // Process staff and students into a single recipients list
+        const userOptions: UserOption[] = []
+
+        if (staffRes.ok) {
+          const staffData = await staffRes.json()
+          staffData.data?.forEach((s: any) => {
+            userOptions.push({ id: s.id, name: s.name, role: s.role, email: s.email })
+          })
+        }
+
+        if (studentRes.ok) {
+          const studentData = await studentRes.json()
+          studentData.data?.forEach((s: any) => {
+            // Add student
+            userOptions.push({ id: s.user_id, name: `${s.first_name} ${s.last_name}`, role: 'student', email: s.email })
+            // Add parent (if they exist)
+            if (s.parent_id && s.parent_email) {
+              userOptions.push({ id: s.parent_id, name: s.parent_name, role: 'parent', email: s.parent_email })
+            }
+          })
+        }
+
+        // De-duplicate users (in case a parent is also staff, etc.)
+        const uniqueUsers = new Map(userOptions.map(u => [u.id, u])).values()
+        setRecipients(Array.from(uniqueUsers))
+
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'An unknown error occurred')
+      } finally {
+        setIsLoading(false)
       }
-    } catch (err) {
-      console.error('Error fetching messages:', err)
-      setError('Failed to load messages')
-    } finally {
-      setIsLoading(false)
     }
-  }
 
-  const handleAnnouncementSubmit = async () => {
-    if (!announcementForm.title || !announcementForm.content || !announcementForm.audience || !announcementForm.priority) {
-      setError('Please fill in all fields')
-      return
-    }
+    loadData()
+  }, [api])
+
+  const handleAnnouncementSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+    setFormError(null)
 
     try {
-      setIsLoading(true)
-      setError('')
-
       const response = await api('/api/messages', {
         method: 'POST',
         body: JSON.stringify({
-          title: announcementForm.title,
-          content: announcementForm.content,
-          recipient_type: announcementForm.audience.toLowerCase(),
-          recipient_ids: [], // For announcements, this could be empty or all users of a type
-          message_type: 'announcement',
-          priority: announcementForm.priority.toLowerCase()
-        })
+          ...announcementForm,
+          is_announcement: true,
+          recipient_group: 'all', // Backend handles 'all' for announcements
+        }),
       })
 
       const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Failed to post announcement')
 
-      if (response.ok && data.success) {
-        // Add the new announcement to the list
-        setAnnouncements(prev => [data.data, ...prev])
-        
-        // Reset form
-        setAnnouncementForm({
-          title: '',
-          content: '',
-          audience: '',
-          priority: ''
-        })
-        
-        setIsAnnouncementDialogOpen(false)
-        
-        // Optionally refetch messages to ensure sync
-        fetchMessages()
-      } else {
-        setError(data.error || 'Failed to create announcement')
-      }
+      setMessages(prev => [data.data, ...prev])
+      setIsAnnouncementOpen(false)
+      setAnnouncementForm({ subject: '', body: '' })
+
     } catch (err) {
-      console.error('Error creating announcement:', err)
-      setError('Failed to create announcement')
+      setFormError(err instanceof Error ? err.message : 'Failed to save')
     } finally {
-      setIsLoading(false)
+      setIsSubmitting(false)
     }
   }
 
-  const handleMessageSubmit = async () => {
-    if (!messageForm.recipient || !messageForm.subject || !messageForm.content) {
-      setError('Please fill in all fields')
-      return
+  const handleMessageSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+    setFormError(null)
+
+    // Check if the recipient is a group or an individual ID
+    const isGroup = messageForm.recipient.startsWith('all_')
+
+    const payload = {
+      subject: messageForm.subject,
+      body: messageForm.body,
+      recipient_group: isGroup ? messageForm.recipient.replace('all_', 'all-') : undefined,
+      recipient_id: isGroup ? undefined : messageForm.recipient,
+      is_announcement: false,
     }
 
     try {
-      setIsLoading(true)
-      setError('')
-
       const response = await api('/api/messages', {
         method: 'POST',
-        body: JSON.stringify({
-          title: messageForm.subject,
-          content: messageForm.content,
-          recipient_type: 'individual',
-          recipient_ids: [messageForm.recipient], // This should be an actual user ID
-          message_type: 'message'
-        })
+        body: JSON.stringify(payload),
       })
 
       const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Failed to send message')
 
-      if (response.ok && data.success) {
-        // Reset form
-        setMessageForm({
-          recipient: '',
-          subject: '',
-          content: ''
-        })
-        
-        setIsMessageDialogOpen(false)
-        
-        // Refetch messages
-        fetchMessages()
-      } else {
-        setError(data.error || 'Failed to send message')
+      // If sent to an individual, add to list. Group messages might not return.
+      if (data.data) {
+        setMessages(prev => [data.data, ...prev])
       }
+
+      setIsMessageOpen(false)
+      setMessageForm({ recipient: '', subject: '', body: '' })
+
     } catch (err) {
-      console.error('Error sending message:', err)
-      setError('Failed to send message')
+      setFormError(err instanceof Error ? err.message : 'Failed to save')
     } finally {
-      setIsLoading(false)
+      setIsSubmitting(false)
     }
   }
+
+  const renderLoading = () => (
+    <div className="flex items-center justify-center p-8 text-gray-600">
+      <Loader2 className="w-6 h-6 animate-spin mr-2" />
+      Loading messages...
+    </div>
+  )
+
+  const renderError = (err: string | null) => err && (
+    <div className="flex items-center gap-2 text-sm text-red-600 p-3 bg-red-50 rounded-md">
+      <AlertCircle className="w-4 h-4" /> {err}
+    </div>
+  )
+
+  const renderFormError = (err: string | null) => err && (
+    <div className="flex items-center gap-2 text-sm text-red-600 mt-2">
+      <AlertCircle className="w-4 h-4" /> {err}
+    </div>
+  )
+
+  const canManage = user?.role === 'admin' || user?.role === 'teacher'
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Communications</h1>
-          <p className="text-gray-600">Manage announcements, messages, and school communications</p>
+          <p className="text-gray-600">Send and receive messages and announcements</p>
         </div>
-        
-        <div className="flex space-x-2">
-          {canCreateContent && (
-            <>
-              <Dialog open={isAnnouncementDialogOpen} onOpenChange={setIsAnnouncementDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="outline">
-                    <Megaphone className="w-4 h-4 mr-2" />
-                    New Announcement
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-2xl">
+
+        {canManage && (
+          <div className="flex space-x-2">
+            {/* --- New Announcement Dialog --- */}
+            <Dialog open={isAnnouncementOpen} onOpenChange={(open) => { setIsAnnouncementOpen(open); setFormError(null); }}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <Megaphone className="w-4 h-4 mr-2" />
+                  New Announcement
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <form onSubmit={handleAnnouncementSubmit}>
                   <DialogHeader>
-                    <DialogTitle>Create Announcement</DialogTitle>
+                    <DialogTitle>New Announcement</DialogTitle>
                     <DialogDescription>
-                      Create a new announcement for the school community
+                      This will be sent to all users in the school.
                     </DialogDescription>
                   </DialogHeader>
-                  
-                  <div className="grid gap-4">
+                  <div className="py-4 space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="title">Title</Label>
-                      <Input 
-                        id="title" 
-                        placeholder="Enter announcement title"
-                        value={announcementForm.title}
-                        onChange={(e) => setAnnouncementForm(prev => ({ ...prev, title: e.target.value }))}
-                      />
+                      <Label htmlFor="ann-subject">Subject</Label>
+                      <Input id="ann-subject" value={announcementForm.subject} onChange={e => setAnnouncementForm({...announcementForm, subject: e.target.value})} />
                     </div>
-                    
                     <div className="space-y-2">
-                      <Label htmlFor="content">Content</Label>
-                      <textarea 
-                        id="content" 
-                        className="min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" 
-                        placeholder="Enter announcement content..."
-                        value={announcementForm.content}
-                        onChange={(e) => setAnnouncementForm(prev => ({ ...prev, content: e.target.value }))}
-                      />
+                      <Label htmlFor="ann-body">Body</Label>
+                      <Textarea id="ann-body" rows={5} value={announcementForm.body} onChange={e => setAnnouncementForm({...announcementForm, body: e.target.value})} />
                     </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="audience">Audience</Label>
-                        <Select 
-                          value={announcementForm.audience}
-                          onValueChange={(value) => setAnnouncementForm(prev => ({ ...prev, audience: value }))}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select audience" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">All</SelectItem>
-                            <SelectItem value="students">Students</SelectItem>
-                            <SelectItem value="parents">Parents</SelectItem>
-                            <SelectItem value="staff">Staff</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="priority">Priority</Label>
-                        <Select
-                          value={announcementForm.priority}
-                          onValueChange={(value) => setAnnouncementForm(prev => ({ ...prev, priority: value }))}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select priority" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="low">Low</SelectItem>
-                            <SelectItem value="medium">Medium</SelectItem>
-                            <SelectItem value="high">High</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-
-                    {error && <p className="text-sm text-red-500">{error}</p>}
+                    {renderFormError(formError)}
                   </div>
-                  
                   <DialogFooter>
-                    <Button 
-                      variant="outline" 
-                      onClick={() => {
-                        setIsAnnouncementDialogOpen(false)
-                        setError('')
-                      }}
-                      disabled={isLoading}
-                    >
-                      Cancel
-                    </Button>
-                    <Button 
-                      onClick={handleAnnouncementSubmit}
-                      disabled={isLoading}
-                    >
-                      {isLoading ? 'Publishing...' : 'Publish Announcement'}
+                    <Button type="button" variant="outline" onClick={() => setIsAnnouncementOpen(false)} disabled={isSubmitting}>Cancel</Button>
+                    <Button type="submit" disabled={isSubmitting}>
+                      {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Send Announcement'}
                     </Button>
                   </DialogFooter>
-                </DialogContent>
-              </Dialog>
+                </form>
+              </DialogContent>
+            </Dialog>
 
-              <Dialog open={isMessageDialogOpen} onOpenChange={setIsMessageDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <MessageSquare className="w-4 h-4 mr-2" />
-                    New Message
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-2xl">
+            {/* --- New Message Dialog --- */}
+            <Dialog open={isMessageOpen} onOpenChange={(open) => { setIsMessageOpen(open); setFormError(null); }}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Send className="w-4 h-4 mr-2" />
+                  New Message
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <form onSubmit={handleMessageSubmit}>
                   <DialogHeader>
-                    <DialogTitle>Compose Message</DialogTitle>
-                    <DialogDescription>
-                      Send a message to parents, students, or staff
-                    </DialogDescription>
+                    <DialogTitle>New Message</DialogTitle>
                   </DialogHeader>
-                  
-                  <div className="grid gap-4">
+                  <div className="py-4 space-y-4">
+                    {/* --- THIS IS THE UPGRADED "TO" FIELD --- */}
                     <div className="space-y-2">
-                      <Label htmlFor="recipient">Recipient</Label>
-                      <Input 
-                        id="recipient" 
-                        placeholder="Search and select recipient..."
-                        value={messageForm.recipient}
-                        onChange={(e) => setMessageForm(prev => ({ ...prev, recipient: e.target.value }))}
-                      />
+                      <Label htmlFor="recipient">To</Label>
+                      <Select value={messageForm.recipient} onValueChange={val => setMessageForm({...messageForm, recipient: val})}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a recipient or group..." />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-64">
+                          <SelectGroup>
+                            <SelectLabel>Groups</SelectLabel>
+                            <SelectItem value="all_staff">All Staff</SelectItem>
+                            <SelectItem value="all_parents">All Parents</SelectItem>
+                            <SelectItem value="all_students">All Students</SelectItem>
+                          </SelectGroup>
+                          <SelectGroup>
+                            <SelectLabel>Individuals</SelectLabel>
+                            {recipients.map(r => (
+                              <SelectItem key={r.id} value={r.id}>
+                                {r.name} ({r.role})
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
                     </div>
-                    
                     <div className="space-y-2">
-                      <Label htmlFor="subject">Subject</Label>
-                      <Input 
-                        id="subject" 
-                        placeholder="Enter message subject"
-                        value={messageForm.subject}
-                        onChange={(e) => setMessageForm(prev => ({ ...prev, subject: e.target.value }))}
-                      />
+                      <Label htmlFor="msg-subject">Subject</Label>
+                      <Input id="msg-subject" value={messageForm.subject} onChange={e => setMessageForm({...messageForm, subject: e.target.value})} />
                     </div>
-                    
                     <div className="space-y-2">
-                      <Label htmlFor="messageContent">Message</Label>
-                      <textarea 
-                        id="messageContent" 
-                        className="min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" 
-                        placeholder="Enter your message..."
-                        value={messageForm.content}
-                        onChange={(e) => setMessageForm(prev => ({ ...prev, content: e.target.value }))}
-                      />
+                      <Label htmlFor="msg-body">Body</Label>
+                      <Textarea id="msg-body" rows={5} value={messageForm.body} onChange={e => setMessageForm({...messageForm, body: e.target.value})} />
                     </div>
-
-                    {error && <p className="text-sm text-red-500">{error}</p>}
+                    {renderFormError(formError)}
                   </div>
-                  
                   <DialogFooter>
-                    <Button 
-                      variant="outline" 
-                      onClick={() => {
-                        setIsMessageDialogOpen(false)
-                        setError('')
-                      }}
-                      disabled={isLoading}
-                    >
-                      Cancel
-                    </Button>
-                    <Button 
-                      onClick={handleMessageSubmit}
-                      disabled={isLoading}
-                    >
-                      <Send className="w-4 h-4 mr-2" />
-                      {isLoading ? 'Sending...' : 'Send Message'}
+                    <Button type="button" variant="outline" onClick={() => setIsMessageOpen(false)} disabled={isSubmitting}>Cancel</Button>
+                    <Button type="submit" disabled={isSubmitting}>
+                      {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Send Message'}
                     </Button>
                   </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </>
-          )}
-        </div>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+        )}
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+      <Tabs defaultValue="inbox" className="space-y-6">
         <TabsList>
+          <TabsTrigger value="inbox">Inbox</TabsTrigger>
           <TabsTrigger value="announcements">Announcements</TabsTrigger>
-          <TabsTrigger value="messages">Messages</TabsTrigger>
-          <TabsTrigger value="events">Events</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="announcements" className="space-y-6">
-          <div className="flex items-center gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input
-                placeholder="Search announcements..."
-                className="pl-10"
-              />
-            </div>
-          </div>
+        {renderError(error)}
 
-          <div className="space-y-4">
-            {announcements.length === 0 && !isLoading && (
-              <div className="text-center py-8 text-gray-500">
-                No announcements yet
-              </div>
-            )}
-            
-            {announcements.map((announcement) => (
-              <Card key={announcement.id} className="hover:shadow-md transition-shadow">
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-2 mb-2">
-                        <CardTitle className="text-lg">{announcement.title}</CardTitle>
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                          announcement.priority === 'high' 
-                            ? 'bg-red-100 text-red-800'
-                            : announcement.priority === 'medium'
-                            ? 'bg-yellow-100 text-yellow-800'
-                            : 'bg-green-100 text-green-800'
-                        }`}>
-                          {announcement.priority}
-                        </span>
-                      </div>
-                      <div className="flex items-center space-x-4 text-sm text-gray-600">
-                        <span>By {announcement.sender_name || 'Admin'}</span>
-                        <span>•</span>
-                        <span>{new Date(announcement.created_at).toLocaleDateString()}</span>
-                        <span>•</span>
-                        <div className="flex items-center space-x-1">
-                          <Users className="w-3 h-3" />
-                          <span>{announcement.recipient_type}</span>
-                        </div>
+        {isLoading ? renderLoading() : (
+          <>
+            <TabsContent value="inbox" className="space-y-4">
+              {messages.filter(m => !m.is_announcement).map(message => (
+                <Card key={message.id}>
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <div className="flex items-center space-x-3">
+                      <User className="w-6 h-6 text-gray-500" />
+                      <div>
+                        <CardTitle className="text-lg">{message.subject}</CardTitle>
+                        <CardDescription>From: {message.sender_name}</CardDescription>
                       </div>
                     </div>
-                    <Megaphone className="w-5 h-5 text-gray-400" />
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <p className="text-gray-700">{announcement.content}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </TabsContent>
+                    <p className="text-sm text-gray-500">{new Date(message.created_at).toLocaleString()}</p>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-gray-700">{message.body}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </TabsContent>
 
-        <TabsContent value="messages" className="space-y-6">
-          <div className="flex items-center gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input
-                placeholder="Search messages..."
-                className="pl-10"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            {messages.length === 0 && !isLoading && (
-              <div className="text-center py-8 text-gray-500">
-                No messages yet
-              </div>
-            )}
-            
-            {messages.map((message) => (
-              <Card key={message.id} className={`hover:shadow-md transition-shadow ${!message.is_read ? 'border-l-4 border-l-blue-500' : ''}`}>
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-2 mb-1">
-                        <h4 className="font-medium">{message.title}</h4>
-                        {!message.is_read && (
-                          <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-                        )}
+            <TabsContent value="announcements" className="space-y-4">
+              {messages.filter(m => m.is_announcement).map(message => (
+                <Card key={message.id} className="border-blue-200">
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <div className="flex items-center space-x-3">
+                      <Megaphone className="w-6 h-6 text-blue-500" />
+                      <div>
+                        <CardTitle className="text-lg">{message.subject}</CardTitle>
+                        <CardDescription>From: {message.sender_name}</CardDescription>
                       </div>
-                      <div className="flex items-center space-x-2 text-sm text-gray-600 mb-2">
-                        <span>From: {message.sender_name}</span>
-                        <span>•</span>
-                        <span>{new Date(message.created_at).toLocaleString()}</span>
-                      </div>
-                      <p className="text-gray-700 text-sm">{message.content}</p>
                     </div>
-                    <MessageSquare className="w-5 h-5 text-gray-400" />
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="events" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>School Events</CardTitle>
-                {canCreateContent && (
-                  <Button>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Event
-                  </Button>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-12 text-gray-500">
-                <Calendar className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                <h3 className="text-lg font-medium mb-2">School Events Calendar</h3>
-                <p>Manage and view upcoming school events, meetings, and activities</p>
-                {canCreateContent && (
-                  <Button className="mt-4">Create First Event</Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+                    <p className="text-sm text-gray-500">{new Date(message.created_at).toLocaleString()}</p>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-gray-700">{message.body}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </TabsContent>
+          </>
+        )}
       </Tabs>
     </div>
   )

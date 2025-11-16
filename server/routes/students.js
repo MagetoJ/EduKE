@@ -41,8 +41,8 @@ router.get('/:id', authorizeRole(['admin', 'teacher', 'parent']), async (req, re
 router.post('/', authorizeRole(['admin']), async (req, res) => {
   try {
     const { schoolId } = req;
-    const student = await studentService.createStudent(schoolId, req.body);
-    
+    const student = await studentService.createStudentAndParent(req.body, schoolId);
+
     res.status(201).json({ success: true, data: student, message: 'Student created successfully' });
   } catch (err) {
     console.error('Error creating student:', err);
@@ -114,6 +114,28 @@ router.get('/:id/attendance', authorizeRole(['admin', 'teacher', 'parent', 'stud
   } catch (err) {
     console.error('Error fetching student attendance:', err);
     res.status(500).json({ success: false, error: 'Failed to fetch attendance' });
+  }
+});
+
+// Get courses for a specific student
+router.get('/:id/courses', authorizeRole(['admin', 'teacher', 'student', 'parent']), async (req, res) => {
+  try {
+    const { schoolId, user } = req;
+    const { id } = req.params;
+
+    // Check permissions - students can only see their own courses, parents can see their child's courses
+    if (user.role === 'student') {
+      const studentCheck = await query('SELECT id FROM students WHERE user_id = $1 AND school_id = $2', [user.id, schoolId]);
+      if (studentCheck.rows.length === 0 || studentCheck.rows[0].id !== parseInt(id)) {
+        return res.status(403).json({ success: false, error: 'Access denied' });
+      }
+    }
+
+    // For now, return empty array - you might want to implement student-course relationships
+    res.json({ success: true, data: [] });
+  } catch (err) {
+    console.error('Error fetching student courses:', err);
+    res.status(500).json({ success: false, error: 'Failed to fetch courses' });
   }
 });
 

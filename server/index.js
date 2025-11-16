@@ -11,6 +11,7 @@ const { getDatabaseInfo } = require('./db/connection');
 const authRoutes = require('./routes/auth');
 const { publicRouter } = require('./routes/public');
 const { secureRouter } = require('./routes/secure');
+const completeRoutes = require('./routes/complete');
 const studentsRoutes = require('./routes/students');
 const assignmentsRoutes = require('./routes/assignments');
 const schoolsRoutes = require('./routes/schools');
@@ -60,6 +61,7 @@ app.use('/api', authenticateToken, tenantContext, subscriptionRoutes);
 app.use('/api', authenticateToken, tenantContext, examsRoutes);
 app.use('/api', authenticateToken, tenantContext, coursesRoutes);
 app.use('/api', authenticateToken, tenantContext, secureRouter);
+app.use('/api', authenticateToken, tenantContext, completeRoutes);
 
 // 404 handler
 app.use((req, res) => {

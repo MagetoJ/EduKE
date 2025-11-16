@@ -738,6 +738,51 @@ router.put('/fee-structures/:id', authorizeRole(['admin']), async (req, res) => 
     res.status(500).json({ success: false, error: err.message || 'Failed to update fee structure' });
   }
 });
+
+// ===================
+// FEES
+// ===================
+
+// Get student fees (for students/parents to view their own fees)
+router.get('/fees', authorizeRole(['student', 'parent']), async (req, res) => {
+  try {
+    const { schoolId, user } = req;
+
+    // For students, get their own fees. For parents, get their child's fees
+    let studentId;
+    if (user.role === 'student') {
+      // Find the student record for this user
+      const studentResult = await query('SELECT id FROM students WHERE user_id = $1 AND school_id = $2', [user.id, schoolId]);
+      if (studentResult.rows.length === 0) {
+        return res.status(404).json({ success: false, error: 'Student record not found' });
+      }
+      studentId = studentResult.rows[0].id;
+    } else if (user.role === 'parent') {
+      // Parents can see fees for all their children
+      // For now, return empty array - you might want to implement parent-child relationship
+      return res.json({ success: true, data: [] });
+    }
+
+    const result = await query(
+      `SELECT
+        sf.*,
+        fs.name as fee_name,
+        fs.fee_type,
+        fs.frequency
+      FROM student_fees sf
+      JOIN fee_structures fs ON sf.fee_structure_id = fs.id
+      WHERE sf.student_id = $1 AND sf.school_id = $2
+      ORDER BY sf.due_date DESC`,
+      [studentId, schoolId]
+    );
+
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error('Error fetching fees:', err);
+    res.status(500).json({ success: false, error: 'Failed to fetch fees' });
+  }
+});
+
 // ===================
 // MESSAGES
 // ===================
@@ -831,6 +876,30 @@ router.get('/discipline', authorizeRole(['admin', 'teacher']), async (req, res) 
     );
     res.json({ success: true, data: result.rows });
   } catch (err) {
+    res.status(500).json({ success: false, error: 'Failed to fetch discipline records' });
+  }
+});
+
+// Get student's own discipline records
+router.get('/my-discipline', authorizeRole(['student']), async (req, res) => {
+  try {
+    const { schoolId, user } = req;
+
+    // Find the student record for this user
+    const studentResult = await query('SELECT id FROM students WHERE user_id = $1 AND school_id = $2', [user.id, schoolId]);
+    if (studentResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Student record not found' });
+    }
+    const studentId = studentResult.rows[0].id;
+
+    const result = await query(
+      'SELECT * FROM discipline WHERE student_id = $1 ORDER BY date DESC',
+      [studentId]
+    );
+
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error('Error fetching student discipline:', err);
     res.status(500).json({ success: false, error: 'Failed to fetch discipline records' });
   }
 });
@@ -1174,7 +1243,7 @@ router.get('/timetable', authorizeRole(['admin', 'teacher', 'student']), async (
     const { schoolId } = req;
     const { grade, day } = req.query;
     
-    let sql = 'SELECT t.*, c.name as course_name, u.name as teacher_name, tp.name as period_name FROM timetable_entries t JOIN courses c ON t.course_id = c.id LEFT JOIN users u ON c.teacher_id = u.id JOIN timetable_periods tp ON t.period_id = tp.id WHERE t.school_id = $1';
+    let sql = 'SELECT t.*, u.name as teacher_name FROM timetables t LEFT JOIN users u ON t.teacher_id = u.id WHERE t.school_id = $1';
     const params = [schoolId];
     let paramIndex = 2;
     
@@ -1189,7 +1258,7 @@ router.get('/timetable', authorizeRole(['admin', 'teacher', 'student']), async (
       params.push(day);
     }
     
-    sql += ' ORDER BY t.day_of_week, tp.start_time';
+    sql += ' ORDER BY t.day_of_week, t.start_time';
     const result = await query(sql, params);
     res.json({ success: true, data: result.rows });
   } catch (err) {
@@ -1222,6 +1291,32 @@ router.post('/timetable', authorizeRole(['admin']), async (req, res) => {
     res.status(201).json({ success: true, data: result.rows[0], message: 'Timetable entry created successfully' });
   } catch (err) {
     res.status(500).json({ success: false, error: 'Failed to create timetable entry' });
+  }
+});
+
+// Update timetable entry
+router.put('/timetable/:id', authorizeRole(['admin']), async (req, res) => {
+  try {
+    const { schoolId } = req;
+    const { id } = req.params;
+    const { course_id, period_id, day_of_week, grade, room } = req.body;
+
+    const result = await query(
+      `UPDATE timetable_entries
+       SET course_id = $1, period_id = $2, day_of_week = $3, grade = $4, room = $5, updated_at = NOW()
+       WHERE id = $6 AND school_id = $7
+       RETURNING *`,
+      [course_id, period_id, day_of_week, grade, room, id, schoolId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Timetable entry not found' });
+    }
+
+    res.json({ success: true, data: result.rows[0], message: 'Timetable entry updated' });
+  } catch (err) {
+    console.error('Error updating timetable entry:', err);
+    res.status(500).json({ success: false, error: 'Failed to update entry' });
   }
 });
 

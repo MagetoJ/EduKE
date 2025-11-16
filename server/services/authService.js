@@ -140,7 +140,7 @@ const registerSchool = async (schoolData, adminData) => {
 const login = async (email, password) => {
   // 1. Find user by email
   const result = await query(
-    `SELECT u.*, s.name as school_name, s.status as school_status, s.curriculum
+    `SELECT u.*, s.name as school_name, s.status as school_status, s.curriculum, u.must_change_password
      FROM users u
      LEFT JOIN schools s ON u.school_id = s.id
      WHERE u.email = $1`,

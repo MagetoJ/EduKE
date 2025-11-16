@@ -5,7 +5,10 @@
 
 const express = require('express');
 const router = express.Router();
+const bcrypt = require('bcrypt');
 const authService = require('../services/authService');
+const { query } = require('../db/connection');
+const { authenticateToken } = require('../middleware/auth');
 const { tenantContext } = require('../middleware/tenant');
 
 // Apply tenant context to all routes
@@ -389,6 +392,34 @@ router.get('/me', async (req, res) => {
       success: false,
       error: 'Failed to get user information'
     });
+  }
+});
+
+/**
+ * POST /api/auth/change-password
+ * Change user password (requires authentication)
+ */
+router.post('/change-password', authenticateToken, async (req, res) => {
+  const { newPassword } = req.body;
+  const { user } = req; // From authenticateToken middleware
+
+  if (!newPassword || newPassword.length < 6) {
+    return res.status(400).json({ success: false, error: 'Password must be at least 6 characters' });
+  }
+
+  try {
+    const password_hash = await bcrypt.hash(newPassword, 10);
+
+    await query(
+      'UPDATE users SET password_hash = $1, must_change_password = false, updated_at = NOW() WHERE id = $2',
+      [password_hash, user.id]
+    );
+
+    res.json({ success: true, message: 'Password updated successfully' });
+
+  } catch (err) {
+    console.error('Error changing password:', err);
+    res.status(500).json({ success: false, error: 'Failed to update password' });
   }
 });
 

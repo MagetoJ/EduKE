@@ -58,6 +58,9 @@ export function FinancialSummaryChart() {
   }, [apiFetch]);
 
   const filteredData = useMemo(() => {
+    if (!Array.isArray(financialData)) {
+      return [];
+    }
     if (!selectedMonth) {
       return financialData;
     }
@@ -90,7 +93,7 @@ export function FinancialSummaryChart() {
           >
             All Months
           </Button>
-          {financialData.map((item) => (
+          {Array.isArray(financialData) && financialData.map((item) => (
             <Button
               key={item.name}
               variant={selectedMonth === item.name ? "default" : "outline"}
@@ -129,7 +132,7 @@ export function FinancialSummaryChart() {
                   }
                 }}
               >
-                {filteredData.map((_, index) => (
+                {Array.isArray(filteredData) && filteredData.map((_, index) => (
                   <Cell
                     key={`collected-${index}`}
                     fill={COLORS[index % COLORS.length]}
@@ -150,7 +153,7 @@ export function FinancialSummaryChart() {
         {selectedMonth && (
           <div className="mt-4 rounded-lg bg-muted p-4">
             <h4 className="font-semibold">{selectedMonth} Financial Details</h4>
-            {financialData
+            {Array.isArray(financialData) && financialData
               .filter((item) => item.name === selectedMonth)
               .map((item) => (
                 <div key={item.name} className="mt-2 grid grid-cols-2 gap-4">

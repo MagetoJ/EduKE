@@ -785,9 +785,32 @@ secureRouter.post('/fees/payment', authorizeRole(['admin']), async (req, res) =>
 secureRouter.get('/messages', authorizeRole(['admin', 'teacher', 'parent', 'student']), async (req, res) => {
   try {
     const { schoolId, user } = req;
+
+    let whereConditions = ['m.school_id = $1'];
+    let params = [schoolId];
+
+    if (user.role === 'admin' || user.role === 'teacher') {
+      // Admins and teachers can see all messages in their school
+    } else {
+      // Students and parents can only see messages sent to them
+      whereConditions.push('m.recipient_id = $2');
+      params.push(user.id);
+    }
+
+    const whereClause = whereConditions.join(' AND ');
+
     const result = await query(
-      'SELECT m.*, u.name as sender_name, mr.is_read FROM messages m LEFT JOIN users u ON m.sender_id = u.id LEFT JOIN message_recipients mr ON m.id = mr.message_id AND mr.recipient_id = $1 WHERE m.school_id = $2 ORDER BY m.created_at DESC LIMIT 50',
-      [user.id, schoolId]
+      `SELECT
+        m.id,
+        m.title as subject,
+        m.content as body,
+        m.sent_at as created_at,
+        u.name as sender_name
+      FROM messages m
+      JOIN users u ON m.sender_id = u.id
+      WHERE ${whereClause}
+      ORDER BY m.sent_at DESC LIMIT 50`,
+      params
     );
     res.json({ success: true, data: result.rows });
   } catch (err) {
@@ -799,20 +822,27 @@ secureRouter.get('/messages', authorizeRole(['admin', 'teacher', 'parent', 'stud
 secureRouter.post('/messages', authorizeRole(['admin', 'teacher']), async (req, res) => {
   try {
     const { schoolId, user } = req;
-    const { title, content, recipient_type, recipient_ids } = req.body;
-    
+    const { subject, body, recipient_group, recipient_id, is_announcement } = req.body;
+
+    // Insert the message
     const message = await query(
-      'INSERT INTO messages (school_id, sender_id, title, content, recipient_type) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [schoolId, user.id, title, content, recipient_type]
+      'INSERT INTO messages (school_id, sender_id, title, content, recipient_type, is_announcement) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+      [schoolId, user.id, subject, body, recipient_group || 'individual', is_announcement || false]
     );
-    
-    for (const recipientId of recipient_ids) {
+
+    // Handle recipients based on whether it's a group or individual
+    if (recipient_group) {
+      // For group messages, we might not need to insert individual recipients
+      // The recipient_type field already indicates it's a group message
+      // The frontend can filter messages based on recipient_type and user role
+    } else if (recipient_id) {
+      // For individual messages, insert the specific recipient
       await query(
         'INSERT INTO message_recipients (message_id, recipient_id) VALUES ($1, $2)',
-        [message.rows[0].id, recipientId]
+        [message.rows[0].id, recipient_id]
       );
     }
-    
+
     res.status(201).json({ success: true, data: message.rows[0] });
   } catch (err) {
     console.error('Error sending message:', err);

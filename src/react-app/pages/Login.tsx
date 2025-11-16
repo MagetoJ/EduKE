@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { GraduationCap } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -12,15 +12,22 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [rememberMe, setRememberMe] = useState(true)
   const [error, setError] = useState('')
-  
+
   const { login, isLoading } = useAuth()
+  const navigate = useNavigate()
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setError('')
     if (email && password) {
       try {
-        await login(email, password, rememberMe)
+        const loginResult = await login(email, password, rememberMe)
+
+        if (loginResult === 'redirect_change_password') {
+          navigate('/change-password')
+        } else {
+          navigate('/dashboard')
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unable to sign in')
       }
