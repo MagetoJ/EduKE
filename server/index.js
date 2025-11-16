@@ -13,7 +13,10 @@ const { publicRouter } = require('./routes/public');
 const { secureRouter } = require('./routes/secure');
 const studentsRoutes = require('./routes/students');
 const assignmentsRoutes = require('./routes/assignments');
-const completeRoutes = require('./routes/complete');
+const schoolsRoutes = require('./routes/schools');
+const subscriptionRoutes = require('./routes/subscription');
+const examsRoutes = require('./routes/exams');
+const coursesRoutes = require('./routes/courses');
 
 // Import middleware
 const { authenticateToken } = require('./middleware/auth');
@@ -52,7 +55,10 @@ app.use('/api/auth', authRoutes);
 app.use('/api', tenantContext, publicRouter);
 app.use('/api/students', authenticateToken, tenantContext, studentsRoutes);
 app.use('/api/assignments', authenticateToken, tenantContext, assignmentsRoutes);
-app.use('/api', authenticateToken, tenantContext, completeRoutes);
+app.use('/api', authenticateToken, tenantContext, schoolsRoutes);
+app.use('/api', authenticateToken, tenantContext, subscriptionRoutes);
+app.use('/api', authenticateToken, tenantContext, examsRoutes);
+app.use('/api', authenticateToken, tenantContext, coursesRoutes);
 app.use('/api', authenticateToken, tenantContext, secureRouter);
 
 // 404 handler

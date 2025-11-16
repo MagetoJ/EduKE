@@ -1,438 +1,255 @@
-import { useEffect, useState } from 'react'
-import { useAuth, useApi } from '../contexts/AuthContext'
-import { Link } from 'react-router'
-import { Plus, Search, Filter, Pencil, User } from 'lucide-react'
+import { useEffect, useState, FormEvent } from 'react' // Import useEffect
+import { Plus, User, Edit, Trash2, AlertCircle, Loader2, ArrowLeft } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
+import { Card, CardContent } from '../components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
 import { Label } from '../components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
+import { useApi } from '../contexts/AuthContext' // Import useApi
+import { useNavigate } from 'react-router'
+import { Badge } from '../components/ui/badge'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "../components/ui/alert-dialog"
 
-
-
-const CURRICULUM_LEVELS: Record<string, string[]> = {
-  cbc: [
-    'PP1',
-    'PP2',
-    'Grade 1',
-    'Grade 2',
-    'Grade 3',
-    'Grade 4',
-    'Grade 5',
-    'Grade 6',
-    'Grade 7',
-    'Grade 8',
-    'Grade 9',
-    'Grade 10',
-    'Grade 11',
-    'Grade 12'
-  ],
-  '844': [
-    'Grade 1',
-    'Grade 2',
-    'Grade 3',
-    'Grade 4',
-    'Grade 5',
-    'Grade 6',
-    'Grade 7',
-    'Grade 8',
-    'Form 1',
-    'Form 2',
-    'Form 3',
-    'Form 4'
-  ],
-  british: [
-    'Year 1',
-    'Year 2',
-    'Year 3',
-    'Year 4',
-    'Year 5',
-    'Year 6',
-    'Year 7',
-    'Year 8',
-    'Year 9',
-    'Year 10',
-    'Year 11',
-    'Year 12',
-    'Year 13'
-  ],
-  american: [
-    'Kindergarten',
-    'Grade 1',
-    'Grade 2',
-    'Grade 3',
-    'Grade 4',
-    'Grade 5',
-    'Grade 6',
-    'Grade 7',
-    'Grade 8',
-    'Grade 9',
-    'Grade 10',
-    'Grade 11',
-    'Grade 12'
-  ],
-  ib: [
-    'PYP 1',
-    'PYP 2',
-    'PYP 3',
-    'PYP 4',
-    'PYP 5',
-    'MYP 1',
-    'MYP 2',
-    'MYP 3',
-    'MYP 4',
-    'MYP 5',
-    'DP 1',
-    'DP 2'
-  ]
+// --- Type definition based on your API/schema ---
+type Student = {
+  id: string;
+  first_name: string;
+  last_name: string;
+  admission_number: string;
+  grade: string;
+  status: 'active' | 'inactive' | 'graduated';
+  email: string;
+  phone: string;
+  address: string;
+  date_of_birth: string;
+  gender: string;
+  parent_name: string;
+  parent_phone: string;
+  parent_email: string;
 }
 
+// Type for the multi-step form
+type StudentFormData = {
+  // Step 1: Student Info
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  date_of_birth: string;
+  gender: string;
+  address: string;
+  // Step 2: Academic Info
+  admission_number: string;
+  grade: string;
+  enrollment_date: string;
+  // Step 3: Parent Info
+  parent_name: string;
+  parent_phone: string;
+  parent_email: string;
+  relationship: string;
+}
+
+const EMPTY_FORM: StudentFormData = {
+  first_name: '',
+  last_name: '',
+  email: '',
+  phone: '',
+  date_of_birth: '',
+  gender: 'male',
+  address: '',
+  admission_number: '',
+  grade: 'Grade 1',
+  enrollment_date: '',
+  parent_name: '',
+  parent_phone: '',
+  parent_email: '',
+  relationship: 'parent'
+}
+
+// Mock data removed
+
 export default function Students() {
-  const { user } = useAuth()
-  const api = useApi()
-  const [gradeLevels, setGradeLevels] = useState<string[]>(CURRICULUM_LEVELS.cbc)
-  const [students, setStudents] = useState([])
+  const api = useApi() // <-- 1. Get the api function
+  const navigate = useNavigate()
+
+  // --- State for data ---
+  const [students, setStudents] = useState<Student[]>([]) // <-- 2. Use state for students
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const [isEnrollmentDialogOpen, setIsEnrollmentDialogOpen] = useState(false)
-  const [formData, setFormData] = useState({
-    first_name: '',
-    last_name: '',
-    email: '',
-    phone: '',
-    date_of_birth: '',
-    address: '',
-    grade: '',
-    enrollment_date: '',
-    password: '',
-    school_id: 1, // Default to first school
-    parent_name: '',
-    parent_email: '',
-    parent_phone: '',
-    parent_password: ''
-  })
+  // --- State for "Enroll" dialog ---
+  const [isEnrollDialogOpen, setIsEnrollDialogOpen] = useState(false)
+  const [enrollForm, setEnrollForm] = useState<StudentFormData>(EMPTY_FORM)
+  const [step, setStep] = useState(1)
+
+  // --- State for "Edit" dialog ---
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [editingStudentId, setEditingStudentId] = useState<string | null>(null)
-  const [editFormData, setEditFormData] = useState({
-    id: '',
-    name: '',
-    email: '',
-    phone: '',
-    grade: '',
-    class: '',
-    status: '',
-    parentGuardian: '',
-    fees: ''
-  })
-  const [academicYear, setAcademicYear] = useState({
-    id: null as number | null,
-    start_date: null as string | null,
-    end_date: null as string | null,
-    status: null as 'active' | 'completed' | null
-  })
-  const [lastCompletedYear, setLastCompletedYear] = useState<{ start_date: string; end_date: string } | null>(null)
-  const [startDate, setStartDate] = useState('')
-  const [isYearLoading, setIsYearLoading] = useState(false)
-  const [isStartingYear, setIsStartingYear] = useState(false)
-  const [isEndingYear, setIsEndingYear] = useState(false)
-  const [promotionSummary, setPromotionSummary] = useState<{ promoted: number; retained: number; graduated: number } | null>(null)
+  const [editForm, setEditForm] = useState<Student | null>(null)
+  
+  // --- State for forms ---
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (user?.schoolCurriculum) {
-      const levels = CURRICULUM_LEVELS[user.schoolCurriculum] ?? CURRICULUM_LEVELS.cbc
-      setGradeLevels(levels)
-    } else {
-      setGradeLevels(CURRICULUM_LEVELS.cbc)
-    }
-  }, [user?.schoolCurriculum])
-
+  // --- 3. Add useEffect to fetch students ---
   useEffect(() => {
     const fetchStudents = async () => {
+      setIsLoading(true)
+      setError(null)
       try {
-        setIsLoading(true)
-        const response = await api('/api/students')
-        const data = await response.json()
-        
-        if (response.ok && data.success) {
-          const mappedStudents = data.data.map((student: any) => ({
-            id: student.id.toString(),
-            name: `${student.first_name} ${student.last_name}`.trim(),
-            email: student.email || '',
-            grade: student.grade || '',
-            class: student.class_section || '',
-            status: student.status ? student.status.charAt(0).toUpperCase() + student.status.slice(1) : 'Active',
-            phone: student.phone || '',
-            parentGuardian: student.parent_name || '',
-            fees: '0'
-          }))
-          setStudents(mappedStudents)
+        const res = await api('/api/students')
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Failed to fetch students')
         }
+        const data = await res.json()
+        setStudents(data.data || [])
       } catch (err) {
-        console.error('Error fetching students:', err)
+        setError(err instanceof Error ? err.message : 'An unknown error occurred')
       } finally {
         setIsLoading(false)
       }
     }
-    
-    if (user) {
-      fetchStudents()
+    fetchStudents()
+  }, [api])
+
+  const handleEnrollDialogChange = (open: boolean) => {
+    if (!open) {
+      setEnrollForm(EMPTY_FORM)
+      setStep(1)
+      setFormError(null)
     }
-  }, [api, user])
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { id, value } = e.target
-    setFormData(prev => ({ ...prev, [id]: value }))
+    setIsEnrollDialogOpen(open)
   }
-
-  const handleEditInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { id, value } = e.target
-    setEditFormData(prev => ({ ...prev, [id]: value }))
-  }
-
-  const handleSelectChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }))
-  }
-
-  const handleEditSelectChange = (field: string, value: string) => {
-    setEditFormData(prev => ({ ...prev, [field]: value }))
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    try {
-      let parentId = null
-
-      // Create caregiver user account first if details provided
-      if (formData.parent_email && formData.parent_password) {
-        const parentResponse = await api('/api/users', {
-          method: 'POST',
-          body: JSON.stringify({
-            name: formData.parent_name,
-            email: formData.parent_email,
-            password: formData.parent_password,
-            role: 'parent',
-            phone: formData.parent_phone,
-            school_id: formData.school_id
-          })
-        })
-
-        if (parentResponse.ok) {
-          const parentResult = await parentResponse.json()
-          parentId = parentResult.id
-        }
-      }
-
-      const studentResponse = await api('/api/students', {
-        method: 'POST',
-        body: JSON.stringify({
-          first_name: formData.first_name,
-          last_name: formData.last_name,
-          email: formData.email,
-          phone: formData.phone,
-          date_of_birth: formData.date_of_birth,
-          address: formData.address,
-          grade: formData.grade,
-          enrollment_date: formData.enrollment_date,
-          school_id: formData.school_id,
-          parent_id: parentId
-        })
-      })
-
-      if (studentResponse.ok) {
-        const studentResult = await studentResponse.json()
-        const studentId = studentResult.id
-
-        if (formData.password) {
-          await api('/api/users', {
-            method: 'POST',
-            body: JSON.stringify({
-              name: `${formData.first_name} ${formData.last_name}`,
-              email: formData.email,
-              password: formData.password,
-              role: 'student',
-              phone: formData.phone,
-              school_id: formData.school_id
-            })
-          })
-        }
-
-        const newStudent = {
-          id: studentId.toString(),
-          name: `${formData.first_name} ${formData.last_name}`,
-          email: formData.email,
-          grade: formData.grade,
-          class: 'A',
-          status: 'Active',
-          phone: formData.phone,
-          parentGuardian: formData.parent_name || 'Parent/Guardian Name',
-          fees: '$0'
-        }
-        setStudents(prev => [...prev, newStudent])
-        setFormData({
-          first_name: '',
-          last_name: '',
-          email: '',
-          phone: '',
-          date_of_birth: '',
-          address: '',
-          grade: '',
-          enrollment_date: '',
-          password: '',
-          school_id: 1,
-          parent_name: '',
-          parent_email: '',
-          parent_phone: '',
-          parent_password: ''
-        })
-        setIsEnrollmentDialogOpen(false)
-      }
-    } catch (error) {
-      console.error('Error enrolling student:', error)
+  
+  const handleEditDialogChange = (open: boolean) => {
+    if (!open) {
+      setFormError(null)
     }
+    setIsEditDialogOpen(open)
   }
 
-  const openEditDialog = (student: any) => {
-    setEditFormData({
-      id: student.id,
-      name: student.name,
-      email: student.email,
-      phone: student.phone,
-      grade: student.grade,
-      class: student.class,
-      status: student.status,
-      parentGuardian: student.parentGuardian,
-      fees: student.fees
-    })
-    setEditingStudentId(student.id)
+  const handleOpenEditDialog = (student: Student) => {
+    setEditForm(student)
     setIsEditDialogOpen(true)
   }
 
-  const handleEditSubmit = (e: React.FormEvent) => {
+  // --- 4. Update handleSubmit to call the API ---
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    if (!editingStudentId) {
-      return
-    }
-
-    setStudents(prev => prev.map(student => (
-      student.id === editingStudentId
-        ? { ...student, ...editFormData }
-        : student
-    )))
-    setIsEditDialogOpen(false)
-    setEditingStudentId(null)
-  }
-
-  const loadAcademicYear = async () => {
-    setIsYearLoading(true)
+    setIsSubmitting(true)
+    setFormError(null)
+    
     try {
-      const response = await fetch('/api/academic-year')
-      if (response.ok) {
-        const data = await response.json()
-        if (data.activeYear) {
-          setAcademicYear({
-            id: data.activeYear.id,
-            start_date: data.activeYear.start_date,
-            end_date: data.activeYear.end_date,
-            status: 'active'
-          })
-        } else {
-          setAcademicYear({ id: null, start_date: null, end_date: null, status: null })
-        }
-
-        if (data.latestYear) {
-          setLastCompletedYear({
-            start_date: data.latestYear.start_date,
-            end_date: data.latestYear.end_date
-          })
-        } else {
-          setLastCompletedYear(null)
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load academic year', error)
-    } finally {
-      setIsYearLoading(false)
-    }
-  }
-
-  const handleStartYear = async () => {
-    if (!startDate) {
-      return
-    }
-    setIsStartingYear(true)
-    setPromotionSummary(null)
-    try {
-      const response = await fetch('/api/academic-year/start', {
+      const response = await api('/api/students', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ start_date: startDate, school_id: 1 })
+        body: JSON.stringify(enrollForm),
       })
-
-      if (response.ok) {
-        setStartDate('')
-        await loadAcademicYear()
+      
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to enroll student')
       }
-    } catch (error) {
-      console.error('Failed to start academic year', error)
+      
+      // Add the new student to the top of the list
+      setStudents(prev => [data.data, ...prev])
+      handleEnrollDialogChange(false)
+      
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'An unknown error occurred')
     } finally {
-      setIsStartingYear(false)
+      setIsSubmitting(false)
     }
   }
+  
+  // --- "Edit Student" Submit Handler (Not implemented yet) ---
+  const handleEditSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!editForm) return;
+    
+    setIsSubmitting(true)
+    setFormError(null)
 
-  const handleEndYear = async () => {
-    if (!academicYear.id || academicYear.status !== 'active') {
-      return
-    }
-    setIsEndingYear(true)
     try {
-      const response = await fetch('/api/academic-year/end', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ year_id: academicYear.id, school_id: 1 })
+      const response = await api(`/api/students/${editForm.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(editForm),
       })
-
-      if (response.ok) {
-        const result = await response.json()
-        if (result.promotionSummary) {
-          setPromotionSummary(result.promotionSummary)
-        }
-        if (Array.isArray(result.updatedStudents) && result.updatedStudents.length > 0) {
-          setStudents(prev => prev.map(student => {
-            const updated = result.updatedStudents.find((item: { id: number }) => item.id.toString() === student.id)
-            if (!updated) {
-              return student
-            }
-            return {
-              ...student,
-              grade: updated.grade ?? student.grade,
-              status: updated.status ?? student.status
-            }
-          }))
-        }
-        await loadAcademicYear()
+      
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to update student')
       }
-    } catch (error) {
-      console.error('Failed to end academic year', error)
+      
+      setStudents(prev => prev.map(s => s.id === data.data.id ? data.data : s))
+      handleEditDialogChange(false)
+      
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'An unknown error occurred')
     } finally {
-      setIsEndingYear(false)
+      setIsSubmitting(false)
     }
   }
 
-  useEffect(() => {
-    loadAcademicYear()
-  }, [])
+  // --- "Deactivate Student" Handler (Not implemented yet) ---
+  const handleDeactivateStudent = async (studentId: string) => {
+    try {
+      const response = await api(`/api/students/${studentId}/status`, {
+        method: 'PUT',
+        body: JSON.stringify({ status: 'inactive' }),
+      })
+      
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to deactivate student')
+      }
+      
+      setStudents(prev => prev.map(s => s.id === data.data.id ? data.data : s))
+      
+    } catch (err) {
+      // Show error in the main page error region
+      setError(err instanceof Error ? err.message : 'An unknown error occurred')
+    }
+  }
+  
+  const renderLoading = () => (
+    <div className="flex items-center justify-center p-8 text-gray-600">
+      <Loader2 className="w-6 h-6 animate-spin mr-2" />
+      Loading students...
+    </div>
+  )
+  
+  const renderError = (err: string | null) => err && (
+    <div className="flex items-center gap-2 text-sm text-red-600 p-3 bg-red-50 rounded-md">
+      <AlertCircle className="w-4 h-4" /> {err}
+    </div>
+  )
+  
+  const renderFormError = (err: string | null) => err && (
+    <div className="flex items-center gap-2 text-sm text-red-600 mt-2">
+      <AlertCircle className="w-4 h-4" /> {err}
+    </div>
+  )
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Students</h1>
-          <p className="text-gray-600">Manage student enrollment and information</p>
+          <p className="text-gray-600">Manage student enrollment and records</p>
         </div>
         
-        <Dialog open={isEnrollmentDialogOpen} onOpenChange={setIsEnrollmentDialogOpen}>
+        <Dialog open={isEnrollDialogOpen} onOpenChange={handleEnrollDialogChange}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="w-4 h-4 mr-2" />
@@ -440,255 +257,192 @@ export default function Students() {
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-2xl">
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit}> {/* Make sure onSubmit is set */}
               <DialogHeader>
-                <DialogTitle>Student Enrollment</DialogTitle>
+                <DialogTitle>Enroll New Student</DialogTitle>
                 <DialogDescription>
-                  Add a new student to the school system
+                  Complete the steps to add a new student to the school
                 </DialogDescription>
               </DialogHeader>
-              <Tabs defaultValue="personal" className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="personal">Personal Info</TabsTrigger>
-                <TabsTrigger value="academic">Academic Info</TabsTrigger>
-                <TabsTrigger value="guardian">Parent/Guardian Account</TabsTrigger>
-              </TabsList>
               
-              <TabsContent value="personal" className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="first_name">First Name</Label>
-                    <Input id="first_name" placeholder="Enter first name" value={formData.first_name} onChange={handleInputChange} required />
+              <div className="py-4 space-y-4">
+                {/* Step 1: Student Information */}
+                {step === 1 && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="first_name">First Name</Label>
+                        <Input id="first_name" value={enrollForm.first_name} onChange={(e) => setEnrollForm({...enrollForm, first_name: e.target.value})} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="last_name">Last Name</Label>
+                        <Input id="last_name" value={enrollForm.last_name} onChange={(e) => setEnrollForm({...enrollForm, last_name: e.target.value})} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="email">Email</Label>
+                        <Input id="email" type="email" value={enrollForm.email} onChange={(e) => setEnrollForm({...enrollForm, email: e.target.value})} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="phone">Phone</Label>
+                        <Input id="phone" value={enrollForm.phone} onChange={(e) => setEnrollForm({...enrollForm, phone: e.target.value})} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="date_of_birth">Date of Birth</Label>
+                        <Input id="date_of_birth" type="date" value={enrollForm.date_of_birth} onChange={(e) => setEnrollForm({...enrollForm, date_of_birth: e.target.value})} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="gender">Gender</Label>
+                        <Select value={enrollForm.gender} onValueChange={(value) => setEnrollForm({...enrollForm, gender: value})}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="male">Male</SelectItem>
+                            <SelectItem value="female">Female</SelectItem>
+                            <SelectItem value="other">Other</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="address">Address</Label>
+                      <Input id="address" value={enrollForm.address} onChange={(e) => setEnrollForm({...enrollForm, address: e.target.value})} />
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="last_name">Last Name</Label>
-                    <Input id="last_name" placeholder="Enter last name" value={formData.last_name} onChange={handleInputChange} required />
+                )}
+                
+                {/* Step 2: Academic Information */}
+                {step === 2 && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="admission_number">Admission Number</Label>
+                        <Input id="admission_number" value={enrollForm.admission_number} onChange={(e) => setEnrollForm({...enrollForm, admission_number: e.target.value})} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="enrollment_date">Enrollment Date</Label>
+                        <Input id="enrollment_date" type="date" value={enrollForm.enrollment_date} onChange={(e) => setEnrollForm({...enrollForm, enrollment_date: e.target.value})} />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="grade">Grade</Label>
+                      <Input id="grade" value={enrollForm.grade} onChange={(e) => setEnrollForm({...enrollForm, grade: e.target.value})} />
+                    </div>
                   </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email Address</Label>
-                    <Input id="email" type="email" placeholder="student@email.com" value={formData.email} onChange={handleInputChange} />
+                )}
+                
+                {/* Step 3: Parent/Guardian Information */}
+                {step === 3 && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="parent_name">Parent/Guardian Name</Label>
+                        <Input id="parent_name" value={enrollForm.parent_name} onChange={(e) => setEnrollForm({...enrollForm, parent_name: e.target.value})} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="relationship">Relationship</Label>
+                        <Input id="relationship" value={enrollForm.relationship} onChange={(e) => setEnrollForm({...enrollForm, relationship: e.target.value})} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="parent_phone">Parent Phone</Label>
+                        <Input id="parent_phone" value={enrollForm.parent_phone} onChange={(e) => setEnrollForm({...enrollForm, parent_phone: e.target.value})} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="parent_email">Parent Email</Label>
+                        <Input id="parent_email" type="email" value={enrollForm.parent_email} onChange={(e) => setEnrollForm({...enrollForm, parent_email: e.target.value})} />
+                      </div>
+                    </div>
+                    {renderFormError(formError)}
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Phone Number</Label>
-                    <Input id="phone" placeholder="+1-555-0000" value={formData.phone} onChange={handleInputChange} />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="date_of_birth">Date of Birth</Label>
-                    <Input id="date_of_birth" type="date" value={formData.date_of_birth} onChange={handleInputChange} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="gender">Gender</Label>
-                    <Select onValueChange={(value) => handleSelectChange('gender', value)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select gender" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="male">Male</SelectItem>
-                        <SelectItem value="female">Female</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="address">Address</Label>
-                    <Input id="address" placeholder="Enter full address" value={formData.address} onChange={handleInputChange} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="password">Student Password</Label>
-                    <Input id="password" type="password" placeholder="Enter password" value={formData.password} onChange={handleInputChange} required />
-                  </div>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="academic" className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="grade">Grade Level</Label>
-                    <Select onValueChange={(value) => handleSelectChange('grade', value)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select grade" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {gradeLevels.map(grade => (
-                          <SelectItem key={grade} value={grade}>
-                            {grade}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="class">Class Section</Label>
-                    <Select onValueChange={(value) => handleSelectChange('class', value)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select class" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="A">Section A</SelectItem>
-                        <SelectItem value="B">Section B</SelectItem>
-                        <SelectItem value="C">Section C</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="studentId">Student ID</Label>
-                  <Input id="studentId" placeholder="Auto-generated" disabled />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="enrollment_date">Admission Date</Label>
-                  <Input id="enrollment_date" type="date" value={formData.enrollment_date} onChange={handleInputChange} />
-                </div>
-              </TabsContent>
-
-              <TabsContent value="guardian" className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="relation">Relation</Label>
-                  <Select onValueChange={(value) => handleSelectChange('relation', value)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select relation" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="parent">Parent</SelectItem>
-                      <SelectItem value="guardian">Guardian</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="p-4 border rounded-lg space-y-4">
-                  <h4 className="font-medium">Link Existing Parent/Guardian Account</h4>
-                  <div className="space-y-2">
-                    <Label htmlFor="parentSearch">Search Parent/Guardian by Email</Label>
-                    <Input id="parentSearch" placeholder="Enter parent/guardian's email" />
-                  </div>
-                  <Button variant="outline" size="sm">Search & Link</Button>
-                </div>
-
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-gray-300" />
-                  </div>
-                  <div className="relative flex justify-center text-sm">
-                    <span className="px-2 bg-white text-gray-500">Or create new account</span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="parent_name">Parent/Guardian Name</Label>
-                    <Input id="parent_name" placeholder="Enter parent/guardian name" value={formData.parent_name} onChange={handleInputChange} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="parent_phone">Parent/Guardian Phone</Label>
-                    <Input id="parent_phone" placeholder="+1-555-0000" value={formData.parent_phone} onChange={handleInputChange} />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="parent_email">Parent/Guardian Email</Label>
-                    <Input id="parent_email" type="email" placeholder="parent@email.com" value={formData.parent_email} onChange={handleInputChange} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="parent_password">Parent/Guardian Password</Label>
-                    <Input id="parent_password" type="password" placeholder="Enter password" value={formData.parent_password} onChange={handleInputChange} />
-                  </div>
-                </div>
-              </TabsContent>
-
-            </Tabs>
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsEnrollmentDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit">
-                Enroll Student
-              </Button>
-            </DialogFooter>
-          </form>
+                )}
+              </div>
+              
+              <DialogFooter className="flex justify-between">
+                {step > 1 ? (
+                  <Button type="button" variant="outline" onClick={() => setStep(step - 1)}>
+                    <ArrowLeft className="w-4 h-4 mr-2" />
+                    Back
+                  </Button>
+                ) : <div />}
+                
+                {step < 3 ? (
+                  <Button type="button" onClick={() => setStep(step + 1)}>
+                    Next
+                  </Button>
+                ) : (
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Enroll Student'}
+                  </Button>
+                )}
+              </DialogFooter>
+            </form>
           </DialogContent>
         </Dialog>
 
-        <Dialog
-          open={isEditDialogOpen}
-          onOpenChange={(open) => {
-            setIsEditDialogOpen(open)
-            if (!open) {
-              setEditingStudentId(null)
-            }
-          }}
-        >
-          <DialogContent className="max-w-xl">
-            <form onSubmit={handleEditSubmit} className="space-y-6">
+        {/* --- "Edit" Dialog --- */}
+        <Dialog open={isEditDialogOpen} onOpenChange={handleEditDialogChange}>
+          <DialogContent className="max-w-2xl">
+            <form onSubmit={handleEditSubmit}>
               <DialogHeader>
                 <DialogTitle>Edit Student</DialogTitle>
-                <DialogDescription>
-                  Update student details
-                </DialogDescription>
+                <DialogDescription>Update student details</DialogDescription>
               </DialogHeader>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Name</Label>
-                  <Input id="name" value={editFormData.name} onChange={handleEditInputChange} required />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" value={editFormData.email} onChange={handleEditInputChange} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Phone</Label>
-                  <Input id="phone" value={editFormData.phone} onChange={handleEditInputChange} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="grade">Grade</Label>
-                  <Input id="grade" value={editFormData.grade} onChange={handleEditInputChange} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="class">Class</Label>
-                  <Input id="class" value={editFormData.class} onChange={handleEditInputChange} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="status">Status</Label>
-                  <Select value={editFormData.status} onValueChange={(value) => handleEditSelectChange('status', value)}>
-                    <SelectTrigger id="status">
-                      <SelectValue placeholder="Select status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Active">Active</SelectItem>
-                      <SelectItem value="Inactive">Inactive</SelectItem>
-                      <SelectItem value="Transferred">Transferred</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="parentGuardian">Parent/Guardian</Label>
-                  <Input id="parentGuardian" value={editFormData.parentGuardian} onChange={handleEditInputChange} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="fees">Fees</Label>
-                  <Input id="fees" value={editFormData.fees} onChange={handleEditInputChange} />
+              <div className="py-4 space-y-4">
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="edit_first_name">First Name</Label>
+                      <Input id="edit_first_name" value={editForm?.first_name} onChange={(e) => setEditForm({...editForm, first_name: e.target.value} as Student)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="edit_last_name">Last Name</Label>
+                      <Input id="edit_last_name" value={editForm?.last_name} onChange={(e) => setEditForm({...editForm, last_name: e.target.value} as Student)} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="edit_email">Email</Label>
+                      <Input id="edit_email" type="email" value={editForm?.email} onChange={(e) => setEditForm({...editForm, email: e.target.value} as Student)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="edit_phone">Phone</Label>
+                      <Input id="edit_phone" value={editForm?.phone} onChange={(e) => setEditForm({...editForm, phone: e.target.value} as Student)} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="edit_admission_number">Admission Number</Label>
+                      <Input id="edit_admission_number" value={editForm?.admission_number} onChange={(e) => setEditForm({...editForm, admission_number: e.target.value} as Student)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="edit_grade">Grade</Label>
+                      <Input id="edit_grade" value={editForm?.grade} onChange={(e) => setEditForm({...editForm, grade: e.target.value} as Student)} />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                      <Label htmlFor="edit_status">Status</Label>
+                      <Select value={editForm?.status} onValueChange={(value) => setEditForm({...editForm, status: value} as Student)}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="active">Active</SelectItem>
+                          <SelectItem value="inactive">Inactive</SelectItem>
+                          <SelectItem value="graduated">Graduated</SelectItem>
+                        </SelectContent>
+                      </Select>
+                  </div>
+                  {renderFormError(formError)}
                 </div>
               </div>
-
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                <Button type="button" variant="outline" onClick={() => handleEditDialogChange(false)} disabled={isSubmitting}>
                   Cancel
                 </Button>
-                <Button type="submit">
-                  Save Changes
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save Changes'}
                 </Button>
               </DialogFooter>
             </form>
@@ -696,135 +450,75 @@ export default function Students() {
         </Dialog>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Academic Year</CardTitle>
-          <CardDescription>Administer annual cycle and student promotions</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {isYearLoading ? (
-            <p className="text-sm text-gray-500">Loading academic year...</p>
-          ) : academicYear.status === 'active' ? (
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-900">
-                  Academic year started on {academicYear.start_date ? new Date(academicYear.start_date).toLocaleDateString() : 'N/A'}
-                </p>
-                {lastCompletedYear && (
-                  <p className="text-xs text-gray-500">
-                    Previous year ended on {new Date(lastCompletedYear.end_date).toLocaleDateString()}
-                  </p>
-                )}
-              </div>
-              <Button onClick={handleEndYear} disabled={isEndingYear}>
-                {isEndingYear ? 'Ending...' : 'End Academic Year'}
-              </Button>
-            </div>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
-              <div className="space-y-2">
-                <Label htmlFor="academic_year_start">Academic Year Start Date</Label>
-                <Input
-                  id="academic_year_start"
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                />
-              </div>
-              <Button onClick={handleStartYear} disabled={!startDate || isStartingYear}>
-                {isStartingYear ? 'Starting...' : 'Start Academic Year'}
-              </Button>
-            </div>
-          )}
+      {renderError(error)}
 
-          {promotionSummary && (
-            <div className="grid grid-cols-3 gap-4 border-t pt-4">
-              <div>
-                <p className="text-sm font-semibold text-gray-900">{promotionSummary.promoted}</p>
-                <p className="text-xs text-gray-500">Promoted</p>
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-gray-900">{promotionSummary.retained}</p>
-                <p className="text-xs text-gray-500">Retained</p>
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-gray-900">{promotionSummary.graduated}</p>
-                <p className="text-xs text-gray-500">Graduated</p>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-          <Input
-            placeholder="Search students..."
-            className="pl-10"
-          />
-        </div>
-        <Button variant="outline">
-          <Filter className="w-4 h-4 mr-2" />
-          Filter
-        </Button>
-      </div>
-
-      <div className="grid gap-4">
-        {students.map((student) => (
-          <Card key={student.id} className="hover:shadow-md transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
-                    <User className="w-6 h-6 text-white" />
+      {/* --- 5. Use 'students' state variable here, not 'mockStudents' --- */}
+      {isLoading ? renderLoading() : (
+        <div className="grid gap-4">
+          {students.map((student) => (
+            <Card key={student.id}>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
+                      <User className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-gray-900">{student.first_name} {student.last_name}</h3>
+                      <p className="text-sm text-gray-600">ID: {student.admission_number}</p>
+                    </div>
                   </div>
                   
-                  <div>
-                    <h3 className="font-semibold text-gray-900">
-                      <Link to={`/dashboard/students/${student.id}`} className="hover:text-blue-600 transition-colors">
-                        {student.name}
-                      </Link>
-                    </h3>
-                    <p className="text-sm text-gray-600">{student.email}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-8">
-                  <div className="text-center">
-                    <p className="text-sm font-medium text-gray-900">{student.grade}</p>
-                    <p className="text-xs text-gray-500">Grade</p>
-                  </div>
-                  
-                  <div className="text-center">
-                    <p className="text-sm font-medium text-gray-900">{student.class}</p>
-                    <p className="text-xs text-gray-500">Class</p>
-                  </div>
-                  
-                  <div className="text-center">
-                    <p className="text-sm font-medium text-gray-900">{student.parentGuardian}</p>
-                    <p className="text-xs text-gray-500">Parent/Guardian</p>
-                  </div>
-                  
-                  <div className="text-center">
-                    <p className="text-sm font-medium text-gray-900">{student.fees}</p>
-                    <p className="text-xs text-gray-500">Fees</p>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
+                  <div className="flex items-center space-x-8">
+                    <div className="text-center">
+                      <p className="text-sm font-medium text-gray-900">{student.grade}</p>
+                      <p className="text-xs text-gray-500">Grade</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm font-medium text-gray-900">{student.parent_name}</p>
+                      <p className="text-xs text-gray-500">Parent</p>
+                    </div>
+                    <Badge className={student.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}>
                       {student.status}
-                    </span>
-                    <Button variant="ghost" size="icon" onClick={() => openEditDialog(student)}>
-                      <Pencil className="w-4 h-4" />
-                    </Button>
+                    </Badge>
+                    
+                    <div className="flex space-x-2">
+                      <Button variant="outline" size="sm" onClick={() => navigate(`/dashboard/students/${student.id}`)}>
+                        View Profile
+                      </Button>
+                      <Button variant="outline" size="icon" onClick={() => handleOpenEditDialog(student)}>
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="destructive" size="icon" disabled={student.status === 'inactive'}>
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This will set {student.first_name}'s status to "inactive". They will no longer have access to the system.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDeactivateStudent(student.id)}>
+                              Deactivate
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

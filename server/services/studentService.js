@@ -79,17 +79,17 @@ const createStudent = async (schoolId, studentData) => {
     );
     
     const subscription = await client.query(
-      `SELECT sp.max_students 
+      `SELECT sp.student_limit
        FROM subscriptions sub
        JOIN subscription_plans sp ON sub.plan_id = sp.id
        WHERE sub.school_id = $1 AND sub.status IN ('active', 'trial')
        LIMIT 1`,
       [schoolId]
     );
-    
+
     if (subscription.rows.length > 0) {
-      const maxStudents = subscription.rows[0].max_students;
-      if (maxStudents && parseInt(studentCount.rows[0].count) >= maxStudents) {
+      const studentLimit = subscription.rows[0].student_limit;
+      if (studentLimit && parseInt(studentCount.rows[0].count) >= studentLimit) {
         throw new Error('Student limit reached for current subscription plan');
       }
     }
@@ -97,24 +97,22 @@ const createStudent = async (schoolId, studentData) => {
     // Create student
     const result = await client.query(
       `INSERT INTO students (
-        school_id, admission_number, first_name, last_name, date_of_birth,
-        gender, grade, class_name, parent_id, emergency_contact,
-        medical_info, address, status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        school_id, first_name, last_name, email, phone, date_of_birth,
+        gender, address, grade, admission_number, enrollment_date, status
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING *`,
       [
         schoolId,
-        studentData.admission_number,
         studentData.first_name,
         studentData.last_name,
+        studentData.email,
+        studentData.phone,
         studentData.date_of_birth,
         studentData.gender,
-        studentData.grade,
-        studentData.class_name,
-        studentData.parent_id,
-        studentData.emergency_contact,
-        studentData.medical_info,
         studentData.address,
+        studentData.grade,
+        studentData.admission_number,
+        studentData.enrollment_date,
         'active'
       ]
     );
