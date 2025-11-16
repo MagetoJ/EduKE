@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '../components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
-import { useApi } from '../contexts/AuthContext'
+import { useApi, useAuth } from '../contexts/AuthContext'
 
 // Add this type definition
 type StaffMember = {
@@ -46,6 +46,7 @@ export default function Staff() {
   const [activeTab, setActiveTab] = useState('directory')
   const [staff, setStaff] = useState<StaffMember[]>([])
   const [leaveRequests, setLeaveRequests] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
   const [isStaffDialogOpen, setIsStaffDialogOpen] = useState(false)
   const [formData, setFormData] = useState(initialStaffForm)
   const [isSubmitting, setIsSubmitting] = useState(false)

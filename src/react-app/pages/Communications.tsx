@@ -1,5 +1,5 @@
 import { useEffect, useState, FormEvent } from 'react'
-import { Send, Megaphone, User, Users, AlertCircle, Loader2 } from 'lucide-react'
+import { Send, Megaphone, User, AlertCircle, Loader2 } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card'
