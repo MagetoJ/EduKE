@@ -1,4 +1,3 @@
-import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { FinancialSummaryChart } from '../components/charts/FinancialSummaryChart';
 import { StudentPerformanceChart } from '../components/charts/StudentPerformanceChart';

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { TrendingUp, Calendar, BookOpen, Award, Clock, Target, BarChart3, Loader2 } from 'lucide-react'
+import { Calendar, Award, Target, BarChart3, Loader2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { useAuth, useApi } from '../contexts/AuthContext'
@@ -7,7 +7,6 @@ import { useAuth, useApi } from '../contexts/AuthContext'
 export default function Progress() {
   const { user } = useAuth()
   const api = useApi()
-  const [selectedChild, setSelectedChild] = useState<string | undefined>(undefined)
   
   const [assignments, setAssignments] = useState<any[]>([])
   const [fees, setFees] = useState<any[]>([])

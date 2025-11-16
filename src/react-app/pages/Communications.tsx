@@ -15,8 +15,8 @@ export default function Communications() {
   const [activeTab, setActiveTab] = useState('announcements')
   const [isAnnouncementDialogOpen, setIsAnnouncementDialogOpen] = useState(false)
   const [isMessageDialogOpen, setIsMessageDialogOpen] = useState(false)
-  const [announcements, setAnnouncements] = useState([])
-  const [messages, setMessages] = useState([])
+  const [announcements, setAnnouncements] = useState<any[]>([])
+  const [messages, setMessages] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   

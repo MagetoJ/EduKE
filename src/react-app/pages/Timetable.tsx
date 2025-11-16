@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Calendar, Clock, MapPin, User, Plus, Loader2 } from 'lucide-react'
+import { Calendar, Clock, MapPin, User, Plus } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
@@ -92,12 +92,10 @@ export default function Timetable() {
   const [selectedGrade, setSelectedGrade] = useState(CURRICULUM_LEVELS.cbc[0] ?? '')
   const [selectedClass, setSelectedClass] = useState('10A')
   const [timetable, setTimetable] = useState<Record<string, any[]>>({})
-  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     const fetchTimetable = async () => {
       try {
-        setIsLoading(true)
         const response = await api('/api/timetable')
         const data = await response.json()
         
@@ -125,12 +123,10 @@ export default function Timetable() {
         weekDays.forEach(day => {
           if (!timetable[day]) timetable[day] = []
         })
-      } finally {
-        setIsLoading(false)
       }
     }
     
-    if (user && api) {
+    if (user) {
       fetchTimetable()
     }
   }, [api, user])
