@@ -34,18 +34,7 @@ export default function Login() {
     }
   }
 
-  const handleDemoLogin = (demoRole: string) => {
-    const demoCredentials = {
-      'super_admin': 'super@eduke.com',
-      'admin': 'admin@eduke.com',
-      'teacher': 'teacher@eduke.com', 
-      'parent': 'parent@eduke.com',
-      'student': 'student@eduke.com'
-    }
-    setError('')
-    setEmail(demoCredentials[demoRole as keyof typeof demoCredentials])
-    setPassword('demo123')
-  }
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-4">
@@ -113,60 +102,7 @@ export default function Login() {
               </Button>
             </form>
 
-            <div className="mt-6">
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-300" />
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-white text-gray-500">Try Demo Accounts</span>
-                </div>
-              </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => handleDemoLogin('super_admin')}
-                  disabled={isLoading}
-                >
-                  Super Admin
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => handleDemoLogin('admin')}
-                  disabled={isLoading}
-                >
-                  Admin
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => handleDemoLogin('teacher')}
-                  disabled={isLoading}
-                >
-                  Teacher
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => handleDemoLogin('parent')}
-                  disabled={isLoading}
-                >
-                  Parent
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => handleDemoLogin('student')}
-                  disabled={isLoading}
-                  className="col-span-2"
-                >
-                  Student
-                </Button>
-              </div>
-            </div>
 
             <div className="mt-4 text-center text-sm">
               Registering a new school?{' '}
