@@ -140,10 +140,17 @@ export default function Communications() {
     // Check if the recipient is a group or an individual ID
     const isGroup = messageForm.recipient.startsWith('all_')
 
+    // Map frontend values to backend expected recipient_type values
+    const recipientTypeMap: { [key: string]: string } = {
+      'all_staff': 'staff',
+      'all_parents': 'parents',
+      'all_students': 'students'
+    }
+
     const payload = {
       subject: messageForm.subject,
       body: messageForm.body,
-      recipient_group: isGroup ? messageForm.recipient.replace('all_', 'all-') : undefined,
+      recipient_type: isGroup ? recipientTypeMap[messageForm.recipient] : 'individual',
       recipient_id: isGroup ? undefined : messageForm.recipient,
       is_announcement: false,
     }
@@ -252,6 +259,9 @@ export default function Communications() {
                 <form onSubmit={handleMessageSubmit}>
                   <DialogHeader>
                     <DialogTitle>New Message</DialogTitle>
+                    <DialogDescription>
+                      Send a new message to staff, parents, or specific grades.
+                    </DialogDescription>
                   </DialogHeader>
                   <div className="py-4 space-y-4">
                     {/* --- THIS IS THE UPGRADED "TO" FIELD --- */}
