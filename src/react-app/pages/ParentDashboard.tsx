@@ -1,12 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { User, BookOpen, DollarSign, Calendar, AlertTriangle } from 'lucide-react'
 import { Button } from '../components/ui/button'
-import { Input } from '../components/ui/input'
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card'
 import { Label } from '../components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Badge } from '../components/ui/badge'
-import { useApi, useAuth } from '../contexts/AuthContext'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
+import { useApi } from '../contexts/AuthContext'
 
 type DisciplineRecord = {
   id: number
@@ -19,24 +19,9 @@ type DisciplineRecord = {
   status: string | null
 }
 
-type PerformanceRecord = {
-  id: number
-  student_id: number
-  teacher_id: number | null
-  subject: string
-  grade: number | string
-  term: string | null
-  comments: string | null
-  date_recorded: string | null
-}
 
-type AttendanceRecord = {
-  id: number
-  student_id: number
-  date: string
-  status: string
-  teacher_id: number | null
-}
+
+
 
 type FinancialSummary = {
   feesPaid: number
@@ -45,18 +30,7 @@ type FinancialSummary = {
   status: string
 }
 
-type ParentAccessResponse = {
-  student: {
-    id: number
-    name: string
-    grade: string | null
-    class: string | null
-  }
-  discipline: DisciplineRecord[]
-  performance: PerformanceRecord[]
-  attendance: AttendanceRecord[]
-  financial: FinancialSummary
-}
+
 
 type SubjectPerformance = {
   subject: string
@@ -101,7 +75,6 @@ type Child = {
 
 export default function ParentDashboard() {
   const apiFetch = useApi()
-  const { user } = useAuth()
   const [children, setChildren] = useState<Child[]>([])
   const [selectedChildId, setSelectedChildId] = useState<string>('')
   const [studentData, setStudentData] = useState<StudentDashboardData | null>(null)
@@ -187,8 +160,16 @@ export default function ParentDashboard() {
         : 0
 
       // Process attendance
-      const attendanceSummary = attendanceData.data?.reduce<AttendanceSummary>(
-        (summary, record: any) => {
+      const initialSummary: AttendanceSummary = {
+        present: 0,
+        absent: 0,
+        late: 0,
+        total: 0,
+        percentage: 0
+      }
+
+      const attendanceSummary = attendanceData.data?.reduce(
+        (summary: AttendanceSummary, record: any) => {
           const status = record.status?.toLowerCase()
           if (status === 'present') summary.present += 1
           else if (status === 'late') summary.late += 1
@@ -196,16 +177,16 @@ export default function ParentDashboard() {
           summary.total += 1
           return summary
         },
-        { present: 0, absent: 0, late: 0, total: 0, percentage: 0 }
-      ) || { present: 0, absent: 0, late: 0, total: 0, percentage: 0 }
+        initialSummary
+      ) || initialSummary
 
       attendanceSummary.percentage = attendanceSummary.total > 0
         ? Number(((attendanceSummary.present / attendanceSummary.total) * 100).toFixed(1))
         : 0
 
       // Process fees
-      const totalFees = feesData.data?.reduce((sum: number, fee: any) => sum + (Number(fee.amount_due) || 0), 0) || 0
-      const paidFees = feesData.data?.reduce((sum: number, fee: any) => sum + (Number(fee.amount_paid) || 0), 0) || 0
+      const totalFees = feesData.data?.reduce((sum: number, _fee: any) => sum + (Number(_fee.amount_due) || 0), 0) || 0
+      const paidFees = feesData.data?.reduce((sum: number, _fee: any) => sum + (Number(_fee.amount_paid) || 0), 0) || 0
       const financial: FinancialSummary = {
         feesPaid: paidFees,
         feesDue: totalFees - paidFees,
@@ -286,10 +267,7 @@ export default function ParentDashboard() {
     )
   }
 
-  const handleSwitchChild = () => {
-    setStudentData(null)
-    setError(null)
-  }
+
 
   return (
     <div className="space-y-6">
@@ -347,7 +325,7 @@ export default function ParentDashboard() {
                 <User className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{studentData.performance.overallAverage}%</div>
+                <div className="text-2xl font-bold">{studentData!.performance.overallAverage}%</div>
                 <p className="text-xs text-muted-foreground">Overall performance</p>
               </CardContent>
             </Card>
@@ -369,7 +347,7 @@ export default function ParentDashboard() {
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">${studentData.financial.feesDue}</div>
+                <div className="text-2xl font-bold">${studentData!.financial.feesDue}</div>
                 <p className="text-xs text-muted-foreground">Outstanding</p>
               </CardContent>
             </Card>
@@ -383,10 +361,10 @@ export default function ParentDashboard() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {studentData.performance.subjects.length === 0 && (
+                {studentData!.performance.subjects.length === 0 && (
                   <p className="text-sm text-muted-foreground">No performance records available.</p>
                 )}
-                {studentData.performance.subjects.map((subject) => (
+                {studentData!.performance.subjects.map((subject) => (
                   <div key={subject.subject} className="flex items-center justify-between">
                     <span className="capitalize">{subject.subject}</span>
                     <div className="flex items-center space-x-2">
@@ -412,10 +390,10 @@ export default function ParentDashboard() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {studentData.discipline.length === 0 && (
+                {studentData!.discipline.length === 0 && (
                   <p className="text-sm text-muted-foreground">No discipline records available.</p>
                 )}
-                {studentData.discipline.map((record) => (
+                {studentData!.discipline.map((record) => (
                   <div key={record.id} className="flex items-center justify-between rounded-lg border p-4">
                     <div className="flex items-center space-x-4">
                       <AlertTriangle className="h-5 w-5 text-orange-500" />
@@ -474,19 +452,19 @@ export default function ParentDashboard() {
               <div className="space-y-4">
                 <div className="flex justify-between">
                   <span>Total Fees</span>
-                  <span>${studentData.financial.totalFees}</span>
+                  <span>${studentData!.financial.totalFees}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Fees Paid</span>
-                  <span className="text-green-600">${studentData.financial.feesPaid}</span>
+                  <span className="text-green-600">${studentData!.financial.feesPaid}</span>
                 </div>
                 <div className="flex justify-between font-medium">
                   <span>Outstanding</span>
-                  <span className="text-red-600">${studentData.financial.feesDue}</span>
+                  <span className="text-red-600">${studentData!.financial.feesDue}</span>
                 </div>
                 <div className="border-t pt-2">
-                  <Badge variant={studentData.financial.status === 'Paid' ? 'default' : 'secondary'}>
-                    {studentData.financial.status}
+                  <Badge variant={studentData!.financial.status === 'Paid' ? 'default' : 'secondary'}>
+                    {studentData!.financial.status}
                   </Badge>
                 </div>
               </div>

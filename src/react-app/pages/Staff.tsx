@@ -1,5 +1,5 @@
 import { type ChangeEvent, type FormEvent, useEffect, useState } from 'react'
-import { Plus, Search, Filter, UserCheck, Mail, Phone, Calendar, Clock, CheckCircle, XCircle, DollarSign, Pencil, Trash2, AlertCircle } from 'lucide-react'
+import { Plus, Search, Filter, UserCheck, Mail, Phone, Calendar, Clock, CheckCircle, XCircle, DollarSign, Pencil, Trash2 } from 'lucide-react'
 import { Link } from 'react-router'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -59,6 +59,7 @@ export default function Staff() {
   const [staff, setStaff] = useState<StaffMember[]>([])
   const [leaveRequests, setLeaveRequests] = useState<any[]>([])
   const [isStaffDialogOpen, setIsStaffDialogOpen] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [formData, setFormData] = useState(initialStaffForm)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -338,6 +339,14 @@ export default function Staff() {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <p>Loading staff data...</p>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">

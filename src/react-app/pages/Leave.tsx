@@ -25,7 +25,7 @@ export default function Leave() {
   const { user } = useAuth()
   const api = useApi()
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([])
-  const [leaveTypes, setLeaveTypes] = useState([])
+  const [leaveTypes, setLeaveTypes] = useState<Array<{id: string | number, name: string}>>([])
   const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
@@ -212,7 +212,7 @@ export default function Leave() {
                     </SelectTrigger>
                     <SelectContent>
                       {leaveTypes.map((type) => (
-                        <SelectItem key={type.id} value={type.id.toString()}>
+                        <SelectItem key={type.id} value={String(type.id)}>
                           {type.name}
                         </SelectItem>
                       ))}

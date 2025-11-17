@@ -1,4 +1,8 @@
 import { useState, useEffect } from 'react'
+import { useAuth, useApi } from '../contexts/AuthContext'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
+import { Loader2, Calendar, Target, BarChart3, Award } from 'lucide-react'
+
 export default function Progress() {
   const { user } = useAuth()
   const api = useApi()

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'react-router'
 import { Users, Calendar, BookOpen, Clock, FileText, Plus, ExternalLink, Trash2 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
@@ -105,8 +105,11 @@ export function CourseDetail() {
     url: '',
     description: ''
   })
+
+  // Add these two lines back
   const [resourceSaving, setResourceSaving] = useState(false)
   const [resourceDeletingId, setResourceDeletingId] = useState<string | null>(null)
+
 
   const parseResources = useCallback((payload: unknown): CourseResource[] => {
     if (!Array.isArray(payload)) {
@@ -231,20 +234,57 @@ export function CourseDetail() {
 
   const handleResourceSubmit = useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!id || !canManageResources) {
-      return
+    setResourceSaving(true)
+    try {
+      const response = await api(`/api/courses/${id}/resources`, {
+        method: 'POST',
+        body: JSON.stringify({
+          title: resourceForm.title,
+          type: resourceForm.type,
+          url: resourceForm.url || null,
+          description: resourceForm.description || null
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to create resource')
+      }
+
+      // Reset form and close dialog
+      setResourceForm({ title: '', type: 'Document', url: '', description: '' })
+      setIsResourceDialogOpen(false)
+
+      // Reload resources
+      loadAllData()
+    } catch (err) {
+      setResourceError(err instanceof Error ? err.message : 'Failed to create resource')
+    } finally {
+      setResourceSaving(false)
     }
-    // (Handler logic remains as you wrote it)
-    // ...
-  }, [api, canManageResources, id, parseResources, resourceForm])
+  }, [api, id, parseResources, loadAllData, resourceForm])
 
   const handleDeleteResource = useCallback(async (resourceId: string) => {
     if (!id || !canManageResources) {
       return
     }
-    // (Handler logic remains as you wrote it)
-    // ...
-  }, [api, canManageResources, id])
+    setResourceDeletingId(resourceId)
+    try {
+      const response = await api(`/api/courses/${id}/resources/${resourceId}`, {
+        method: 'DELETE'
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to delete resource')
+      }
+
+      // Reload resources
+      loadAllData()
+    } catch (err) {
+      setResourceError(err instanceof Error ? err.message : 'Failed to delete resource')
+    } finally {
+      setResourceDeletingId(null)
+    }
+  }, [api, id, loadAllData, canManageResources])
 
   if (isLoading) {
     return <p>Loading course details...</p>
