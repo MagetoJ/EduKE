@@ -292,10 +292,6 @@ export function useApi() {
         }
       }
 
-      if (response.status === 403) {
-        throw new Error('Access denied');
-      }
-
       return response;
     },
     [logout, refreshSession, token]

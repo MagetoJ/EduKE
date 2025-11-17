@@ -626,12 +626,34 @@ router.put('/staff/:id', authorizeRole(['admin']), async (req, res) => {
   }
 });
 
+// Get staff member by ID
+router.get('/staff/:id', authorizeRole(['admin']), async (req, res) => {
+  try {
+    const { schoolId } = req;
+    const { id } = req.params;
+
+    const result = await query(
+      "SELECT id, email, first_name, last_name, name, phone, role, status, avatar_url, department, employee_id, hire_date, subject, class_assigned FROM users WHERE id = $1 AND school_id = $2 AND role IN ('admin', 'teacher')",
+      [id, schoolId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Staff member not found' });
+    }
+
+    res.json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    console.error('Error fetching staff member:', err);
+    res.status(500).json({ success: false, error: 'Failed to fetch staff member' });
+  }
+});
+
 // Delete staff member
 router.delete('/staff/:id', authorizeRole(['admin']), async (req, res) => {
   try {
     const { schoolId } = req;
     const { id } = req.params;
-    
+
     await query('UPDATE users SET status = $1, updated_at = NOW() WHERE id = $2 AND school_id = $3', ['inactive', id, schoolId]);
     res.json({ success: true, message: 'Staff member deactivated successfully' });
   } catch (err) {

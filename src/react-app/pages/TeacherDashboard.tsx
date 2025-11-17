@@ -124,7 +124,7 @@ export default function TeacherDashboard() {
         method: 'POST',
         body: JSON.stringify({
           date: attendanceDate,
-          records
+          attendance: records
         })
       })
       const data = await response.json().catch(() => ({}))

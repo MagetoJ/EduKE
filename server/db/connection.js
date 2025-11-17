@@ -3,7 +3,7 @@ require('dotenv').config();
 
 // Database configuration
 const getDbConfig = () => {
-  const isProduction = process.env.NODE_ENV === 'production';
+  const isProduction = process.env.NODE_ENV === 'production' || process.env.DATABASE_URL.includes('onrender.com');
 
   if (isProduction) {
     return {

@@ -85,12 +85,25 @@ type StudentDashboardData = {
   financial: FinancialSummary
 }
 
+type Child = {
+  id: string
+  first_name: string
+  last_name: string
+  admission_number: string
+  grade: string
+  class_assigned: string
+  email: string
+  phone: string
+  date_of_birth: string
+  gender: string
+  status: string
+}
+
 export default function ParentDashboard() {
   const apiFetch = useApi()
   const { user } = useAuth()
-  const [studentId, setStudentId] = useState('')
-  const [studentPassword, setStudentPassword] = useState('')
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [children, setChildren] = useState<Child[]>([])
+  const [selectedChildId, setSelectedChildId] = useState<string>('')
   const [studentData, setStudentData] = useState<StudentDashboardData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -102,42 +115,66 @@ export default function ParentDashboard() {
     return studentData.attendance
   }, [studentData])
 
-  const handleAuthenticate = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!user) {
-      setError('You must be logged in to access student data.')
-      return
+  // Load children on mount
+  useEffect(() => {
+    const loadChildren = async () => {
+      setIsLoading(true)
+      setError(null)
+      try {
+        const response = await apiFetch('/api/parent/children')
+        if (!response.ok) {
+          throw new Error('Failed to load children')
+        }
+        const data = await response.json()
+        setChildren(data.data || [])
+        if (data.data && data.data.length > 0) {
+          setSelectedChildId(data.data[0].id)
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load children')
+      } finally {
+        setIsLoading(false)
+      }
     }
+    loadChildren()
+  }, [apiFetch])
 
+  // Load student data when child is selected
+  useEffect(() => {
+    if (selectedChildId) {
+      loadStudentData(selectedChildId)
+    }
+  }, [selectedChildId])
+
+  const loadStudentData = async (childId: string) => {
     setIsLoading(true)
     setError(null)
 
     try {
-      const response = await apiFetch('/api/parent/access', {
-        method: 'POST',
-        body: JSON.stringify({
-          student_id: Number(studentId),
-          student_password: studentPassword
-        })
-      })
+      // Fetch performance, attendance, fees in parallel
+      const [performanceRes, attendanceRes, feesRes] = await Promise.all([
+        apiFetch(`/api/students/${childId}/performance`),
+        apiFetch(`/api/students/${childId}/attendance`),
+        apiFetch(`/api/students/${childId}/fees`)
+      ])
 
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}))
-        throw new Error(data.error || 'Invalid student ID or password')
-      }
+      const performanceData = performanceRes.ok ? await performanceRes.json() : { data: [] }
+      const attendanceData = attendanceRes.ok ? await attendanceRes.json() : { data: [] }
+      const feesData = feesRes.ok ? await feesRes.json() : { data: [] }
 
-      const data: ParentAccessResponse = await response.json()
+      const child = children.find(c => c.id === childId)
+      if (!child) return
 
+      // Process performance
       const performanceGroups: Record<string, number[]> = {}
-      data.performance.forEach((record) => {
-        const numericGrade = Number(record.grade)
-        if (Number.isNaN(numericGrade)) {
-          return
+      performanceData.data?.forEach((record: any) => {
+        const numericGrade = Number(record.score)
+        if (Number.isNaN(numericGrade)) return
+        const subject = record.subject || 'General'
+        if (!performanceGroups[subject]) {
+          performanceGroups[subject] = []
         }
-        if (!performanceGroups[record.subject]) {
-          performanceGroups[record.subject] = []
-        }
-        performanceGroups[record.subject].push(numericGrade)
+        performanceGroups[subject].push(numericGrade)
       })
 
       const subjectPerformance: SubjectPerformance[] = Object.entries(performanceGroups).map(([subject, scores]) => ({
@@ -146,104 +183,111 @@ export default function ParentDashboard() {
       }))
 
       const overallAverage = subjectPerformance.length
-        ? Number(
-            (
-              subjectPerformance.reduce((sum, current) => sum + current.average, 0) /
-              subjectPerformance.length
-            ).toFixed(1)
-          )
+        ? Number((subjectPerformance.reduce((sum, current) => sum + current.average, 0) / subjectPerformance.length).toFixed(1))
         : 0
 
-      const attendanceSummary = data.attendance.reduce<AttendanceSummary>(
-        (summary, record) => {
-          const status = record.status.toLowerCase()
-          if (status === 'present') {
-            summary.present += 1
-          } else if (status === 'late') {
-            summary.late += 1
-          } else if (status === 'absent') {
-            summary.absent += 1
-          }
+      // Process attendance
+      const attendanceSummary = attendanceData.data?.reduce<AttendanceSummary>(
+        (summary, record: any) => {
+          const status = record.status?.toLowerCase()
+          if (status === 'present') summary.present += 1
+          else if (status === 'late') summary.late += 1
+          else if (status === 'absent') summary.absent += 1
           summary.total += 1
           return summary
         },
         { present: 0, absent: 0, late: 0, total: 0, percentage: 0 }
-      )
+      ) || { present: 0, absent: 0, late: 0, total: 0, percentage: 0 }
 
-      attendanceSummary.percentage = attendanceSummary.total
-        ? Math.round((attendanceSummary.present / attendanceSummary.total) * 100)
+      attendanceSummary.percentage = attendanceSummary.total > 0
+        ? Number(((attendanceSummary.present / attendanceSummary.total) * 100).toFixed(1))
         : 0
 
+      // Process fees
+      const totalFees = feesData.data?.reduce((sum: number, fee: any) => sum + (Number(fee.amount_due) || 0), 0) || 0
+      const paidFees = feesData.data?.reduce((sum: number, fee: any) => sum + (Number(fee.amount_paid) || 0), 0) || 0
+      const financial: FinancialSummary = {
+        feesPaid: paidFees,
+        feesDue: totalFees - paidFees,
+        totalFees,
+        status: paidFees >= totalFees ? 'Paid' : 'Pending'
+      }
+
       setStudentData({
-        id: data.student.id.toString(),
-        name: data.student.name,
-        grade: data.student.grade,
-        className: data.student.class,
-        discipline: data.discipline,
+        id: child.id,
+        name: `${child.first_name} ${child.last_name}`,
+        grade: child.grade,
+        className: child.class_assigned,
+        discipline: [], // TODO: fetch discipline if available
         performance: {
-          subjects: subjectPerformance
-            .sort((a, b) => b.average - a.average)
-            .slice(0, subjectPerformance.length),
+          subjects: subjectPerformance,
           overallAverage
         },
         attendance: attendanceSummary,
-        financial: data.financial
+        financial
       })
-      setIsAuthenticated(true)
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Error connecting to server'
-      setError(message)
+      setError(err instanceof Error ? err.message : 'Failed to load student data')
     } finally {
       setIsLoading(false)
     }
   }
 
-  if (!isAuthenticated || !studentData) {
+  const handleChildChange = (childId: string) => {
+    setSelectedChildId(childId)
+  }
+
+  if (children.length === 0 && !isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <Card className="w-full max-w-md">
           <CardHeader>
-            <CardTitle className="text-center">Parent Access</CardTitle>
+            <CardTitle className="text-center">No Children Found</CardTitle>
+            <CardDescription>You don't have any children registered in the system.</CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    )
+  }
+
+  if (!studentData && !isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="text-center">Select Child</CardTitle>
+            <CardDescription>Choose a child to view their information</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleAuthenticate} className="space-y-4">
+            <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="studentId">Student ID</Label>
-                <Input
-                  id="studentId"
-                  placeholder="Enter student ID"
-                  value={studentId}
-                  onChange={(event) => setStudentId(event.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="studentPassword">Student Password</Label>
-                <Input
-                  id="studentPassword"
-                  type="password"
-                  placeholder="Enter student password"
-                  value={studentPassword}
-                  onChange={(event) => setStudentPassword(event.target.value)}
-                  required
-                />
+                <Label>Select Child</Label>
+                <Select value={selectedChildId} onValueChange={handleChildChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a child" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {children.map((child) => (
+                      <SelectItem key={child.id} value={child.id}>
+                        {child.first_name} {child.last_name} - {child.grade}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               {error && <p className="text-sm font-medium text-red-500">{error}</p>}
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? 'Loading...' : 'Access Student Information'}
+              <Button onClick={() => selectedChildId && loadStudentData(selectedChildId)} className="w-full" disabled={isLoading || !selectedChildId}>
+                {isLoading ? 'Loading...' : 'View Information'}
               </Button>
-            </form>
+            </div>
           </CardContent>
         </Card>
       </div>
     )
   }
 
-  const handleSwitchStudent = () => {
-    setIsAuthenticated(false)
+  const handleSwitchChild = () => {
     setStudentData(null)
-    setStudentId('')
-    setStudentPassword('')
     setError(null)
   }
 
@@ -251,14 +295,28 @@ export default function ParentDashboard() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Student Dashboard</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Parent Dashboard</h1>
           <p className="text-gray-600">
-            Viewing information for {studentData.name} (ID: {studentData.id})
+            Viewing information for {studentData.name}
           </p>
         </div>
-        <Button variant="outline" onClick={handleSwitchStudent}>
-          Switch Student
-        </Button>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Label htmlFor="child-select">Child:</Label>
+            <Select value={selectedChildId} onValueChange={handleChildChange}>
+              <SelectTrigger id="child-select" className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {children.map((child) => (
+                  <SelectItem key={child.id} value={child.id}>
+                    {child.first_name} {child.last_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
       </div>
 
       <Tabs defaultValue="overview" className="space-y-4">

@@ -400,3 +400,31 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
+
+CREATE TABLE IF NOT EXISTS attendance (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id INTEGER NOT NULL,
+  class_id TEXT NOT NULL,
+  date TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('present', 'absent', 'late', 'excused')),
+  marked_by INTEGER NOT NULL,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (student_id) REFERENCES students(id),
+  FOREIGN KEY (marked_by) REFERENCES users(id),
+  UNIQUE(student_id, date, class_id)
+);
+
+CREATE TABLE IF NOT EXISTS performance (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id INTEGER NOT NULL,
+  assignment_id INTEGER NOT NULL,
+  score DECIMAL(5,2),
+  grade TEXT,
+  comments TEXT,
+  submitted_by INTEGER NOT NULL,
+  submitted_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (student_id) REFERENCES students(id),
+  FOREIGN KEY (assignment_id) REFERENCES assignments(id),
+  FOREIGN KEY (submitted_by) REFERENCES users(id),
+  UNIQUE(student_id, assignment_id)
+);

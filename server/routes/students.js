@@ -139,4 +139,72 @@ router.get('/:id/courses', authorizeRole(['admin', 'teacher', 'student', 'parent
   }
 });
 
+// Get student performance
+router.get('/:id/performance', authorizeRole(['admin', 'teacher', 'parent']), async (req, res) => {
+  try {
+    const { schoolId } = req;
+    const { id } = req.params;
+
+    const result = await query(`
+      SELECT p.*, a.title as assignment_title, c.name as course_name
+      FROM performance p
+      LEFT JOIN assignments a ON p.assignment_id = a.id
+      LEFT JOIN courses c ON a.course_id = c.id
+      WHERE p.student_id = $1 AND c.school_id = $2
+      ORDER BY p.submitted_at DESC
+    `, [id, schoolId]);
+
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error('Error fetching student performance:', err);
+    res.status(500).json({ success: false, error: 'Failed to fetch performance' });
+  }
+});
+
+// Get student attendance
+router.get('/:id/attendance', authorizeRole(['admin', 'teacher', 'parent']), async (req, res) => {
+  try {
+    const { schoolId } = req;
+    const { id } = req.params;
+
+    const result = await query(`
+      SELECT a.*, c.name as course_name
+      FROM attendance a
+      LEFT JOIN courses c ON a.class_id = c.code
+      WHERE a.student_id = $1 AND c.school_id = $2
+      ORDER BY a.date DESC
+    `, [id, schoolId]);
+
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error('Error fetching student attendance:', err);
+    res.status(500).json({ success: false, error: 'Failed to fetch attendance' });
+  }
+});
+
+// Get student fees
+router.get('/:id/fees', authorizeRole(['admin', 'teacher', 'parent']), async (req, res) => {
+  try {
+    const { schoolId } = req;
+    const { id } = req.params;
+
+    // For now, return mock data since fee system isn't fully implemented
+    const mockFees = [
+      {
+        id: 1,
+        description: 'Tuition Fee',
+        amount_due: 5000,
+        amount_paid: 3000,
+        due_date: '2024-12-31',
+        payment_status: 'partial'
+      }
+    ];
+
+    res.json({ success: true, data: mockFees });
+  } catch (err) {
+    console.error('Error fetching student fees:', err);
+    res.status(500).json({ success: false, error: 'Failed to fetch fees' });
+  }
+});
+
 module.exports = router;

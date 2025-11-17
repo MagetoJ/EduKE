@@ -18,6 +18,7 @@ const schoolsRoutes = require('./routes/schools');
 const subscriptionRoutes = require('./routes/subscription');
 const examsRoutes = require('./routes/exams');
 const coursesRoutes = require('./routes/courses');
+const teacherRoutes = require('./routes/teacher');
 
 // Import middleware
 const { authenticateToken } = require('./middleware/auth');
@@ -65,6 +66,7 @@ app.use('/api', authenticateToken, tenantContext, schoolsRoutes);
 app.use('/api', authenticateToken, tenantContext, subscriptionRoutes);
 app.use('/api', authenticateToken, tenantContext, examsRoutes);
 app.use('/api', authenticateToken, tenantContext, coursesRoutes);
+app.use('/api/teacher', authenticateToken, tenantContext, teacherRoutes);
 app.use('/api', authenticateToken, tenantContext, secureRouter);
 app.use('/api', authenticateToken, tenantContext, completeRoutes);
 

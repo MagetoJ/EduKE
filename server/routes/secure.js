@@ -1054,4 +1054,23 @@ secureRouter.get('/staff/:id/leave', authorizeRole(['admin']), async (req, res) 
   }
 });
 
+// --- Parent Routes ---
+secureRouter.get('/parent/children', authorizeRole(['parent']), async (req, res) => {
+  try {
+    const parentId = req.user.id;
+    const result = await query(`
+      SELECT s.id, s.first_name, s.last_name, s.admission_number, s.grade, s.class_assigned,
+             s.email, s.phone, s.date_of_birth, s.gender, s.status
+      FROM students s
+      WHERE s.parent_id = $1
+      ORDER BY s.first_name, s.last_name
+    `, [parentId]);
+
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error('Error fetching parent children:', err);
+    res.status(500).json({ success: false, error: 'Failed to fetch children' });
+  }
+});
+
 module.exports = { secureRouter };
