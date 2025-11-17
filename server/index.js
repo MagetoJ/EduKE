@@ -98,11 +98,11 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;
 
 // Start server with database info
-app.listen(PORT, async () => {
+app.listen(PORT, '0.0.0.0', async () => {
   console.log('\n' + '='.repeat(60));
   console.log('🚀 EduKE Server Started');
   console.log('='.repeat(60));
-  console.log(`📍 Server: http://localhost:${PORT}`);
+  console.log(`📍 Server listening on port: ${PORT}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
   
   try {
