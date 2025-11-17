@@ -17,6 +17,9 @@ type StudentProfile = {
   class_section: string
   status: string
   parent_id: string
+  parent_name?: string
+  parent_email?: string
+  parent_phone?: string
 }
 
 type Course = {
@@ -212,6 +215,39 @@ export function StudentProfile() {
             <div className="space-y-2">
               <p className="text-sm font-medium text-gray-500">Class</p>
               <p className="text-gray-700">{student.class_section}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Parent/Guardian Information */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Parent/Guardian Information</CardTitle>
+          <CardDescription>Contact details for emergency and communication</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-6 md:grid-cols-2">
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-gray-500">Parent/Guardian Name</p>
+              <div className="flex items-center space-x-2 text-gray-900">
+                <User className="w-4 h-4" />
+                <span>{student.parent_name || 'Not assigned'}</span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-gray-500">Parent Email</p>
+              <div className="flex items-center space-x-2 text-gray-900">
+                <Mail className="w-4 h-4" />
+                <span>{student.parent_email || 'Not provided'}</span>
+              </div>
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <p className="text-sm font-medium text-gray-500">Parent Phone</p>
+              <div className="flex items-center space-x-2 text-gray-900">
+                <Phone className="w-4 h-4" />
+                <span>{student.parent_phone || 'Not provided'}</span>
+              </div>
             </div>
           </div>
         </CardContent>

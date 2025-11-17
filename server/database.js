@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const sqlite3 = require('sqlite3').verbose();
+const { Pool } = require('pg');
 const bcrypt = require('bcrypt');
 const { nowIso } = require('./utils');
 const {
@@ -9,83 +9,108 @@ const {
   SUPER_ADMIN_PASSWORD
 } = require('./config');
 
-const DB_PATH = path.join(__dirname, 'eduke.db');
-const db = new sqlite3.Database(DB_PATH, (err) => {
-  if (err) {
-    console.error('Error opening database', err.message);
-  } else {
-    console.log('Connected to the SQLite database.');
+// Database configuration
+const getDbConfig = () => {
+  const useProduction = process.env.USE_PRODUCTION_DB === 'true';
+
+  if (useProduction) {
+    return {
+      connectionString: process.env.DATABASE_URL,
+      ssl: {
+        rejectUnauthorized: false
+      }
+    };
   }
+
+  return {
+    host: process.env.DB_HOST || 'localhost',
+    port: parseInt(process.env.DB_PORT || '5432'),
+    database: process.env.DB_NAME || 'eduke',
+    user: process.env.DB_USER || 'postgres',
+    password: process.env.DB_PASSWORD || 'postgres'
+  };
+};
+
+const pool = new Pool(getDbConfig());
+
+// Test connection
+pool.on('connect', () => {
+  console.log('Connected to PostgreSQL database.');
 });
 
-const schemaPath = path.join(__dirname, '..', 'schema.sql');
-try {
-  const schema = fs.readFileSync(schemaPath, 'utf-8');
-  db.exec(schema, (err) => {
-    if (err) {
-      console.error('Error executing schema:', err.message);
-    } else {
-      console.log('Database schema ensured.');
-    }
-  });
-} catch (schemaError) {
-  console.error('Failed to read schema.sql', schemaError);
-}
+pool.on('error', (err) => {
+  console.error('Unexpected error on idle client', err);
+  process.exit(-1);
+});
 
-const dbRun = (sql, params = []) =>
-  new Promise((resolve, reject) => {
-    db.run(sql, params, function (err) {
-      if (err) {
-        reject(err);
-        return;
-      }
-      resolve({ lastID: this.lastID, changes: this.changes });
-    });
-  });
+const schemaPath = path.join(__dirname, '..', 'database', 'schema.sql');
+const initializeSchema = async () => {
+  try {
+    const schema = fs.readFileSync(schemaPath, 'utf-8');
+    await pool.query(schema);
+    console.log('Database schema ensured.');
+  } catch (schemaError) {
+    console.error('Failed to execute schema:', schemaError);
+  }
+};
 
-const dbGet = (sql, params = []) =>
-  new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-      if (err) {
-        reject(err);
-        return;
-      }
-      resolve(row);
-    });
-  });
+// Initialize schema on startup
+initializeSchema();
 
-const dbAll = (sql, params = []) =>
-  new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-      if (err) {
-        reject(err);
-        return;
-      }
-      resolve(rows);
-    });
-  });
+const dbRun = async (sql, params = []) => {
+  try {
+    const result = await pool.query(sql, params);
+    return { lastID: result.rows.length > 0 ? result.rows[0].id : null, changes: result.rowCount };
+  } catch (err) {
+    throw err;
+  }
+};
+
+const dbGet = async (sql, params = []) => {
+  try {
+    const result = await pool.query(sql, params);
+    return result.rows[0] || null;
+  } catch (err) {
+    throw err;
+  }
+};
+
+const dbAll = async (sql, params = []) => {
+  try {
+    const result = await pool.query(sql, params);
+    return result.rows;
+  } catch (err) {
+    throw err;
+  }
+};
 
 const ensureSchemaUpgrades = async () => {
   try {
-    const userColumns = await dbAll('PRAGMA table_info(users)');
-    const columnNames = userColumns.map((column) => column.name);
-    if (!columnNames.includes('department')) {
+    // Check users table columns
+    const userColumns = await dbAll(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'users' AND table_schema = 'public'
+    `);
+    const userColumnNames = userColumns.map((column) => column.column_name);
+
+    if (!userColumnNames.includes('department')) {
       await dbRun('ALTER TABLE users ADD COLUMN department TEXT');
     }
-    if (!columnNames.includes('class_assigned')) {
+    if (!userColumnNames.includes('class_assigned')) {
       await dbRun('ALTER TABLE users ADD COLUMN class_assigned TEXT');
     }
-    if (!columnNames.includes('subject')) {
+    if (!userColumnNames.includes('subject')) {
       await dbRun('ALTER TABLE users ADD COLUMN subject TEXT');
     }
-    if (!columnNames.includes('status')) {
+    if (!userColumnNames.includes('status')) {
       await dbRun("ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'Active'");
     }
-    if (!columnNames.includes('is_verified')) {
+    if (!userColumnNames.includes('is_verified')) {
       await dbRun('ALTER TABLE users ADD COLUMN is_verified INTEGER NOT NULL DEFAULT 0');
     }
-    if (!columnNames.includes('email_verified_at')) {
-      await dbRun('ALTER TABLE users ADD COLUMN email_verified_at TEXT');
+    if (!userColumnNames.includes('email_verified_at')) {
+      await dbRun('ALTER TABLE users ADD COLUMN email_verified_at TIMESTAMP');
     }
 
     await dbRun(
@@ -97,14 +122,24 @@ const ensureSchemaUpgrades = async () => {
          AND id NOT IN (SELECT user_id FROM email_verification_tokens)`
     );
 
-    const studentColumns = await dbAll('PRAGMA table_info(students)');
-    const studentColumnNames = studentColumns.map((column) => column.name);
+    // Check students table columns
+    const studentColumns = await dbAll(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'students' AND table_schema = 'public'
+    `);
+    const studentColumnNames = studentColumns.map((column) => column.column_name);
     if (!studentColumnNames.includes('class_section')) {
       await dbRun('ALTER TABLE students ADD COLUMN class_section TEXT');
     }
 
-    const schoolColumns = await dbAll('PRAGMA table_info(schools)');
-    const schoolColumnNames = schoolColumns.map((column) => column.name);
+    // Check schools table columns
+    const schoolColumns = await dbAll(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'schools' AND table_schema = 'public'
+    `);
+    const schoolColumnNames = schoolColumns.map((column) => column.column_name);
     if (!schoolColumnNames.includes('primary_color')) {
       await dbRun('ALTER TABLE schools ADD COLUMN primary_color TEXT');
     }
@@ -115,17 +150,26 @@ const ensureSchemaUpgrades = async () => {
       await dbRun('ALTER TABLE schools ADD COLUMN grade_levels TEXT');
     }
 
-    const subscriptionsTable = await dbAll(
-      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'subscriptions'"
-    );
+    // Check if subscriptions table exists and create trigger
+    const subscriptionsTable = await dbAll(`
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_name = 'subscriptions' AND table_schema = 'public'
+    `);
     if (subscriptionsTable.length > 0) {
-      await dbRun(
-        `CREATE TRIGGER IF NOT EXISTS subscriptions_updated_at
-           AFTER UPDATE ON subscriptions
-           BEGIN
-             UPDATE subscriptions SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
-           END`
-      );
+      await dbRun(`
+        CREATE OR REPLACE FUNCTION update_subscriptions_updated_at()
+        RETURNS TRIGGER AS $$
+        BEGIN
+          NEW.updated_at = CURRENT_TIMESTAMP;
+          RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+
+        CREATE TRIGGER IF NOT EXISTS subscriptions_updated_at
+          BEFORE UPDATE ON subscriptions
+          FOR EACH ROW EXECUTE FUNCTION update_subscriptions_updated_at();
+      `);
     }
   } catch (schemaUpgradeError) {
     console.error('Failed to ensure schema upgrades', schemaUpgradeError);
@@ -344,7 +388,7 @@ initializeDatabase().catch((error) => {
 });
 
 module.exports = {
-  db,
+  pool,
   dbRun,
   dbGet,
   dbAll

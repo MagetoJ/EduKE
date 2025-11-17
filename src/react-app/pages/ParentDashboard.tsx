@@ -297,7 +297,7 @@ export default function ParentDashboard() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Parent Dashboard</h1>
           <p className="text-gray-600">
-            Viewing information for {studentData.name}
+            Viewing information for {studentData?.name}
           </p>
         </div>
         <div className="flex items-center gap-4">
@@ -336,8 +336,8 @@ export default function ParentDashboard() {
                 <BookOpen className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{studentData.grade ?? 'N/A'}</div>
-                <p className="text-xs text-muted-foreground">Class {studentData.className ?? 'N/A'}</p>
+                <div className="text-2xl font-bold">{studentData?.grade ?? 'N/A'}</div>
+                <p className="text-xs text-muted-foreground">Class {studentData?.className ?? 'N/A'}</p>
               </CardContent>
             </Card>
 

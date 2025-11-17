@@ -475,8 +475,14 @@ export default function Students() {
                       <p className="text-xs text-gray-500">Grade</p>
                     </div>
                     <div className="text-center">
-                      <p className="text-sm font-medium text-gray-900">{student.parent_name}</p>
-                      <p className="text-xs text-gray-500">Parent</p>
+                      <p className="text-sm font-medium text-gray-900">{student.parent_name || 'Not assigned'}</p>
+                      <p className="text-xs text-gray-500">Parent/Guardian</p>
+                      {student.parent_phone && (
+                        <p className="text-xs text-blue-600">{student.parent_phone}</p>
+                      )}
+                      {student.parent_email && (
+                        <p className="text-xs text-blue-600 truncate max-w-24">{student.parent_email}</p>
+                      )}
                     </div>
                     <Badge className={student.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}>
                       {student.status}

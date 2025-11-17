@@ -3,12 +3,11 @@ require('dotenv').config();
 
 // Database configuration
 const getDbConfig = () => {
-  const isProduction = process.env.NODE_ENV === 'production' || process.env.DATABASE_URL.includes('onrender.com');
-
-  if (isProduction) {
+  // If DATABASE_URL is set, use it (for Render database)
+  if (process.env.DATABASE_URL) {
     return {
       connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false } // Required for Render and most cloud providers
+      ssl: process.env.DATABASE_URL.includes('render.com') ? { rejectUnauthorized: false } : false
     };
   }
 

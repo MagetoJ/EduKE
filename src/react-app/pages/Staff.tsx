@@ -1,5 +1,5 @@
 import { type ChangeEvent, type FormEvent, useEffect, useState } from 'react'
-import { Plus, Search, Filter, UserCheck, Mail, Phone, Calendar, Clock, CheckCircle, XCircle, DollarSign, Pencil } from 'lucide-react'
+import { Plus, Search, Filter, UserCheck, Mail, Phone, Calendar, Clock, CheckCircle, XCircle, DollarSign, Pencil, Trash2, AlertCircle } from 'lucide-react'
 import { Link } from 'react-router'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -9,6 +9,18 @@ import { Label } from '../components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { useApi, useAuth } from '../contexts/AuthContext'
+// Import AlertDialog components
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "../components/ui/alert-dialog"
 
 // Add this type definition
 type StaffMember = {
@@ -41,12 +53,11 @@ const initialStaffForm = {
 }
 
 export default function Staff() {
-  const { user } = useAuth()
+  const { } = useAuth()
   const api = useApi()
   const [activeTab, setActiveTab] = useState('directory')
   const [staff, setStaff] = useState<StaffMember[]>([])
   const [leaveRequests, setLeaveRequests] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
   const [isStaffDialogOpen, setIsStaffDialogOpen] = useState(false)
   const [formData, setFormData] = useState(initialStaffForm)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -302,6 +313,31 @@ export default function Staff() {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred.')
     }
   }
+
+  // --- ADDED THIS FUNCTION ---
+  const handleDeactivateStaff = async (staffId: string) => {
+    try {
+      const response = await api(`/api/staff/${staffId}`, {
+        method: 'DELETE',
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to deactivate staff member');
+      }
+
+      // Update the state locally to reflect the change
+      setStaff(prev =>
+        prev.map(member =>
+          member.id === staffId ? { ...member, status: 'Inactive' } : member
+        )
+      );
+
+    } catch (err) {
+      // Show error in the main page error region
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -642,6 +678,30 @@ export default function Staff() {
                         <Button variant="ghost" size="icon" onClick={() => openStaffEdit(member)}>
                           <Pencil className="w-4 h-4" />
                         </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon" className="text-red-600 hover:text-red-700 hover:bg-red-50">
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Deactivate Staff Member</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to deactivate {member.name}? This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleDeactivateStaff(member.id)}
+                                className="bg-red-600 hover:bg-red-700"
+                              >
+                                Deactivate
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     </div>
                   </div>
