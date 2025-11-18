@@ -5,8 +5,18 @@ const { query } = require('../db/connection');
  */
 const getAllCourses = async (req, res) => {
   try {
-    const { schoolId } = req;
-    const result = await query('SELECT c.*, u.name as teacher_name FROM courses c LEFT JOIN users u ON c.teacher_id = u.id WHERE c.school_id = $1 ORDER BY c.name', [schoolId]);
+    const { schoolId, user } = req;
+    let sql = 'SELECT c.*, u.name as teacher_name FROM courses c LEFT JOIN users u ON c.teacher_id = u.id WHERE c.school_id = $1';
+    const params = [schoolId];
+
+    // For teachers, only show courses they teach
+    if (user.role === 'teacher') {
+      sql += ' AND c.teacher_id = $2';
+      params.push(user.id);
+    }
+
+    sql += ' ORDER BY c.name';
+    const result = await query(sql, params);
     res.json({ success: true, data: result.rows });
   } catch (err) {
     console.error('Error fetching courses:', err);

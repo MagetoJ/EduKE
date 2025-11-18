@@ -49,14 +49,26 @@ router.get('/:id', authorizeRole(['admin', 'teacher', 'student']), async (req, r
 // Create assignment
 router.post('/', authorizeRole(['admin', 'teacher']), async (req, res) => {
   try {
-    const { schoolId } = req;
+    const { schoolId, user } = req;
     const { course_id, title, description, due_date, total_marks } = req.body;
-    
+
+    // For teachers, validate they own the course
+    if (user.role === 'teacher') {
+      const courseCheck = await query(
+        'SELECT id FROM courses WHERE id = $1 AND teacher_id = $2 AND school_id = $3',
+        [course_id, user.id, schoolId]
+      );
+
+      if (courseCheck.rows.length === 0) {
+        return res.status(403).json({ success: false, error: 'You can only create assignments for courses you teach' });
+      }
+    }
+
     const result = await query(
-      'INSERT INTO assignments (course_id, title, description, due_date, total_marks) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [course_id, title, description, due_date, total_marks]
+      'INSERT INTO assignments (school_id, course_id, teacher_id, title, description, due_date, total_marks) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+      [schoolId, course_id, user.id, title, description, due_date, total_marks]
     );
-    
+
     res.status(201).json({ success: true, data: result.rows[0], message: 'Assignment created successfully' });
   } catch (err) {
     console.error('Error creating assignment:', err);
@@ -67,20 +79,32 @@ router.post('/', authorizeRole(['admin', 'teacher']), async (req, res) => {
 // Update assignment
 router.put('/:id', authorizeRole(['admin', 'teacher']), async (req, res) => {
   try {
-    const { schoolId } = req;
+    const { schoolId, user } = req;
     const { id } = req.params;
     const { title, description, due_date, total_marks } = req.body;
-    
+
+    // For teachers, validate they own the course this assignment belongs to
+    if (user.role === 'teacher') {
+      const ownershipCheck = await query(
+        'SELECT a.id FROM assignments a JOIN courses c ON a.course_id = c.id WHERE a.id = $1 AND c.teacher_id = $2 AND c.school_id = $3',
+        [id, user.id, schoolId]
+      );
+
+      if (ownershipCheck.rows.length === 0) {
+        return res.status(403).json({ success: false, error: 'You can only update assignments for courses you teach' });
+      }
+    }
+
     const result = await query(
       `UPDATE assignments SET title = $1, description = $2, due_date = $3, total_marks = $4
        WHERE id = $5 RETURNING *`,
       [title, description, due_date, total_marks, id]
     );
-    
+
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, error: 'Assignment not found' });
     }
-    
+
     res.json({ success: true, data: result.rows[0], message: 'Assignment updated successfully' });
   } catch (err) {
     console.error('Error updating assignment:', err);
@@ -91,9 +115,21 @@ router.put('/:id', authorizeRole(['admin', 'teacher']), async (req, res) => {
 // Delete assignment
 router.delete('/:id', authorizeRole(['admin', 'teacher']), async (req, res) => {
   try {
-    const { schoolId } = req;
+    const { schoolId, user } = req;
     const { id } = req.params;
-    
+
+    // For teachers, validate they own the course this assignment belongs to
+    if (user.role === 'teacher') {
+      const ownershipCheck = await query(
+        'SELECT a.id FROM assignments a JOIN courses c ON a.course_id = c.id WHERE a.id = $1 AND c.teacher_id = $2 AND c.school_id = $3',
+        [id, user.id, schoolId]
+      );
+
+      if (ownershipCheck.rows.length === 0) {
+        return res.status(403).json({ success: false, error: 'You can only delete assignments for courses you teach' });
+      }
+    }
+
     await query('DELETE FROM assignments WHERE id = $1', [id]);
     res.json({ success: true, message: 'Assignment deleted successfully' });
   } catch (err) {
@@ -160,19 +196,35 @@ router.post('/:id/submit', authorizeRole(['student']), async (req, res) => {
 // Grade submission
 router.post('/submissions/:submissionId/grade', authorizeRole(['admin', 'teacher']), async (req, res) => {
   try {
+    const { schoolId, user } = req;
     const { submissionId } = req.params;
     const { score, feedback } = req.body;
-    
+
+    // For teachers, validate they own the course this submission belongs to
+    if (user.role === 'teacher') {
+      const ownershipCheck = await query(
+        `SELECT asub.id FROM assignment_submissions asub
+         JOIN assignments a ON asub.assignment_id = a.id
+         JOIN courses c ON a.course_id = c.id
+         WHERE asub.id = $1 AND c.teacher_id = $2 AND c.school_id = $3`,
+        [submissionId, user.id, schoolId]
+      );
+
+      if (ownershipCheck.rows.length === 0) {
+        return res.status(403).json({ success: false, error: 'You can only grade submissions for courses you teach' });
+      }
+    }
+
     const result = await query(
       `UPDATE assignment_submissions SET score = $1, feedback = $2, status = 'graded', graded_at = NOW(), updated_at = NOW()
        WHERE id = $3 RETURNING *`,
       [score, feedback, submissionId]
     );
-    
+
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, error: 'Submission not found' });
     }
-    
+
     res.json({ success: true, data: result.rows[0], message: 'Submission graded successfully' });
   } catch (err) {
     console.error('Error grading submission:', err);

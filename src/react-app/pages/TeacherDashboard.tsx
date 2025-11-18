@@ -37,6 +37,24 @@ type DisciplineRecord = {
   status: string
 }
 
+type Assignment = {
+  id: string
+  title: string
+  description?: string
+  due_date: string
+  total_marks: number
+  course_name?: string
+}
+
+type Exam = {
+  id: string
+  name: string
+  exam_date: string
+  total_marks: number
+  duration_minutes: number
+  course_name?: string
+}
+
 export default function TeacherDashboard() {
   const api = useApi()
   const defaultStatuses = useMemo(() => ['Present', 'Absent', 'Late', 'Excused', 'Not Marked'], [])
@@ -49,11 +67,18 @@ export default function TeacherDashboard() {
   const [attendanceDirty, setAttendanceDirty] = useState(false)
   const [isDisciplineDialogOpen, setIsDisciplineDialogOpen] = useState(false)
   const [isPerformanceDialogOpen, setIsPerformanceDialogOpen] = useState(false)
+  const [isAssignmentDialogOpen, setIsAssignmentDialogOpen] = useState(false)
+  const [isExamDialogOpen, setIsExamDialogOpen] = useState(false)
   const [selectedStudent, setSelectedStudent] = useState<TeacherStudent | null>(null)
+  const [isSubmittingAssignment, setIsSubmittingAssignment] = useState(false)
+  const [isSubmittingExam, setIsSubmittingExam] = useState(false)
 
   // Real data state variables
   const [students, setStudents] = useState<TeacherStudent[]>([]);
   const [disciplineRecords, setDisciplineRecords] = useState<DisciplineRecord[]>([]);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [exams, setExams] = useState<Exam[]>([]);
+  const [courses, setCourses] = useState<any[]>([]);
 
 
 
@@ -149,6 +174,27 @@ export default function TeacherDashboard() {
   useEffect(() => {
     const loadData = async () => {
       try {
+        // Fetch courses for the teacher
+        const coursesRes = await api('/api/courses');
+        const coursesData = await coursesRes.json();
+        if (coursesData.data) {
+          setCourses(coursesData.data);
+        }
+
+        // Fetch assignments for the teacher
+        const assignmentsRes = await api('/api/assignments');
+        const assignmentsData = await assignmentsRes.json();
+        if (assignmentsData.data) {
+          setAssignments(assignmentsData.data);
+        }
+
+        // Fetch exams for the teacher
+        const examsRes = await api('/api/exams');
+        const examsData = await examsRes.json();
+        if (examsData.data) {
+          setExams(examsData.data);
+        }
+
         // Fetch students for the "My Students" tab
         const studentRes = await api('/api/students');
         const studentData = await studentRes.json();
@@ -199,6 +245,23 @@ export default function TeacherDashboard() {
     grade: '',
     term: 'Term 1',
     comments: ''
+  })
+
+  const [assignmentForm, setAssignmentForm] = useState({
+    courseId: '',
+    title: '',
+    description: '',
+    dueDate: '',
+    totalMarks: ''
+  })
+
+  const [examForm, setExamForm] = useState({
+    courseId: '',
+    name: '',
+    examDate: '',
+    totalMarks: '',
+    durationMinutes: '',
+    description: ''
   })
 
   const handleDisciplineSubmit = async (e: React.FormEvent) => {
@@ -269,6 +332,114 @@ export default function TeacherDashboard() {
     }
   }
 
+  const handleAssignmentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    if (isSubmittingAssignment) return
+
+    setIsSubmittingAssignment(true)
+
+    try {
+      const response = await api('/api/assignments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          course_id: parseInt(assignmentForm.courseId),
+          title: assignmentForm.title,
+          description: assignmentForm.description,
+          due_date: assignmentForm.dueDate,
+          total_marks: parseInt(assignmentForm.totalMarks)
+        })
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        alert('Assignment created successfully')
+        setAssignmentForm({
+          courseId: '',
+          title: '',
+          description: '',
+          dueDate: '',
+          totalMarks: ''
+        })
+        setIsAssignmentDialogOpen(false)
+        // Refresh assignments
+        const assignmentsRes = await api('/api/assignments');
+        const assignmentsData = await assignmentsRes.json();
+        if (assignmentsData.success && assignmentsData.data) {
+          setAssignments(assignmentsData.data);
+        }
+      } else {
+        const errorMessage = data.error || 'Error creating assignment'
+        alert(`Error: ${errorMessage}`)
+      }
+    } catch (error) {
+      console.error('Error submitting assignment:', error)
+      alert('Error connecting to server. Please check your connection and try again.')
+    } finally {
+      setIsSubmittingAssignment(false)
+    }
+  }
+
+  const handleExamSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    if (isSubmittingExam) return
+
+    setIsSubmittingExam(true)
+
+    try {
+      const response = await api('/api/exams', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          course_id: parseInt(examForm.courseId),
+          name: examForm.name,
+          exam_date: examForm.examDate,
+          total_marks: parseInt(examForm.totalMarks),
+          duration_minutes: parseInt(examForm.durationMinutes),
+          description: examForm.description
+        })
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        alert('Exam created successfully')
+        setExamForm({
+          courseId: '',
+          name: '',
+          examDate: '',
+          totalMarks: '',
+          durationMinutes: '',
+          description: ''
+        })
+        setIsExamDialogOpen(false)
+        // Refresh exams
+        const examsRes = await api('/api/exams');
+        const examsData = await examsRes.json();
+        if (examsData.success && examsData.data) {
+          setExams(examsData.data);
+        }
+      } else {
+        const errorMessage = data.error || 'Error creating exam'
+        alert(`Error: ${errorMessage}`)
+      }
+    } catch (error) {
+      console.error('Error submitting exam:', error)
+      alert('Error connecting to server. Please check your connection and try again.')
+    } finally {
+      setIsSubmittingExam(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -316,6 +487,8 @@ export default function TeacherDashboard() {
       <Tabs defaultValue="attendance" className="space-y-4">
         <TabsList>
           <TabsTrigger value="attendance">Attendance</TabsTrigger>
+          <TabsTrigger value="assignments">Assignments</TabsTrigger>
+          <TabsTrigger value="exams">Exams</TabsTrigger>
           <TabsTrigger value="students">My Students</TabsTrigger>
           <TabsTrigger value="discipline">Discipline</TabsTrigger>
           <TabsTrigger value="performance">Performance</TabsTrigger>
@@ -409,6 +582,267 @@ export default function TeacherDashboard() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="assignments" className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-semibold">Assignments</h2>
+            <Dialog open={isAssignmentDialogOpen} onOpenChange={setIsAssignmentDialogOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create Assignment
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <form onSubmit={handleAssignmentSubmit}>
+                  <DialogHeader>
+                    <DialogTitle>Create Assignment</DialogTitle>
+                    <DialogDescription>
+                      Create a new assignment for your course
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="course">Course</Label>
+                      <Select
+                        value={assignmentForm.courseId}
+                        onValueChange={(value) => setAssignmentForm(prev => ({ ...prev, courseId: value }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select course" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {courses.map((course) => (
+                            <SelectItem key={course.id} value={course.id.toString()}>
+                              {course.name} - {course.grade}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="title">Title</Label>
+                      <Input
+                        id="title"
+                        placeholder="Assignment title"
+                        value={assignmentForm.title}
+                        onChange={(e) => setAssignmentForm(prev => ({ ...prev, title: e.target.value }))}
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="description">Description</Label>
+                      <Textarea
+                        id="description"
+                        placeholder="Assignment description..."
+                        value={assignmentForm.description}
+                        onChange={(e) => setAssignmentForm(prev => ({ ...prev, description: e.target.value }))}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="dueDate">Due Date</Label>
+                        <Input
+                          id="dueDate"
+                          type="date"
+                          value={assignmentForm.dueDate}
+                          onChange={(e) => setAssignmentForm(prev => ({ ...prev, dueDate: e.target.value }))}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="totalMarks">Total Marks</Label>
+                        <Input
+                          id="totalMarks"
+                          type="number"
+                          placeholder="100"
+                          value={assignmentForm.totalMarks}
+                          onChange={(e) => setAssignmentForm(prev => ({ ...prev, totalMarks: e.target.value }))}
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setIsAssignmentDialogOpen(false)} disabled={isSubmittingAssignment}>
+                      Cancel
+                    </Button>
+                    <Button type="submit" disabled={isSubmittingAssignment}>
+                      {isSubmittingAssignment ? 'Creating...' : 'Create Assignment'}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          <div className="space-y-4">
+            {assignments.map((assignment) => (
+              <Card key={assignment.id}>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-semibold">{assignment.title}</h3>
+                      <p className="text-sm text-gray-600">{assignment.course_name}</p>
+                      <p className="text-sm text-gray-500">Due: {new Date(assignment.due_date).toLocaleDateString()}</p>
+                      <p className="text-sm text-gray-500">Total Marks: {assignment.total_marks}</p>
+                    </div>
+                    <div className="flex space-x-2">
+                      <Button variant="outline" size="sm">
+                        View Submissions
+                      </Button>
+                      <Button variant="outline" size="sm">
+                        Edit
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="exams" className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-semibold">Exams</h2>
+            <Dialog open={isExamDialogOpen} onOpenChange={setIsExamDialogOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create Exam
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <form onSubmit={handleExamSubmit}>
+                  <DialogHeader>
+                    <DialogTitle>Create Exam</DialogTitle>
+                    <DialogDescription>
+                      Create a new exam for your course
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="exam-course">Course</Label>
+                      <Select
+                        value={examForm.courseId}
+                        onValueChange={(value) => setExamForm(prev => ({ ...prev, courseId: value }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select course" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {courses.map((course) => (
+                            <SelectItem key={course.id} value={course.id.toString()}>
+                              {course.name} - {course.grade}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="exam-name">Exam Name</Label>
+                      <Input
+                        id="exam-name"
+                        placeholder="Mid-term Exam"
+                        value={examForm.name}
+                        onChange={(e) => setExamForm(prev => ({ ...prev, name: e.target.value }))}
+                        required
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="exam-date">Exam Date</Label>
+                        <Input
+                          id="exam-date"
+                          type="date"
+                          value={examForm.examDate}
+                          onChange={(e) => setExamForm(prev => ({ ...prev, examDate: e.target.value }))}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="exam-marks">Total Marks</Label>
+                        <Input
+                          id="exam-marks"
+                          type="number"
+                          placeholder="100"
+                          value={examForm.totalMarks}
+                          onChange={(e) => setExamForm(prev => ({ ...prev, totalMarks: e.target.value }))}
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="exam-duration">Duration (minutes)</Label>
+                      <Input
+                        id="exam-duration"
+                        type="number"
+                        placeholder="120"
+                        value={examForm.durationMinutes}
+                        onChange={(e) => setExamForm(prev => ({ ...prev, durationMinutes: e.target.value }))}
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="exam-description">Description</Label>
+                      <Textarea
+                        id="exam-description"
+                        placeholder="Exam instructions..."
+                        value={examForm.description}
+                        onChange={(e) => setExamForm(prev => ({ ...prev, description: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setIsExamDialogOpen(false)} disabled={isSubmittingExam}>
+                      Cancel
+                    </Button>
+                    <Button type="submit" disabled={isSubmittingExam}>
+                      {isSubmittingExam ? 'Creating...' : 'Create Exam'}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          <div className="space-y-4">
+            {exams.map((exam) => (
+              <Card key={exam.id}>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-semibold">{exam.name}</h3>
+                      <p className="text-sm text-gray-600">{exam.course_name}</p>
+                      <p className="text-sm text-gray-500">Date: {new Date(exam.exam_date).toLocaleDateString()}</p>
+                      <p className="text-sm text-gray-500">Duration: {exam.duration_minutes} minutes</p>
+                      <p className="text-sm text-gray-500">Total Marks: {exam.total_marks}</p>
+                    </div>
+                    <div className="flex space-x-2">
+                      <Button variant="outline" size="sm">
+                        View Results
+                      </Button>
+                      <Button variant="outline" size="sm">
+                        Edit
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </TabsContent>
 
         <TabsContent value="students" className="space-y-4">
