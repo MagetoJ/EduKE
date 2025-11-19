@@ -18,10 +18,10 @@ const tenantContext = async (req, res, next) => {
     if (!req.user) {
       // If no user context, try to extract from token header
       const authHeader = req.headers.authorization;
-      
+
       if (authHeader && authHeader.startsWith('Bearer ')) {
         const token = authHeader.substring(7);
-        
+
         try {
           const decoded = jwt.verify(token, process.env.JWT_SECRET);
           req.user = decoded;
@@ -31,7 +31,7 @@ const tenantContext = async (req, res, next) => {
         }
       }
     }
-    
+
     // Super admins can operate across all tenants
     if (req.user && req.user.role === 'super_admin') {
       // Allow super admins to specify school_id in query params
@@ -45,13 +45,13 @@ const tenantContext = async (req, res, next) => {
       }
       return next();
     }
-    
+
     // For regular users, extract school_id from user context
     if (req.user && req.user.schoolId) {
       req.schoolId = req.user.schoolId;
       return next();
     }
-    
+
     // For public routes (registration, etc.), school_id might not be needed
     // Let the route handler decide if school context is required
     req.schoolId = null;
@@ -93,7 +93,7 @@ const validateSchoolAccess = (resourceSchoolId) => {
     if (req.isSuperAdmin) {
       return next();
     }
-    
+
     // Regular users can only access their own school's data
     if (!req.schoolId) {
       return res.status(403).json({
@@ -102,7 +102,7 @@ const validateSchoolAccess = (resourceSchoolId) => {
         code: 'NO_SCHOOL_CONTEXT'
       });
     }
-    
+
     // If resource school ID is provided, validate it matches user's school
     if (resourceSchoolId && resourceSchoolId !== req.schoolId) {
       return res.status(403).json({
@@ -111,7 +111,7 @@ const validateSchoolAccess = (resourceSchoolId) => {
         code: 'SCHOOL_ACCESS_DENIED'
       });
     }
-    
+
     next();
   };
 };

@@ -109,6 +109,7 @@ export function Settings() {
   const [savingSchoolDetails, setSavingSchoolDetails] = useState(false)
   const [savingBranding, setSavingBranding] = useState(false)
   const [savingGrades, setSavingGrades] = useState(false)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
   const [settingsError, setSettingsError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
@@ -240,6 +241,55 @@ export function Settings() {
     }
   }, [])
 
+  const handleLogoUpload = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) {
+      return
+    }
+
+    if (isSuperAdmin && !selectedSchoolId) {
+      setSettingsError('Select a school before uploading a logo.')
+      return
+    }
+
+    setUploadingLogo(true)
+    setSettingsError(null)
+    setSuccessMessage(null)
+
+    try {
+      const formData = new FormData()
+      formData.append('logo', file)
+
+      const query = isSuperAdmin ? `?schoolId=${encodeURIComponent(selectedSchoolId)}` : ''
+      const response = await fetch(`/api/upload/logo${query}`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      })
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        const message = data?.error ?? 'Failed to upload logo'
+        throw new Error(message)
+      }
+
+      // Update the branding form with the new logo URL
+      setBrandingForm((current) => ({
+        ...current,
+        logo: data.data?.url || ''
+      }))
+
+      setSuccessMessage('Logo uploaded successfully.')
+    } catch (uploadError) {
+      setSettingsError(uploadError instanceof Error ? uploadError.message : 'Failed to upload logo')
+    } finally {
+      setUploadingLogo(false)
+    }
+  }, [api, isSuperAdmin, selectedSchoolId])
+
   const handleAddGradeLevel = useCallback(() => {
     if (isSuperAdmin && !selectedSchoolId) {
       return
@@ -288,10 +338,8 @@ export function Settings() {
     setSuccessMessage(null)
     try {
       const payload: Record<string, unknown> = { gradeLevels: normalizedLevels }
-      if (isSuperAdmin) {
-        payload.schoolId = selectedSchoolId
-      }
-      const response = await api('/api/school/settings', {
+      const query = isSuperAdmin ? `?schoolId=${encodeURIComponent(selectedSchoolId)}` : ''
+      const response = await api(`/api/school/settings${query}`, {
         method: 'PUT',
         body: JSON.stringify(payload)
       })
@@ -326,14 +374,11 @@ export function Settings() {
       setSuccessMessage(null)
       try {
         const payload: Record<string, unknown> = {
-          logo: brandingForm.logo,
           primaryColor: brandingForm.primaryColor,
           accentColor: brandingForm.accentColor
         }
-        if (isSuperAdmin) {
-          payload.schoolId = selectedSchoolId
-        }
-        const response = await api('/api/school/settings', {
+        const query = isSuperAdmin ? `?schoolId=${encodeURIComponent(selectedSchoolId)}` : ''
+        const response = await api(`/api/school/settings${query}`, {
           method: 'PUT',
           body: JSON.stringify(payload)
         })
@@ -355,7 +400,7 @@ export function Settings() {
         setSavingBranding(false)
       }
     },
-    [api, brandingForm.accentColor, brandingForm.logo, brandingForm.primaryColor, isSuperAdmin, selectedSchoolId, user]
+    [api, brandingForm.accentColor, brandingForm.primaryColor, isSuperAdmin, selectedSchoolId, user]
   )
 
   const handleSchoolDetailsSubmit = useCallback(
@@ -378,10 +423,8 @@ export function Settings() {
           curriculum: schoolDetails.curriculum.trim(),
           level: schoolDetails.level.trim()
         }
-        if (isSuperAdmin) {
-          payload.schoolId = selectedSchoolId
-        }
-        const response = await api('/api/school/settings', {
+        const query = isSuperAdmin ? `?schoolId=${encodeURIComponent(selectedSchoolId)}` : ''
+        const response = await api(`/api/school/settings${query}`, {
           method: 'PUT',
           body: JSON.stringify(payload)
         })
@@ -410,7 +453,7 @@ export function Settings() {
     setSelectedSchoolId(value)
   }, [])
 
-  const brandingDisabled = savingBranding || (isSuperAdmin && !selectedSchoolId)
+  const brandingDisabled = savingBranding || uploadingLogo || (isSuperAdmin && !selectedSchoolId)
   const gradeDisabled = savingGrades || (isSuperAdmin && !selectedSchoolId)
   const schoolDetailsDisabled = savingSchoolDetails || (isSuperAdmin && !selectedSchoolId)
 
@@ -429,13 +472,13 @@ export function Settings() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="settings-school">School</Label>
-              <Select value={selectedSchoolId} onValueChange={handleSchoolSelection} disabled={loadingSchools}>
+              <Select value={selectedSchoolId || undefined} onValueChange={handleSchoolSelection} disabled={loadingSchools}>
                 <SelectTrigger id="settings-school">
                   <SelectValue placeholder={loadingSchools ? 'Loading schools…' : 'Select a school'} />
                 </SelectTrigger>
                 <SelectContent>
                   {schools.length === 0 ? (
-                    <SelectItem value="" disabled>
+                    <SelectItem value="none" disabled>
                       No schools available
                     </SelectItem>
                   ) : null}
@@ -542,15 +585,18 @@ export function Settings() {
           <CardContent>
             <form onSubmit={handleBrandingSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="brand-logo">Logo URL</Label>
-                <Input
-                  id="brand-logo"
-                  name="logo"
-                  value={brandingForm.logo}
-                  onChange={handleBrandingChange}
-                  placeholder="https://example.com/logo.png"
-                  disabled={brandingDisabled}
-                />
+                <Label htmlFor="brand-logo">School Logo</Label>
+                <div className="flex items-center gap-3">
+                  <Input
+                    id="brand-logo"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleLogoUpload}
+                    disabled={brandingDisabled || uploadingLogo}
+                    className="flex-1"
+                  />
+                  {uploadingLogo && <span className="text-sm text-muted-foreground">Uploading...</span>}
+                </div>
                 {brandingForm.logo ? (
                   <div className="rounded-md border border-border p-3">
                     <img src={brandingForm.logo} alt="School logo preview" className="h-12 w-auto object-contain" />

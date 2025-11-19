@@ -24,14 +24,16 @@ type TimetableEntry = {
   id: string;
   day_of_week: string;
   grade: string;
-  room: string;
+  classroom: string;
   course_name: string;
   teacher_name: string;
   period_name: string; // From join
   start_time: string; // From join
   end_time: string; // From join
+  is_break: boolean; // From join
   // Fields needed for forms
   course_id: string;
+  teacher_id: string;
   period_id: string;
 };
 
@@ -47,24 +49,38 @@ type TimePeriod = {
   end_time: string;
 };
 
+type Teacher = {
+  id: string;
+  name: string;
+};
+
 type FormData = {
   id?: string;
   course_id: string;
+  teacher_id: string;
   period_id: string;
   day_of_week: string;
   grade: string;
-  room: string;
+  classroom: string;
+};
+
+type PeriodFormData = {
+  period_name: string;
+  start_time: string;
+  end_time: string;
+  is_break: boolean;
 };
 
 const EMPTY_FORM: FormData = {
   course_id: '',
+  teacher_id: '',
   period_id: '',
-  day_of_week: 'Monday',
+  day_of_week: 'monday',
   grade: '',
-  room: ''
+  classroom: ''
 };
 
-const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const DAYS_OF_WEEK = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
 export default function Timetable() {
   const { user } = useAuth()
@@ -73,6 +89,7 @@ export default function Timetable() {
   // --- State for Data ---
   const [timetableData, setTimetableData] = useState<TimetableEntry[]>([])
   const [courses, setCourses] = useState<Course[]>([])
+  const [teachers, setTeachers] = useState<Teacher[]>([])
   const [periods, setPeriods] = useState<TimePeriod[]>([])
 
   const [isLoading, setIsLoading] = useState(true)
@@ -81,33 +98,50 @@ export default function Timetable() {
   // --- State for Dialogs ---
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [isAddPeriodDialogOpen, setIsAddPeriodDialogOpen] = useState(false)
 
   const [formData, setFormData] = useState<FormData>(EMPTY_FORM)
+  const [periodFormData, setPeriodFormData] = useState<PeriodFormData>({
+    period_name: '',
+    start_time: '',
+    end_time: '',
+    is_break: false
+  })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
   // --- Data Fetching ---
   useEffect(() => {
     const loadData = async () => {
+      if (!user) {
+        setError('Please log in to access the timetable')
+        setIsLoading(false)
+        return
+      }
+
       setIsLoading(true)
       setError(null)
       try {
-        const [tableRes, courseRes, periodRes] = await Promise.all([
+        const [tableRes, courseRes, teacherRes, periodRes] = await Promise.all([
           api('/api/timetable'),
           api('/api/courses'),
-          api('/api/timetable-periods')
+          api('/api/teachers'),
+          api('/api/timetable/periods')
         ])
 
         if (!tableRes.ok) throw new Error('Failed to fetch timetable')
         if (!courseRes.ok) throw new Error('Failed to fetch courses')
+        if (!teacherRes.ok) throw new Error('Failed to fetch teachers')
         if (!periodRes.ok) throw new Error('Failed to fetch time periods')
 
         const tableData = await tableRes.json()
         const courseData = await courseRes.json()
+        const teacherData = await teacherRes.json()
         const periodData = await periodRes.json()
 
         setTimetableData(tableData.data || [])
         setCourses(courseData.data || [])
+        setTeachers(teacherData.data || [])
         setPeriods(periodData.data || [])
 
       } catch (err) {
@@ -117,10 +151,14 @@ export default function Timetable() {
       }
     }
     loadData()
-  }, [api])
+  }, [api, user])
 
   const handleFormChange = (field: keyof FormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }))
+  }
+
+  const handlePeriodFormChange = (field: keyof PeriodFormData, value: string | boolean) => {
+    setPeriodFormData(prev => ({ ...prev, [field]: value }))
   }
 
   // --- Add Entry ---
@@ -128,6 +166,33 @@ export default function Timetable() {
     e.preventDefault()
     setIsSubmitting(true)
     setFormError(null)
+
+    // Validation
+    if (!formData.course_id) {
+      setFormError('Please select a course')
+      setIsSubmitting(false)
+      return
+    }
+    if (!formData.teacher_id) {
+      setFormError('Please select a teacher')
+      setIsSubmitting(false)
+      return
+    }
+    if (!formData.period_id) {
+      setFormError('Please select a period')
+      setIsSubmitting(false)
+      return
+    }
+    if (!formData.day_of_week) {
+      setFormError('Please select a day')
+      setIsSubmitting(false)
+      return
+    }
+    if (!formData.grade) {
+      setFormError('Please enter a grade')
+      setIsSubmitting(false)
+      return
+    }
 
     try {
       const res = await api('/api/timetable', {
@@ -162,16 +227,66 @@ export default function Timetable() {
     }
   }
 
+  // --- Add Period ---
+  const handleAddPeriodSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+    setFormError(null)
+
+    // Validation
+    if (!periodFormData.period_name) {
+      setFormError('Please enter period name')
+      setIsSubmitting(false)
+      return
+    }
+    if (!periodFormData.start_time) {
+      setFormError('Please enter start time')
+      setIsSubmitting(false)
+      return
+    }
+    if (!periodFormData.end_time) {
+      setFormError('Please enter end time')
+      setIsSubmitting(false)
+      return
+    }
+
+    try {
+      const res = await api('/api/timetable/periods', {
+        method: 'POST',
+        body: JSON.stringify(periodFormData),
+      })
+
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to create period')
+
+      // Add new period to state
+      setPeriods(prev => [...prev, data.data])
+      setIsAddPeriodDialogOpen(false)
+      setPeriodFormData({
+        period_name: '',
+        start_time: '',
+        end_time: '',
+        is_break: false
+      })
+
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Failed to save')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   // --- Edit Entry ---
   const handleOpenEditDialog = (entry: TimetableEntry) => {
     setFormError(null)
     setFormData({
       id: entry.id,
       course_id: entry.course_id,
+      teacher_id: entry.teacher_id,
       period_id: entry.period_id,
       day_of_week: entry.day_of_week,
       grade: entry.grade,
-      room: entry.room,
+      classroom: entry.classroom,
     })
     setIsEditDialogOpen(true)
   }
@@ -274,13 +389,79 @@ export default function Timetable() {
           <p className="text-gray-600">View and manage class schedules</p>
         </div>
         {canManage && (
-          <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); setFormData(EMPTY_FORM); setFormError(null); }}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Entry
-              </Button>
-            </DialogTrigger>
+          <div className="flex gap-2">
+            <Dialog open={isAddPeriodDialogOpen} onOpenChange={(open) => { setIsAddPeriodDialogOpen(open); setPeriodFormData({ period_name: '', start_time: '', end_time: '', is_break: false }); setFormError(null); }}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Period
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <form onSubmit={handleAddPeriodSubmit}>
+                  <DialogHeader>
+                    <DialogTitle>Add Time Period</DialogTitle>
+                  </DialogHeader>
+                  <div className="py-4 space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="period_name">Period Name</Label>
+                      <Input
+                        id="period_name"
+                        value={periodFormData.period_name}
+                        onChange={(e) => handlePeriodFormChange('period_name', e.target.value)}
+                        placeholder="e.g., Period 1"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="start_time">Start Time</Label>
+                      <Input
+                        id="start_time"
+                        type="time"
+                        value={periodFormData.start_time}
+                        onChange={(e) => handlePeriodFormChange('start_time', e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="end_time">End Time</Label>
+                      <Input
+                        id="end_time"
+                        type="time"
+                        value={periodFormData.end_time}
+                        onChange={(e) => handlePeriodFormChange('end_time', e.target.value)}
+                      />
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="is_break"
+                        checked={periodFormData.is_break}
+                        onChange={(e) => handlePeriodFormChange('is_break', e.target.checked)}
+                      />
+                      <Label htmlFor="is_break">Is Break Period</Label>
+                    </div>
+                    {formError && (
+                      <div className="text-red-600 text-sm">{formError}</div>
+                    )}
+                  </div>
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setIsAddPeriodDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button type="submit" disabled={isSubmitting}>
+                      {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                      Add Period
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+            <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); setFormData(EMPTY_FORM); setFormError(null); }}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Entry
+                </Button>
+              </DialogTrigger>
             <DialogContent>
               <form onSubmit={handleAddSubmit}>
                 <DialogHeader>
@@ -293,7 +474,7 @@ export default function Timetable() {
                     <Select value={formData.day_of_week} onValueChange={(val) => handleFormChange('day_of_week', val)}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {DAYS_OF_WEEK.map(day => <SelectItem key={day} value={day}>{day}</SelectItem>)}
+                        {DAYS_OF_WEEK.map(day => <SelectItem key={day} value={day}>{day.charAt(0).toUpperCase() + day.slice(1)}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
@@ -316,6 +497,15 @@ export default function Timetable() {
                     </Select>
                   </div>
                   <div className="space-y-2">
+                    <Label htmlFor="teacher_id">Teacher</Label>
+                    <Select value={formData.teacher_id} onValueChange={(val) => handleFormChange('teacher_id', val)}>
+                      <SelectTrigger><SelectValue placeholder="Select teacher" /></SelectTrigger>
+                      <SelectContent>
+                        {teachers.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
                     <Label htmlFor="grade">Grade</Label>
                     <Input
                       id="grade"
@@ -325,11 +515,11 @@ export default function Timetable() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="room">Room</Label>
+                    <Label htmlFor="classroom">Room</Label>
                     <Input
-                      id="room"
-                      value={formData.room}
-                      onChange={(e) => handleFormChange('room', e.target.value)}
+                      id="classroom"
+                      value={formData.classroom}
+                      onChange={(e) => handleFormChange('classroom', e.target.value)}
                       placeholder="e.g., Room 101"
                     />
                   </div>
@@ -347,6 +537,7 @@ export default function Timetable() {
               </form>
             </DialogContent>
           </Dialog>
+          </div>
         )}
       </div>
 
@@ -355,22 +546,28 @@ export default function Timetable() {
       {isLoading ? renderLoading() : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
           {DAYS_OF_WEEK.map(day => (
-            <Card key={day}>
-              <CardHeader>
-                <CardTitle className="text-lg">{day}</CardTitle>
+            <Card key={day} className="shadow-md hover:shadow-lg transition-shadow duration-200 border-2 border-gray-200">
+              <CardHeader className="bg-gray-100 border-b border-gray-200">
+                <CardTitle className="text-lg font-semibold text-gray-800">{day.charAt(0).toUpperCase() + day.slice(1)}</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-4">
                 <div className="space-y-3">
                   {(groupedTimetable[day] || []).map(entry => (
-                    <div key={entry.id} className="p-3 bg-gray-50 rounded-lg border">
+                    <div key={entry.id} className={`p-3 rounded-md border transition-all duration-200 hover:shadow-md ${
+                      entry.is_break
+                        ? 'bg-red-50 border-red-300'
+                        : 'bg-white border-gray-300'
+                    }`}>
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <h4 className="font-semibold text-sm text-gray-900">{entry.course_name}</h4>
+                          <h4 className={`font-semibold text-sm ${
+                            entry.is_break ? 'text-red-700' : 'text-gray-900'
+                          }`}>{entry.course_name}</h4>
                           <div className="text-xs text-gray-600 space-y-1 mt-1">
-                            <div>{entry.period_name} ({entry.start_time} - {entry.end_time})</div>
+                            <div className="font-medium">{entry.period_name} ({entry.start_time} - {entry.end_time})</div>
                             <div>Grade: {entry.grade}</div>
-                            <div>Room: {entry.room}</div>
-                            {entry.teacher_name && <div>Teacher: {entry.teacher_name}</div>}
+                            <div>Room: {entry.classroom}</div>
+                            {entry.teacher_name && <div className="font-medium">Teacher: {entry.teacher_name}</div>}
                           </div>
                         </div>
                         {canManage && (
@@ -435,7 +632,7 @@ export default function Timetable() {
                   <Select value={formData.day_of_week} onValueChange={(val) => handleFormChange('day_of_week', val)}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {DAYS_OF_WEEK.map(day => <SelectItem key={day} value={day}>{day}</SelectItem>)}
+                      {DAYS_OF_WEEK.map(day => <SelectItem key={day} value={day}>{day.charAt(0).toUpperCase() + day.slice(1)}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -458,6 +655,15 @@ export default function Timetable() {
                   </Select>
                 </div>
                 <div className="space-y-2">
+                  <Label htmlFor="edit_teacher_id">Teacher</Label>
+                  <Select value={formData.teacher_id} onValueChange={(val) => handleFormChange('teacher_id', val)}>
+                    <SelectTrigger><SelectValue placeholder="Select teacher" /></SelectTrigger>
+                    <SelectContent>
+                      {teachers.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="edit_grade">Grade</Label>
                   <Input
                     id="edit_grade"
@@ -470,8 +676,8 @@ export default function Timetable() {
                   <Label htmlFor="edit_room">Room</Label>
                   <Input
                     id="edit_room"
-                    value={formData.room}
-                    onChange={(e) => handleFormChange('room', e.target.value)}
+                    value={formData.classroom}
+                    onChange={(e) => handleFormChange('classroom', e.target.value)}
                     placeholder="e.g., Room 101"
                   />
                 </div>

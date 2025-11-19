@@ -4,9 +4,9 @@ const { query } = require('../db/connection');
 const { authorizeRole } = require('../middleware/auth');
 
 // Get all timetable entries for a school
-router.get('/', authorizeRole(['admin', 'teacher', 'student', 'parent']), async (req, res) => {
+router.get('/', authorizeRole(['super_admin', 'admin', 'teacher', 'student', 'parent']), async (req, res) => {
   try {
-    const { schoolId } = req;
+    const { schoolId, isSuperAdmin } = req;
     const { grade, class_section, teacher_id, day_of_week } = req.query;
 
     let sql = `
@@ -17,16 +17,23 @@ router.get('/', authorizeRole(['admin', 'teacher', 'student', 'parent']), async 
         u.name as teacher_name,
         tp.start_time,
         tp.end_time,
-        tp.period_name
+        tp.name as period_name,
+        tp.is_break
       FROM timetable_entries te
       LEFT JOIN courses c ON te.course_id = c.id
       LEFT JOIN users u ON te.teacher_id = u.id
       LEFT JOIN timetable_periods tp ON te.period_id = tp.id
-      WHERE te.school_id = $1
     `;
 
-    const params = [schoolId];
-    let paramIndex = 2;
+    const params = [];
+    let paramIndex = 1;
+
+    // Filter by school if schoolId is provided
+    if (schoolId) {
+      sql += ` WHERE te.school_id = $${paramIndex}`;
+      params.push(schoolId);
+      paramIndex++;
+    }
 
     if (grade) {
       sql += ` AND te.grade = $${paramIndex}`;
@@ -63,16 +70,54 @@ router.get('/', authorizeRole(['admin', 'teacher', 'student', 'parent']), async 
 });
 
 // Get timetable periods for a school
-router.get('/periods', authorizeRole(['admin', 'teacher']), async (req, res) => {
+router.get('/periods', authorizeRole(['super_admin', 'admin', 'teacher']), async (req, res) => {
   try {
-    const { schoolId } = req;
+    const { schoolId, user } = req;
+    let sql = `SELECT * FROM timetable_periods`;
+    const params = [];
 
-    const result = await query(
-      `SELECT * FROM timetable_periods
-       WHERE school_id = $1
-       ORDER BY start_time`,
-      [schoolId]
-    );
+    if (schoolId) {
+      sql += ` WHERE school_id = $1`;
+      params.push(schoolId);
+    }
+
+    sql += ` ORDER BY start_time`;
+
+    let result = await query(sql, params);
+
+    // If user is admin/super_admin, ensure default periods exist
+    if (user.role === 'admin' || user.role === 'super_admin') {
+      const defaultPeriods = [
+        { name: 'Period 1', start_time: '08:00', end_time: '09:00', is_break: false },
+        { name: 'Period 2', start_time: '09:00', end_time: '10:00', is_break: false },
+        { name: 'Break (15 min)', start_time: '10:00', end_time: '10:15', is_break: true },
+        { name: 'Period 3', start_time: '10:15', end_time: '11:15', is_break: false },
+        { name: 'Period 4', start_time: '11:15', end_time: '12:15', is_break: false },
+        { name: 'Break (30 min)', start_time: '12:15', end_time: '12:45', is_break: true },
+        { name: 'Period 5', start_time: '12:45', end_time: '13:45', is_break: false },
+        { name: 'Period 6', start_time: '13:45', end_time: '14:45', is_break: false },
+        { name: 'Break (1 hr)', start_time: '14:45', end_time: '15:45', is_break: true }
+      ];
+
+      for (const period of defaultPeriods) {
+        // Check if period already exists
+        const existing = await query(
+          `SELECT id FROM timetable_periods WHERE school_id IS NOT DISTINCT FROM $1 AND name = $2`,
+          [schoolId, period.name]
+        );
+
+        if (existing.rows.length === 0) {
+          await query(
+            `INSERT INTO timetable_periods (school_id, name, start_time, end_time, is_break)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [schoolId, period.name, period.start_time, period.end_time, period.is_break]
+          );
+        }
+      }
+
+      // Fetch again
+      result = await query(sql, params);
+    }
 
     res.json({ success: true, data: result.rows });
   } catch (err) {
@@ -84,7 +129,6 @@ router.get('/periods', authorizeRole(['admin', 'teacher']), async (req, res) => 
 // Create timetable entry
 router.post('/', authorizeRole(['admin']), async (req, res) => {
   try {
-    const { schoolId } = req;
     const {
       course_id,
       teacher_id,
@@ -102,7 +146,7 @@ router.post('/', authorizeRole(['admin']), async (req, res) => {
        (school_id, course_id, teacher_id, day_of_week, period_id, grade, class_section, classroom, academic_year_id, term_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
-      [schoolId, course_id, teacher_id, day_of_week, period_id, grade, class_section, classroom, academic_year_id, term_id]
+      [req.schoolId, course_id, teacher_id, day_of_week, period_id, grade, class_section, classroom, academic_year_id, term_id]
     );
 
     res.status(201).json({ success: true, data: result.rows[0] });
@@ -115,7 +159,6 @@ router.post('/', authorizeRole(['admin']), async (req, res) => {
 // Update timetable entry
 router.put('/:id', authorizeRole(['admin']), async (req, res) => {
   try {
-    const { schoolId } = req;
     const { id } = req.params;
     const {
       course_id,
@@ -136,7 +179,7 @@ router.put('/:id', authorizeRole(['admin']), async (req, res) => {
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $10 AND school_id = $11
        RETURNING *`,
-      [course_id, teacher_id, day_of_week, period_id, grade, class_section, classroom, academic_year_id, term_id, id, schoolId]
+      [course_id, teacher_id, day_of_week, period_id, grade, class_section, classroom, academic_year_id, term_id, id, req.schoolId]
     );
 
     if (result.rows.length === 0) {
@@ -153,12 +196,11 @@ router.put('/:id', authorizeRole(['admin']), async (req, res) => {
 // Delete timetable entry
 router.delete('/:id', authorizeRole(['admin']), async (req, res) => {
   try {
-    const { schoolId } = req;
     const { id } = req.params;
 
     const result = await query(
       'DELETE FROM timetable_entries WHERE id = $1 AND school_id = $2 RETURNING *',
-      [id, schoolId]
+      [id, req.schoolId]
     );
 
     if (result.rows.length === 0) {
@@ -173,16 +215,15 @@ router.delete('/:id', authorizeRole(['admin']), async (req, res) => {
 });
 
 // Create timetable period
-router.post('/periods', authorizeRole(['admin']), async (req, res) => {
+router.post('/periods', authorizeRole(['super_admin', 'admin', 'teacher']), async (req, res) => {
   try {
-    const { schoolId } = req;
     const { period_name, start_time, end_time, is_break } = req.body;
 
     const result = await query(
-      `INSERT INTO timetable_periods (school_id, period_name, start_time, end_time, is_break)
+      `INSERT INTO timetable_periods (school_id, name, start_time, end_time, is_break)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [schoolId, period_name, start_time, end_time, is_break || false]
+      [req.schoolId, period_name, start_time, end_time, is_break || false]
     );
 
     res.status(201).json({ success: true, data: result.rows[0] });
@@ -195,7 +236,6 @@ router.post('/periods', authorizeRole(['admin']), async (req, res) => {
 // Update timetable period
 router.put('/periods/:id', authorizeRole(['admin']), async (req, res) => {
   try {
-    const { schoolId } = req;
     const { id } = req.params;
     const { period_name, start_time, end_time, is_break } = req.body;
 
@@ -204,7 +244,7 @@ router.put('/periods/:id', authorizeRole(['admin']), async (req, res) => {
        SET period_name = $1, start_time = $2, end_time = $3, is_break = $4
        WHERE id = $5 AND school_id = $6
        RETURNING *`,
-      [period_name, start_time, end_time, is_break, id, schoolId]
+      [period_name, start_time, end_time, is_break, id, req.schoolId]
     );
 
     if (result.rows.length === 0) {
@@ -221,12 +261,11 @@ router.put('/periods/:id', authorizeRole(['admin']), async (req, res) => {
 // Delete timetable period
 router.delete('/periods/:id', authorizeRole(['admin']), async (req, res) => {
   try {
-    const { schoolId } = req;
     const { id } = req.params;
 
     const result = await query(
       'DELETE FROM timetable_periods WHERE id = $1 AND school_id = $2 RETURNING *',
-      [id, schoolId]
+      [id, req.schoolId]
     );
 
     if (result.rows.length === 0) {

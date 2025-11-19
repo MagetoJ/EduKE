@@ -5,14 +5,23 @@ const { query } = require('../db/connection');
  */
 const getAllCourses = async (req, res) => {
   try {
-    const { schoolId, user } = req;
-    let sql = 'SELECT c.*, u.name as teacher_name FROM courses c LEFT JOIN users u ON c.teacher_id = u.id WHERE c.school_id = $1';
-    const params = [schoolId];
+    const { schoolId, user, isSuperAdmin } = req;
+    let sql = 'SELECT c.*, u.name as teacher_name FROM courses c LEFT JOIN users u ON c.teacher_id = u.id';
+    const params = [];
+    let paramIndex = 1;
+
+    // Filter by school if schoolId is provided
+    if (schoolId) {
+      sql += ` WHERE c.school_id = $${paramIndex}`;
+      params.push(schoolId);
+      paramIndex++;
+    }
 
     // For teachers, only show courses they teach
     if (user.role === 'teacher') {
-      sql += ' AND c.teacher_id = $2';
+      sql += ` AND c.teacher_id = $${paramIndex}`;
       params.push(user.id);
+      paramIndex++;
     }
 
     sql += ' ORDER BY c.name';

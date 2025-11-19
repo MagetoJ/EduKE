@@ -14,15 +14,15 @@ const {
 } = require('../controllers/courseController');
 
 // --- Courses ---
-router.get('/courses', authorizeRole(['admin', 'teacher', 'student', 'parent']), getAllCourses);
+router.get('/courses', authorizeRole(['super_admin', 'admin', 'teacher', 'student', 'parent']), getAllCourses);
 
-router.get('/courses/:id', authorizeRole(['admin', 'teacher', 'student']), getCourseById);
+router.get('/courses/:id', authorizeRole(['super_admin', 'admin', 'teacher', 'student']), getCourseById);
 
-router.post('/courses', authorizeRole(['admin']), createCourse);
+router.post('/courses', authorizeRole(['super_admin', 'admin']), createCourse);
 
-router.put('/courses/:id', authorizeRole(['admin']), updateCourse);
+router.put('/courses/:id', authorizeRole(['super_admin', 'admin']), updateCourse);
 
-router.delete('/courses/:id', authorizeRole(['admin']), deleteCourse);
+router.delete('/courses/:id', authorizeRole(['super_admin', 'admin']), deleteCourse);
 
 router.get('/courses/:id/students', authorizeRole(['admin', 'teacher']), getCourseStudents);
 

@@ -53,7 +53,6 @@ const initialStaffForm = {
 }
 
 export default function Staff() {
-  const { } = useAuth()
   const api = useApi()
   const [activeTab, setActiveTab] = useState('directory')
   const [staff, setStaff] = useState<StaffMember[]>([])
@@ -84,7 +83,7 @@ export default function Staff() {
         setLoading(true)
         const response = await api('/api/staff')
         const data = await response.json()
-        
+
         if (response.ok && data.success) {
           const mappedStaff = data.data.map((member: any) => ({
             id: member.id.toString(),
@@ -98,14 +97,17 @@ export default function Staff() {
             avatar: member.avatar_url || 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&h=150&fit=crop&crop=face'
           }))
           setStaff(mappedStaff)
+        } else {
+          throw new Error(data.error || `HTTP ${response.status}: ${response.statusText}`)
         }
       } catch (err) {
         console.error('Error fetching staff:', err)
+        // Optionally show error to user
       } finally {
         setLoading(false)
       }
     }
-    
+
     fetchStaff()
   }, [api])
 
@@ -114,7 +116,7 @@ export default function Staff() {
       try {
         const response = await api('/api/leave-requests')
         const data = await response.json()
-        
+
         if (response.ok && data.success) {
           const mappedRequests = data.data.map((request: any) => ({
             id: request.id.toString(),
@@ -126,6 +128,8 @@ export default function Staff() {
             status: request.status ? request.status.charAt(0).toUpperCase() + request.status.slice(1) : 'Pending'
           }))
           setLeaveRequests(mappedRequests)
+        } else {
+          throw new Error(data.error || `HTTP ${response.status}: ${response.statusText}`)
         }
       } catch (err) {
         console.error('Error fetching leave requests:', err)
@@ -398,7 +402,7 @@ export default function Staff() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="role">Role</Label>
-                    <Select value={formData.role} onValueChange={(value) => handleSelectChange('role', value)}>
+                    <Select value={formData.role || undefined} onValueChange={(value) => handleSelectChange('role', value)}>
                       <SelectTrigger id="role">
                         <SelectValue placeholder="Select role" />
                       </SelectTrigger>
@@ -412,7 +416,7 @@ export default function Staff() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="department">Department</Label>
-                    <Select value={formData.department} onValueChange={(value) => handleSelectChange('department', value)}>
+                    <Select value={formData.department || undefined} onValueChange={(value) => handleSelectChange('department', value)}>
                       <SelectTrigger id="department">
                         <SelectValue placeholder="Select department" />
                       </SelectTrigger>

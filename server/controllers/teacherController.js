@@ -1,4 +1,29 @@
-const { getDatabase } = require('../db/connection');
+const { query } = require('../db/connection');
+
+/**
+ * Get all teachers
+ */
+const getAllTeachers = async (req, res) => {
+  try {
+    const { schoolId, user, isSuperAdmin } = req;
+    let sql = 'SELECT id, name FROM users WHERE role = $1';
+    const params = ['teacher'];
+
+    // Filter by school if schoolId is provided
+    if (schoolId) {
+      sql += ' AND school_id = $2';
+      params.push(schoolId);
+    }
+
+    sql += ' ORDER BY name';
+
+    const result = await query(sql, params);
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error('Error fetching teachers:', err);
+    res.status(500).json({ success: false, error: 'Failed to fetch teachers' });
+  }
+};
 
 // Get attendance roster for a teacher's class
 const getAttendanceRoster = async (req, res) => {
@@ -157,6 +182,7 @@ const submitGrade = async (req, res) => {
 };
 
 module.exports = {
+  getAllTeachers,
   getAttendanceRoster,
   markAttendance,
   submitGrade

@@ -1,14 +1,40 @@
 const express = require('express');
 const { query } = require('../db/connection');
+const multer = require('multer');
+const path = require('path');
 
 const secureRouter = express.Router();
 const { authorizeRole, requireFeature } = require('../middleware/auth');
 
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/'); // Store files in uploads directory
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'));
+    }
+  }
+});
+
 // --- Courses ---
 secureRouter.get('/courses', authorizeRole(['admin', 'teacher', 'student', 'parent']), async (req, res) => {
   try {
-    const { schoolId } = req;
-    const result = await query('SELECT c.*, u.name as teacher_name FROM courses c LEFT JOIN users u ON c.teacher_id = u.id WHERE c.school_id = $1 ORDER BY c.name', [schoolId]);
+    const result = await query('SELECT c.*, u.name as teacher_name FROM courses c LEFT JOIN users u ON c.teacher_id = u.id WHERE c.school_id = $1 ORDER BY c.name', [req.schoolId]);
     res.json({ success: true, data: result.rows });
   } catch (err) {
     console.error('Error fetching courses:', err);
@@ -18,9 +44,8 @@ secureRouter.get('/courses', authorizeRole(['admin', 'teacher', 'student', 'pare
 
 secureRouter.get('/courses/:id', authorizeRole(['admin', 'teacher', 'student']), async (req, res) => {
   try {
-    const { schoolId } = req;
     const { id } = req.params;
-    const result = await query('SELECT c.*, u.name as teacher_name FROM courses c LEFT JOIN users u ON c.teacher_id = u.id WHERE c.id = $1 AND c.school_id = $2', [id, schoolId]);
+    const result = await query('SELECT c.*, u.name as teacher_name FROM courses c LEFT JOIN users u ON c.teacher_id = u.id WHERE c.id = $1 AND c.school_id = $2', [id, req.schoolId]);
     
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, error: 'Course not found' });
@@ -457,34 +482,129 @@ secureRouter.delete('/schools/:id', authorizeRole(['super_admin']), async (req, 
   }
 });
 
+// --- File Uploads ---
+secureRouter.post('/upload/logo', authorizeRole(['admin', 'super_admin']), upload.single('logo'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'No file uploaded' });
+    }
+
+    // Create URL for the uploaded file
+    const fileUrl = `/uploads/${req.file.filename}`;
+
+    res.json({
+      success: true,
+      data: {
+        url: fileUrl,
+        filename: req.file.filename,
+        size: req.file.size,
+        mimetype: req.file.mimetype
+      },
+      message: 'Logo uploaded successfully'
+    });
+  } catch (err) {
+    console.error('Error uploading logo:', err);
+    res.status(500).json({ success: false, error: 'Failed to upload logo' });
+  }
+});
+
 // --- School Settings ---
-secureRouter.get('/school/settings', authorizeRole(['admin']), async (req, res) => {
+secureRouter.get('/school/settings', authorizeRole(['admin', 'super_admin']), async (req, res) => {
   try {
     const { schoolId } = req;
-    const result = await query('SELECT name, email, phone, address, logo_url, level, curriculum, grade_levels, primary_color, accent_color FROM schools WHERE id = $1', [schoolId]);
+    const result = await query('SELECT name, principal, email, phone, address, logo_url as logo, level, curriculum, grade_levels as gradeLevels, primary_color as primaryColor, accent_color as accentColor FROM schools WHERE id = $1', [schoolId]);
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, error: 'School not found' });
     }
-    res.json({ success: true, data: result.rows[0] });
+    const data = result.rows[0];
+    // Parse gradeLevels if it's a string
+    if (typeof data.gradeLevels === 'string') {
+      try {
+        data.gradeLevels = JSON.parse(data.gradeLevels);
+      } catch {
+        data.gradeLevels = [];
+      }
+    }
+    res.json(data);
   } catch (err) {
     console.error('Error fetching school settings:', err);
     res.status(500).json({ success: false, error: 'Failed to fetch school settings' });
   }
 });
 
-secureRouter.put('/school/settings', authorizeRole(['admin']), async (req, res) => {
+secureRouter.put('/school/settings', authorizeRole(['admin', 'super_admin']), async (req, res) => {
   try {
     const { schoolId } = req;
-    const { name, email, phone, address, logo_url, level, curriculum, grade_levels, primary_color, accent_color } = req.body;
-    
+    const updates = req.body;
+
+    // Build dynamic update query
+    const fields = [];
+    const values = [];
+    let paramIndex = 1;
+
+    if (updates.name !== undefined) {
+      fields.push(`name = $${paramIndex++}`);
+      values.push(updates.name);
+    }
+    if (updates.principal !== undefined) {
+      fields.push(`principal = $${paramIndex++}`);
+      values.push(updates.principal);
+    }
+    if (updates.email !== undefined) {
+      fields.push(`email = $${paramIndex++}`);
+      values.push(updates.email);
+    }
+    if (updates.phone !== undefined) {
+      fields.push(`phone = $${paramIndex++}`);
+      values.push(updates.phone);
+    }
+    if (updates.address !== undefined) {
+      fields.push(`address = $${paramIndex++}`);
+      values.push(updates.address);
+    }
+    if (updates.logo !== undefined) {
+      fields.push(`logo_url = $${paramIndex++}`);
+      values.push(updates.logo);
+    }
+    if (updates.level !== undefined) {
+      fields.push(`level = $${paramIndex++}`);
+      values.push(updates.level);
+    }
+    if (updates.curriculum !== undefined) {
+      fields.push(`curriculum = $${paramIndex++}`);
+      values.push(updates.curriculum);
+    }
+    if (updates.gradeLevels !== undefined) {
+      fields.push(`grade_levels = $${paramIndex++}`);
+      values.push(JSON.stringify(updates.gradeLevels));
+    }
+    if (updates.primaryColor !== undefined) {
+      fields.push(`primary_color = $${paramIndex++}`);
+      values.push(updates.primaryColor);
+    }
+    if (updates.accentColor !== undefined) {
+      fields.push(`accent_color = $${paramIndex++}`);
+      values.push(updates.accentColor);
+    }
+
+    if (fields.length === 0) {
+      return res.status(400).json({ success: false, error: 'No fields to update' });
+    }
+
     const sql = `
       UPDATE schools
-      SET name = $1, email = $2, phone = $3, address = $4, logo_url = $5, level = $6, curriculum = $7, grade_levels = $8, primary_color = $9, accent_color = $10, updated_at = NOW()
-      WHERE id = $11
+      SET ${fields.join(', ')}, updated_at = NOW()
+      WHERE id = $${paramIndex}
       RETURNING *
     `;
-    
-    const result = await query(sql, [name, email, phone, address, logo_url, level, curriculum, grade_levels, primary_color, accent_color, schoolId]);
+
+    values.push(schoolId);
+    const result = await query(sql, values);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'School not found' });
+    }
+
     res.json({ success: true, data: result.rows[0], message: 'School settings updated successfully' });
   } catch (err) {
     console.error('Error updating school settings:', err);

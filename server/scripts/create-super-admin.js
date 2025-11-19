@@ -44,8 +44,7 @@ async function createSuperAdmin() {
       `INSERT INTO users (
         email, password_hash, first_name, last_name, name,
         role, status, is_verified, email_verified_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
-      RETURNING id, email, first_name, last_name, role`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
       [
         SUPER_ADMIN.email,
         passwordHash,
@@ -54,11 +53,17 @@ async function createSuperAdmin() {
         SUPER_ADMIN.name,
         'super_admin',
         'active',
-        true
+        1
       ]
     );
-    
-    const user = result.rows[0];
+
+    // Get the created user
+    const userResult = await query(
+      'SELECT id, email, first_name, last_name, role FROM users WHERE email = ?',
+      [SUPER_ADMIN.email]
+    );
+
+    const user = userResult.rows[0];
     
     console.log('\n✅ Super Admin Created Successfully!\n');
     console.log('📋 User Details:');

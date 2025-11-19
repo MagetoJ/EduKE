@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const sqlite3 = require('sqlite3').verbose();
 const { Pool } = require('pg');
 const bcrypt = require('bcrypt');
 const { nowIso } = require('./utils');
@@ -31,23 +32,52 @@ const getDbConfig = () => {
   };
 };
 
-const pool = new Pool(getDbConfig());
+// Database connection
+let db;
+const useProduction = process.env.USE_PRODUCTION_DB === 'true';
+
+if (useProduction) {
+  db = new Pool(getDbConfig());
+} else {
+  // Use SQLite for local development
+  const dbPath = path.join(__dirname, 'eduke.db');
+  db = new sqlite3.Database(dbPath);
+}
 
 // Test connection
-pool.on('connect', () => {
-  console.log('Connected to PostgreSQL database.');
-});
+if (useProduction) {
+  db.on('connect', () => {
+    console.log('Connected to PostgreSQL database.');
+  });
 
-pool.on('error', (err) => {
-  console.error('Unexpected error on idle client', err);
-  process.exit(-1);
-});
+  db.on('error', (err) => {
+    console.error('Unexpected error on idle client', err);
+    process.exit(-1);
+  });
+} else {
+  console.log('Using SQLite database for local development.');
+}
 
 const schemaPath = path.join(__dirname, '..', 'database', 'schema.sql');
 const initializeSchema = async () => {
   try {
     const schema = fs.readFileSync(schemaPath, 'utf-8');
-    await pool.query(schema);
+    if (useProduction) {
+      await db.query(schema);
+    } else {
+      // For SQLite, we need to execute statements one by one
+      const statements = schema.split(';').filter(stmt => stmt.trim());
+      for (const statement of statements) {
+        if (statement.trim()) {
+          await new Promise((resolve, reject) => {
+            db.run(statement.trim(), (err) => {
+              if (err) reject(err);
+              else resolve();
+            });
+          });
+        }
+      }
+    }
     console.log('Database schema ensured.');
   } catch (schemaError) {
     console.error('Failed to execute schema:', schemaError);
@@ -58,41 +88,69 @@ const initializeSchema = async () => {
 initializeSchema();
 
 const dbRun = async (sql, params = []) => {
-  try {
-    const result = await pool.query(sql, params);
-    return { lastID: result.rows.length > 0 ? result.rows[0].id : null, changes: result.rowCount };
-  } catch (err) {
-    throw err;
-  }
+  return new Promise((resolve, reject) => {
+    if (useProduction) {
+      db.query(sql, params, (err, result) => {
+        if (err) reject(err);
+        else resolve({ lastID: result.rows.length > 0 ? result.rows[0].id : null, changes: result.rowCount });
+      });
+    } else {
+      db.run(sql, params, function(err) {
+        if (err) reject(err);
+        else resolve({ lastID: this.lastID, changes: this.changes });
+      });
+    }
+  });
 };
 
 const dbGet = async (sql, params = []) => {
-  try {
-    const result = await pool.query(sql, params);
-    return result.rows[0] || null;
-  } catch (err) {
-    throw err;
-  }
+  return new Promise((resolve, reject) => {
+    if (useProduction) {
+      db.query(sql, params, (err, result) => {
+        if (err) reject(err);
+        else resolve(result.rows[0] || null);
+      });
+    } else {
+      db.get(sql, params, (err, row) => {
+        if (err) reject(err);
+        else resolve(row || null);
+      });
+    }
+  });
 };
 
 const dbAll = async (sql, params = []) => {
-  try {
-    const result = await pool.query(sql, params);
-    return result.rows;
-  } catch (err) {
-    throw err;
-  }
+  return new Promise((resolve, reject) => {
+    if (useProduction) {
+      db.query(sql, params, (err, result) => {
+        if (err) reject(err);
+        else resolve(result.rows);
+      });
+    } else {
+      db.all(sql, params, (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows);
+      });
+    }
+  });
 };
 
 const ensureSchemaUpgrades = async () => {
   try {
     // Check users table columns
-    const userColumns = await dbAll(`
-      SELECT column_name
-      FROM information_schema.columns
-      WHERE table_name = 'users' AND table_schema = 'public'
-    `);
-    const userColumnNames = userColumns.map((column) => column.column_name);
+    let userColumnNames = [];
+    if (useProduction) {
+      const userColumns = await dbAll(`
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_name = 'users' AND table_schema = 'public'
+      `);
+      userColumnNames = userColumns.map((column) => column.column_name);
+    } else {
+      // For SQLite, use PRAGMA table_info
+      const userColumns = await dbAll(`PRAGMA table_info(users)`);
+      userColumnNames = userColumns.map((column) => column.name);
+    }
 
     if (!userColumnNames.includes('department')) {
       await dbRun('ALTER TABLE users ADD COLUMN department TEXT');
@@ -123,23 +181,35 @@ const ensureSchemaUpgrades = async () => {
     );
 
     // Check students table columns
-    const studentColumns = await dbAll(`
-      SELECT column_name
-      FROM information_schema.columns
-      WHERE table_name = 'students' AND table_schema = 'public'
-    `);
-    const studentColumnNames = studentColumns.map((column) => column.column_name);
+    let studentColumnNames = [];
+    if (useProduction) {
+      const studentColumns = await dbAll(`
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_name = 'students' AND table_schema = 'public'
+      `);
+      studentColumnNames = studentColumns.map((column) => column.column_name);
+    } else {
+      const studentColumns = await dbAll(`PRAGMA table_info(students)`);
+      studentColumnNames = studentColumns.map((column) => column.name);
+    }
     if (!studentColumnNames.includes('class_section')) {
       await dbRun('ALTER TABLE students ADD COLUMN class_section TEXT');
     }
 
     // Check schools table columns
-    const schoolColumns = await dbAll(`
-      SELECT column_name
-      FROM information_schema.columns
-      WHERE table_name = 'schools' AND table_schema = 'public'
-    `);
-    const schoolColumnNames = schoolColumns.map((column) => column.column_name);
+    let schoolColumnNames = [];
+    if (useProduction) {
+      const schoolColumns = await dbAll(`
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_name = 'schools' AND table_schema = 'public'
+      `);
+      schoolColumnNames = schoolColumns.map((column) => column.column_name);
+    } else {
+      const schoolColumns = await dbAll(`PRAGMA table_info(schools)`);
+      schoolColumnNames = schoolColumns.map((column) => column.name);
+    }
     if (!schoolColumnNames.includes('primary_color')) {
       await dbRun('ALTER TABLE schools ADD COLUMN primary_color TEXT');
     }

@@ -41,6 +41,9 @@ app.use(cors(corsOptions));
 app.use(bodyParser.json());
 app.use(cookieParser());
 
+// Serve uploaded files
+app.use('/uploads', express.static('uploads'));
+
 // Health check endpoint
 app.get('/health', async (req, res) => {
   try {

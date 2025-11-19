@@ -5,9 +5,9 @@ const { query } = require('../db/connection');
  */
 const getAllExams = async (req, res) => {
   try {
-    const { schoolId, user } = req;
+    const { user } = req;
     let sql = 'SELECT e.*, c.name as course_name, c.grade FROM exams e JOIN courses c ON e.course_id = c.id WHERE c.school_id = $1';
-    const params = [schoolId];
+    const params = [req.schoolId];
 
     // For teachers, only show exams for courses they teach
     if (user.role === 'teacher') {
@@ -28,11 +28,10 @@ const getAllExams = async (req, res) => {
  */
 const getExamById = async (req, res) => {
   try {
-    const { schoolId } = req;
     const { id } = req.params;
     const result = await query(
       'SELECT e.*, c.name as course_name, c.grade FROM exams e JOIN courses c ON e.course_id = c.id WHERE e.id = $1 AND c.school_id = $2',
-      [id, schoolId]
+      [id, req.schoolId]
     );
 
     if (result.rows.length === 0) {
@@ -81,7 +80,7 @@ const createExam = async (req, res) => {
  */
 const updateExam = async (req, res) => {
   try {
-    const { schoolId, user } = req;
+    const { user } = req;
     const { id } = req.params;
     const { name, exam_date, total_marks, duration_minutes, description } = req.body;
 
@@ -89,7 +88,7 @@ const updateExam = async (req, res) => {
     if (user.role === 'teacher') {
       const ownershipCheck = await query(
         'SELECT e.id FROM exams e JOIN courses c ON e.course_id = c.id WHERE e.id = $1 AND c.teacher_id = $2 AND c.school_id = $3',
-        [id, user.id, schoolId]
+        [id, user.id, req.schoolId]
       );
 
       if (ownershipCheck.rows.length === 0) {
@@ -99,7 +98,7 @@ const updateExam = async (req, res) => {
 
     const result = await query(
       'UPDATE exams SET name = $1, exam_date = $2, total_marks = $3, duration_minutes = $4, description = $5, updated_at = NOW() WHERE id = $6 AND school_id = $7 RETURNING *',
-      [name, exam_date, total_marks, duration_minutes, description, id, schoolId]
+      [name, exam_date, total_marks, duration_minutes, description, id, req.schoolId]
     );
 
     if (result.rows.length === 0) {
@@ -117,10 +116,9 @@ const updateExam = async (req, res) => {
  */
 const deleteExam = async (req, res) => {
   try {
-    const { schoolId } = req;
     const { id } = req.params;
 
-    await query('DELETE FROM exams WHERE id = $1 AND school_id = $2', [id, schoolId]);
+    await query('DELETE FROM exams WHERE id = $1 AND school_id = $2', [id, req.schoolId]);
     res.json({ success: true, message: 'Exam deleted successfully' });
   } catch (err) {
     res.status(500).json({ success: false, error: 'Failed to delete exam' });
@@ -132,7 +130,7 @@ const deleteExam = async (req, res) => {
  */
 const postExamResults = async (req, res) => {
   try {
-    const { schoolId, user } = req;
+    const { user } = req;
     const { id } = req.params;
     const { results } = req.body; // Array of {student_id, score, percentage, grade, remarks}
 
@@ -140,7 +138,7 @@ const postExamResults = async (req, res) => {
     if (user.role === 'teacher') {
       const ownershipCheck = await query(
         'SELECT e.id FROM exams e JOIN courses c ON e.course_id = c.id WHERE e.id = $1 AND c.teacher_id = $2 AND c.school_id = $3',
-        [id, user.id, schoolId]
+        [id, user.id, req.schoolId]
       );
 
       if (ownershipCheck.rows.length === 0) {
