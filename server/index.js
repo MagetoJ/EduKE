@@ -44,6 +44,14 @@ app.use(cookieParser());
 // Serve uploaded files
 app.use('/uploads', express.static('uploads'));
 
+// Serve frontend static files (monorepo: frontend is built to ../dist)
+const path = require('path');
+const frontendPath = path.join(__dirname, '..', 'dist');
+app.use(express.static(frontendPath, { 
+  maxAge: isProduction ? '1y' : '0',
+  etag: false 
+}));
+
 // Health check endpoint
 app.get('/health', async (req, res) => {
   try {
@@ -77,11 +85,16 @@ app.use('/api/messages', authenticateToken, tenantContext, messagesRoutes);
 app.use('/api', authenticateToken, tenantContext, secureRouter);
 app.use('/api', authenticateToken, tenantContext, completeRoutes);
 
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({ 
-    success: false,
-    error: 'Not found' 
+// Client-side routing fallback (for React Router)
+// Any route not matched by API or static files serves index.html
+app.get('*', (req, res) => {
+  res.sendFile(path.join(frontendPath, 'index.html'), (err) => {
+    if (err) {
+      res.status(404).json({ 
+        success: false,
+        error: 'Not found' 
+      });
+    }
   });
 });
 

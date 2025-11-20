@@ -1,19 +1,20 @@
 # ==================================
 # EduKE Render Blueprint (render.yaml)
 # ==================================
-# Complete production deployment configuration for Render
-# Includes both backend API and frontend client with environment detection
+# Monorepo deployment configuration for Render
+# Single service for both backend API and frontend client
+# Includes automatic environment detection
 
 services:
   # -----------------
-  # Backend API (Node.js/Express)
+  # Monorepo Web Service (Backend + Frontend)
   # -----------------
   - type: web
-    name: eduke-server
+    name: eduke
     env: node
-    rootDir: server
-    buildCommand: npm install
-    startCommand: npm start
+    rootDir: .
+    buildCommand: npm install && npm run build && cd server && npm install
+    startCommand: cd server && npm start
     healthCheckPath: /health
     healthCheckTimeout: 30
     numInstances: 1
@@ -29,7 +30,7 @@ services:
       - key: USE_PRODUCTION_DB
         value: "true"
       - key: PORT
-        value: "3001"
+        value: "3000"
       # Database connection from Render Postgres
       - key: DATABASE_URL
         fromDatabase:
@@ -40,39 +41,18 @@ services:
         sync: false
       - key: JWT_REFRESH_SECRET
         sync: false
-      # Frontend URL for CORS
+      # Frontend and CORS Configuration
       - key: CORS_ORIGIN
-        value: https://eduke-client.onrender.com
+        value: https://eduke.onrender.com
       - key: FRONTEND_URL
-        value: https://eduke-client.onrender.com
+        value: https://eduke.onrender.com
+      - key: VITE_API_URL
+        value: https://eduke.onrender.com/api
       # Optional: Rate limiting and email config
       - key: RATE_LIMIT_WINDOW_MS
         value: "900000"
       - key: RATE_LIMIT_MAX_REQUESTS
         value: "100"
-
-  # -----------------
-  # Frontend Client (React/Vite)
-  # -----------------
-  - type: static
-    name: eduke-client
-    env: static
-    rootDir: .
-    buildCommand: npm install && npm run build
-    publishDir: dist
-    # Environment variables for frontend build
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: APP_ENV
-        value: production
-      - key: VITE_API_URL
-        value: https://eduke-server.onrender.com/api
-    # Client-side routing
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
 
   # -----------------
   # PostgreSQL Database

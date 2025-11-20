@@ -33,9 +33,9 @@ Before deploying to Render, ensure you have:
 
 ---
 
-## Step 2: Deploy with render.yaml Blueprint
+## Step 2: Deploy with render.yaml Blueprint (Monorepo)
 
-The `render.yaml` file in your project root contains the complete deployment configuration for both frontend and backend.
+The `render.yaml` file in your project root contains the complete deployment configuration for a **monorepo** with a single web service.
 
 ### Deploy Using render.yaml:
 
@@ -43,70 +43,84 @@ The `render.yaml` file in your project root contains the complete deployment con
 2. Paste your GitHub repository URL
 3. Render will automatically detect and use your `render.yaml` file
 4. Review the services:
-   - `eduke-server` (Backend)
-   - `eduke-client` (Frontend)
+   - `eduke` (Monorepo - Backend + Frontend)
    - `eduke-database` (PostgreSQL)
 5. Click **Create New Services**
 
-### What render.yaml Configures:
+### What render.yaml Configures (Monorepo):
 
 ```yaml
 services:
-  - Backend API (Node.js/Express)
-    - Runs from server/ directory
-    - Uses npm start
+  - Monorepo Web Service (Node.js/Express)
+    - Builds frontend: npm run build (creates dist/)
+    - Builds backend: cd server && npm install
+    - Single Express server serves both
+    - Frontend static files cached
+    - API routes at /api/*
     - Health check enabled
     - Persistent storage for uploads
     
-  - Frontend Client (React/Vite)
-    - Builds with npm run build
-    - Serves dist/ directory
-    - Client-side routing configured
-    
   - PostgreSQL Database
-    - Automatic backups enabled
     - Version 15
     - 50GB storage
+    - Automatic connection string
 ```
+
+### Advantages of Monorepo Deployment:
+
+✅ **Simpler**: One service instead of two  
+✅ **Cheaper**: One web service tier instead of two  
+✅ **Unified**: Shared environment variables  
+✅ **Faster**: No inter-service communication delay  
+✅ **Easier**: Single deployment and logs
 
 ---
 
 ## Step 3: Configure Environment Variables
 
-### For Backend Service (eduke-server)
+### For Monorepo Service (eduke)
 
-1. Go to **eduke-server** service dashboard
+Since this is a monorepo with a single service, all environment variables go in one place.
+
+1. Go to **eduke** service dashboard
 2. Click **Environment** tab
 3. Add the following environment variables:
 
-#### Required Variables (Set in Render Dashboard):
+#### Required Variables (Pre-configured in render.yaml):
 
 ```
 NODE_ENV = production
 APP_ENV = production
 USE_PRODUCTION_DB = true
-PORT = 3001
+PORT = 3000
 ```
 
-#### Security Secrets (Generate new values):
+#### Security Secrets (Generate new values - MUST ADD):
+
+Run in your terminal to generate:
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Then add to Environment tab:
 
 ```
 JWT_SECRET = [Generate strong random string]
 JWT_REFRESH_SECRET = [Generate strong random string]
 ```
 
-**To generate secrets**:
-```bash
-# Run in your terminal
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
-
-#### Database Variables:
+#### Frontend & CORS Variables (Pre-configured):
 
 ```
-DATABASE_URL = [Auto-populated from PostgreSQL service]
-CORS_ORIGIN = https://eduke-client.onrender.com
-FRONTEND_URL = https://eduke-client.onrender.com
+CORS_ORIGIN = https://eduke.onrender.com
+FRONTEND_URL = https://eduke.onrender.com
+VITE_API_URL = https://eduke.onrender.com/api
+```
+
+#### Database Variables (Auto-populated):
+
+```
+DATABASE_URL = [Auto-set from eduke-database service]
 ```
 
 #### Optional Variables:
@@ -116,18 +130,6 @@ RATE_LIMIT_WINDOW_MS = 900000
 RATE_LIMIT_MAX_REQUESTS = 100
 SMTP_HOST = smtp.gmail.com
 SMTP_PORT = 587
-```
-
-### For Frontend Service (eduke-client)
-
-1. Go to **eduke-client** service dashboard
-2. Click **Environment** tab
-3. Add these variables:
-
-```
-NODE_ENV = production
-APP_ENV = production
-VITE_API_URL = https://eduke-server.onrender.com/api
 ```
 
 ### For Database Service (eduke-database)
@@ -207,10 +209,10 @@ Locally, without `NODE_ENV=production`:
 
 ## Step 6: Verify Deployment
 
-### Check Backend Health:
+### Check Monorepo Service Health:
 
 ```bash
-curl https://eduke-server.onrender.com/health
+curl https://eduke.onrender.com/health
 ```
 
 Expected response:
@@ -226,15 +228,23 @@ Expected response:
 }
 ```
 
-### Check Frontend:
+### Check Frontend Application:
 
-Open `https://eduke-client.onrender.com` in your browser
+Open `https://eduke.onrender.com` in your browser  
+(Frontend is served from the same monorepo service)
 
 ### Monitor Logs:
 
-1. Go to service dashboard
+1. Go to **eduke** service dashboard
 2. Click **Logs** to view real-time logs
 3. Check for errors or warnings
+
+### Test API Endpoint:
+
+```bash
+# This should require authentication but shouldn't error
+curl https://eduke.onrender.com/api/health
+```
 
 ---
 

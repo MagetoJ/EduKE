@@ -1,5 +1,9 @@
 # Render Deployment - Quick Start (5-10 minutes)
 
+## Monorepo Deployment
+
+This is a **monorepo** deployment - both frontend and backend run from one service!
+
 ## Prerequisites
 
 ✓ Render account at https://render.com  
@@ -16,22 +20,26 @@
 4. Click **Connect**
 5. Click **Create New Services**
 
-→ *Wait 2-3 minutes while services deploy*
+→ *Wait 3-5 minutes while service builds and deploys*
+
+**Services created**:
+- `eduke` (Backend + Frontend in one service)
+- `eduke-database` (PostgreSQL)
 
 ---
 
 ## Step 2: Set Secrets (2 mins)
 
-**Generate JWT secrets** (run once):
+**Generate JWT secrets** (run once in terminal):
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
 In Render Dashboard:
 
-1. Go to `eduke-server` service
+1. Go to `eduke` service
 2. Click **Environment**
-3. Add these (click each to add):
+3. Add these environment variables:
 
 | Key | Value |
 |-----|-------|
@@ -45,7 +53,7 @@ In Render Dashboard:
 
 ## Step 3: Initialize Database (2 mins)
 
-1. Go to `eduke-server` in dashboard
+1. Go to `eduke` service in dashboard
 2. Click **Shell**
 3. Run:
 ```bash
@@ -60,7 +68,7 @@ NODE_ENV=production node scripts/init-db.js --production
 
 Test health endpoint:
 ```bash
-curl https://eduke-server.onrender.com/health
+curl https://eduke.onrender.com/health
 ```
 
 Should return:
@@ -75,14 +83,14 @@ Should return:
 }
 ```
 
-✓ Backend working!
+✓ API working!
 
 ---
 
 ## Step 5: Test Application (1 min)
 
-1. Open https://eduke-client.onrender.com
-2. App should load
+1. Open https://eduke.onrender.com
+2. App should load (frontend served from same service)
 3. Try login
 
 ✓ Complete!
