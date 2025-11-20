@@ -131,6 +131,124 @@ INSERT OR IGNORE INTO subscription_plans (name, slug, description, price_monthly
 ('Professional Plan', 'pro', 'Advanced features for growing schools', 99.99, 999.99, 500, 50, 0, 1, 1, 1, 1, 1, 1, 0, 0, 1),
 ('Enterprise Plan', 'enterprise', 'Unlimited features for large institutions', 199.99, 1999.99, NULL, NULL, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1);
 
+-- Students table
+CREATE TABLE IF NOT EXISTS students (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    school_id INTEGER NOT NULL,
+    user_id INTEGER,
+    parent_id INTEGER,
+    first_name TEXT NOT NULL,
+    last_name TEXT NOT NULL,
+    email TEXT,
+    phone TEXT,
+    date_of_birth DATE,
+    gender TEXT,
+    address TEXT,
+    avatar_url TEXT,
+    student_id_number TEXT,
+    national_id TEXT,
+    grade TEXT NOT NULL,
+    class_section TEXT,
+    enrollment_date DATE,
+    graduation_date DATE,
+    status TEXT DEFAULT 'active',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (school_id) REFERENCES schools(id),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (parent_id) REFERENCES users(id)
+);
+
+-- Parent-student relations table
+CREATE TABLE IF NOT EXISTS parent_student_relations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    parent_id INTEGER NOT NULL,
+    student_id INTEGER NOT NULL,
+    relation_type TEXT DEFAULT 'guardian',
+    is_primary_contact INTEGER DEFAULT 0,
+    is_financial_responsible INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (parent_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+    UNIQUE(parent_id, student_id)
+);
+
+-- Assignments table
+CREATE TABLE IF NOT EXISTS assignments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    school_id INTEGER NOT NULL,
+    course_id INTEGER NOT NULL,
+    teacher_id INTEGER,
+    title TEXT NOT NULL,
+    description TEXT,
+    due_date DATE,
+    total_marks REAL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (school_id) REFERENCES schools(id),
+    FOREIGN KEY (course_id) REFERENCES courses(id),
+    FOREIGN KEY (teacher_id) REFERENCES users(id)
+);
+
+-- Performance table
+CREATE TABLE IF NOT EXISTS performance (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id INTEGER NOT NULL,
+    assignment_id INTEGER,
+    score REAL,
+    grade TEXT,
+    feedback TEXT,
+    submitted_at TEXT,
+    graded_at TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (student_id) REFERENCES students(id),
+    FOREIGN KEY (assignment_id) REFERENCES assignments(id)
+);
+
+-- Attendance table
+CREATE TABLE IF NOT EXISTS attendance (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id INTEGER NOT NULL,
+    course_id INTEGER,
+    date DATE NOT NULL,
+    status TEXT NOT NULL,
+    notes TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (student_id) REFERENCES students(id),
+    FOREIGN KEY (course_id) REFERENCES courses(id)
+);
+
+-- Student fees table
+CREATE TABLE IF NOT EXISTS student_fees (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id INTEGER NOT NULL,
+    fee_structure_id INTEGER,
+    school_id INTEGER NOT NULL,
+    amount_due REAL NOT NULL,
+    amount_paid REAL DEFAULT 0,
+    due_date DATE,
+    payment_status TEXT DEFAULT 'pending',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (student_id) REFERENCES students(id),
+    FOREIGN KEY (school_id) REFERENCES schools(id)
+);
+
+-- Fee structures table
+CREATE TABLE IF NOT EXISTS fee_structures (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    school_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    fee_type TEXT NOT NULL,
+    amount REAL NOT NULL,
+    frequency TEXT DEFAULT 'annual',
+    description TEXT,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (school_id) REFERENCES schools(id)
+);
+
 -- Create indexes
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_school ON users(school_id);
@@ -139,3 +257,10 @@ CREATE INDEX IF NOT EXISTS idx_courses_school ON courses(school_id);
 CREATE INDEX IF NOT EXISTS idx_periods_school ON timetable_periods(school_id);
 CREATE INDEX IF NOT EXISTS idx_timetable_school ON timetable_entries(school_id);
 CREATE INDEX IF NOT EXISTS idx_timetable_day_period ON timetable_entries(day_of_week, period_id);
+CREATE INDEX IF NOT EXISTS idx_students_school ON students(school_id);
+CREATE INDEX IF NOT EXISTS idx_parent_relations ON parent_student_relations(parent_id);
+CREATE INDEX IF NOT EXISTS idx_student_relations ON parent_student_relations(student_id);
+CREATE INDEX IF NOT EXISTS idx_assignments_school ON assignments(school_id);
+CREATE INDEX IF NOT EXISTS idx_performance_student ON performance(student_id);
+CREATE INDEX IF NOT EXISTS idx_attendance_student ON attendance(student_id);
+CREATE INDEX IF NOT EXISTS idx_fees_student ON student_fees(student_id);

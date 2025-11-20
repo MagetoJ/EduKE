@@ -6,7 +6,7 @@ const { authorizeRole } = require('../middleware/auth');
 // Get all timetable entries for a school
 router.get('/', authorizeRole(['super_admin', 'admin', 'teacher', 'student', 'parent']), async (req, res) => {
   try {
-    const { schoolId, isSuperAdmin } = req;
+    const { schoolId, user, isSuperAdmin } = req;
     const { grade, class_section, teacher_id, day_of_week } = req.query;
 
     let sql = `
@@ -35,19 +35,66 @@ router.get('/', authorizeRole(['super_admin', 'admin', 'teacher', 'student', 'pa
       paramIndex++;
     }
 
-    if (grade) {
+    // Apply role-based filtering
+    if (user.role === 'student') {
+      // For students, fetch their grade and class_section from the students table
+      const studentResult = await query(
+        'SELECT grade, class_section FROM students WHERE user_id = $1 AND school_id = $2',
+        [user.id, schoolId]
+      );
+      
+      if (studentResult.rows.length > 0) {
+        const student = studentResult.rows[0];
+        sql += ` AND te.grade = $${paramIndex}`;
+        params.push(student.grade);
+        paramIndex++;
+        
+        if (student.class_section) {
+          sql += ` AND te.class_section = $${paramIndex}`;
+          params.push(student.class_section);
+          paramIndex++;
+        }
+      }
+    } else if (user.role === 'parent') {
+      // For parents, fetch their children's grades and class_sections
+      const childrenResult = await query(
+        'SELECT DISTINCT grade, class_section FROM students WHERE parent_id = $1 AND school_id = $2',
+        [user.id, schoolId]
+      );
+      
+      if (childrenResult.rows.length > 0) {
+        // Create a list of (grade, class_section) pairs
+        const conditions = childrenResult.rows.map(() => `(te.grade = $${paramIndex} AND te.class_section IS NOT DISTINCT FROM $${paramIndex + 1})`);
+        childrenResult.rows.forEach((child) => {
+          params.push(child.grade);
+          params.push(child.class_section);
+          paramIndex += 2;
+        });
+        sql += ` AND (${conditions.join(' OR ')})`;
+      }
+    } else if (user.role === 'teacher') {
+      // For teachers, optionally filter by their courses
+      if (teacher_id) {
+        sql += ` AND te.teacher_id = $${paramIndex}`;
+        params.push(teacher_id);
+        paramIndex++;
+      }
+    }
+
+    // Allow manual filtering for admin/super_admin
+    if ((user.role === 'admin' || user.role === 'super_admin') && grade) {
       sql += ` AND te.grade = $${paramIndex}`;
       params.push(grade);
       paramIndex++;
     }
 
-    if (class_section) {
+    if ((user.role === 'admin' || user.role === 'super_admin') && class_section) {
       sql += ` AND te.class_section = $${paramIndex}`;
       params.push(class_section);
       paramIndex++;
     }
 
-    if (teacher_id) {
+    if ((user.role === 'admin' || user.role === 'super_admin' || user.role === 'teacher') && teacher_id) {
       sql += ` AND te.teacher_id = $${paramIndex}`;
       params.push(teacher_id);
       paramIndex++;
@@ -70,7 +117,7 @@ router.get('/', authorizeRole(['super_admin', 'admin', 'teacher', 'student', 'pa
 });
 
 // Get timetable periods for a school
-router.get('/periods', authorizeRole(['super_admin', 'admin', 'teacher']), async (req, res) => {
+router.get('/periods', authorizeRole(['super_admin', 'admin', 'teacher', 'student', 'parent']), async (req, res) => {
   try {
     const { schoolId, user } = req;
     let sql = `SELECT * FROM timetable_periods`;

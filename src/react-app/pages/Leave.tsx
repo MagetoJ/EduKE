@@ -15,10 +15,11 @@ type LeaveRequest = {
   leave_type_name: string;
   start_date: string;
   end_date: string;
+  total_days: number;
   reason: string;
-  status: 'pending' | 'approved' | 'rejected';
-  admin_remarks?: string;
-  created_at: string; // <-- ADD THIS LINE
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  rejection_reason?: string;
+  created_at: string;
 };
 
 export default function Leave() {
@@ -82,7 +83,7 @@ export default function Leave() {
         method: 'PUT',
         body: JSON.stringify({
           status: action === 'approve' ? 'approved' : 'rejected',
-          admin_remarks: action === 'approve' ? 'Approved' : 'Denied'
+          rejection_reason: action === 'approve' ? 'Approved' : 'Denied'
         })
       })
 

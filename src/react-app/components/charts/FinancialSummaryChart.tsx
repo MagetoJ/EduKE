@@ -105,8 +105,8 @@ export function FinancialSummaryChart() {
           ))}
         </div>
 
-        <div style={{ width: "100%", height: 300 }}>
-          <ResponsiveContainer>
+        <div style={{ width: "100%", height: 300, minWidth: 0 }}>
+          <ResponsiveContainer width="100%" height="100%">
             <BarChart data={filteredData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
               <XAxis dataKey="name" />
               <YAxis unit="$" />

@@ -1,5 +1,5 @@
 import { useEffect, useState, FormEvent } from 'react'
-import { BookOpen, FileText, Award, Download, AlertCircle, Loader2 } from 'lucide-react' // Added Loader2
+import { BookOpen, FileText, Award, Download, AlertCircle, Loader2, User } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
@@ -236,448 +236,428 @@ export default function Academics() {
   )
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Academics</h1>
-          <p className="text-gray-600">Manage courses, assignments, and examinations</p>
-        </div>
-        
-        <div className="flex space-x-2">
-          {canManage && (
-            <>
-              {user?.role === 'admin' && (
-                <Dialog open={isCourseDialogOpen} onOpenChange={(open) => { setIsCourseDialogOpen(open); setFormError(null); }}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline">
-                      <BookOpen className="w-4 h-4 mr-2" />
-                      Add Course
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-2xl">
-                    <form onSubmit={handleCourseSubmit}>
-                      <DialogHeader>
-                        <DialogTitle>Add New Course</DialogTitle>
-                        <DialogDescription>
-                          Create a new course for the academic year
-                        </DialogDescription>
-                      </DialogHeader>
-                      
-                      <div className="grid gap-4 py-4">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="courseName">Course Name</Label>
-                            <Input id="courseName" placeholder="Enter course name" value={courseForm.name} onChange={(e) => setCourseForm({...courseForm, name: e.target.value})} />
+    <div className="flex h-screen w-full bg-slate-100 font-sans text-slate-900">
+      <main className="flex-1 flex flex-col overflow-hidden">
+        <header className="h-16 bg-slate-800 flex items-center justify-between px-8 shadow-sm z-10">
+          <h1 className="text-white font-semibold text-lg tracking-wide">
+            ACADEMICS MANAGEMENT
+          </h1>
+          <div className="h-9 w-9 bg-slate-600 rounded-full flex items-center justify-center text-white hover:bg-slate-500 cursor-pointer">
+            <User size={18} />
+          </div>
+        </header>
+
+        <div className="flex-1 overflow-y-auto p-8">
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-slate-700 uppercase tracking-tight">
+              Manage Courses, Assignments & Exams
+            </h2>
+          </div>
+
+          <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-200 mb-6 flex flex-wrap items-center justify-between gap-4 relative z-50">
+            <div className="flex items-center gap-4">
+              {canManage && (
+                <>
+                  {user?.role === 'admin' && (
+                    <Dialog open={isCourseDialogOpen} onOpenChange={(open) => { setIsCourseDialogOpen(open); setFormError(null); }}>
+                      <DialogTrigger asChild>
+                        <button className="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-md font-medium flex items-center gap-2 transition-colors shadow-sm">
+                          <BookOpen size={18} />
+                          ADD COURSE
+                        </button>
+                      </DialogTrigger>
+                      <DialogContent className="z-[100] max-w-2xl">
+                        <form onSubmit={handleCourseSubmit}>
+                          <DialogHeader>
+                            <DialogTitle>Add New Course</DialogTitle>
+                            <DialogDescription>
+                              Create a new course for the academic year
+                            </DialogDescription>
+                          </DialogHeader>
+                          
+                          <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <Label htmlFor="courseName">Course Name</Label>
+                                <Input id="courseName" placeholder="Enter course name" value={courseForm.name} onChange={(e) => setCourseForm({...courseForm, name: e.target.value})} />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="courseCode">Course Code</Label>
+                                <Input id="courseCode" placeholder="e.g., MATH-401" value={courseForm.code} onChange={(e) => setCourseForm({...courseForm, code: e.target.value})} />
+                              </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <Label htmlFor="teacher">Assigned Teacher</Label>
+                                <Select value={courseForm.teacher_id} onValueChange={(value) => setCourseForm({...courseForm, teacher_id: value})}>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select teacher" />
+                                  </SelectTrigger>
+                                  <SelectContent className="z-[101]">
+                                    {staff.map(s => (
+                                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="grade">Grade Level</Label>
+                                <Select value={courseForm.grade} onValueChange={(value) => setCourseForm({...courseForm, grade: value})}>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select grade" />
+                                  </SelectTrigger>
+                                  <SelectContent className="z-[101]">
+                                    {gradeLevels.map(grade => (
+                                      <SelectItem key={grade} value={grade}>
+                                        {grade}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label htmlFor="description">Description</Label>
+                              <textarea 
+                                id="description" 
+                                className="min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                placeholder="Course description..."
+                                value={courseForm.description} onChange={(e) => setCourseForm({...courseForm, description: e.target.value})}
+                              />
+                            </div>
+                            {renderError(formError)}
                           </div>
+                          
+                          <DialogFooter>
+                            <Button type="button" variant="outline" onClick={() => setIsCourseDialogOpen(false)} disabled={isSubmitting}>
+                              Cancel
+                            </Button>
+                            <Button type="submit" disabled={isSubmitting}>
+                              {isSubmitting ? 'Creating...' : 'Create Course'}
+                            </Button>
+                          </DialogFooter>
+                        </form>
+                      </DialogContent>
+                    </Dialog>
+                  )}
+
+                  <Dialog open={isAssignmentDialogOpen} onOpenChange={(open) => { setIsAssignmentDialogOpen(open); setFormError(null); }}>
+                    <DialogTrigger asChild>
+                      <button className="bg-white border border-slate-300 text-slate-600 px-4 py-2 rounded-md font-medium flex items-center gap-2 transition-colors hover:border-slate-400">
+                        <FileText size={18} />
+                        NEW ASSIGNMENT
+                      </button>
+                    </DialogTrigger>
+                    <DialogContent className="z-[100] max-w-2xl">
+                      <form onSubmit={handleAssignmentSubmit}>
+                        <DialogHeader>
+                          <DialogTitle>Create Assignment</DialogTitle>
+                          <DialogDescription>
+                            Create a new assignment for your students
+                          </DialogDescription>
+                        </DialogHeader>
+                        
+                        <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto">
                           <div className="space-y-2">
-                            <Label htmlFor="courseCode">Course Code</Label>
-                            <Input id="courseCode" placeholder="e.g., MATH-401" value={courseForm.code} onChange={(e) => setCourseForm({...courseForm, code: e.target.value})} />
+                            <Label htmlFor="assignmentTitle">Assignment Title</Label>
+                            <Input id="assignmentTitle" placeholder="Enter assignment title" value={assignmentForm.title} onChange={(e) => setAssignmentForm({...assignmentForm, title: e.target.value})} />
                           </div>
+                          
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="course">Course</Label>
+                              <Select value={assignmentForm.course_id} onValueChange={(value) => setAssignmentForm({...assignmentForm, course_id: value})}>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select course" />
+                                </SelectTrigger>
+                                <SelectContent className="z-[101]">
+                                  {courses.map(course => (
+                                    <SelectItem key={course.id} value={course.id}>{course.name}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="dueDate">Due Date</Label>
+                              <Input id="dueDate" type="datetime-local" value={assignmentForm.due_date} onChange={(e) => setAssignmentForm({...assignmentForm, due_date: e.target.value})} />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="max_score">Total Marks</Label>
+                              <Input id="max_score" type="number" placeholder="100" value={assignmentForm.max_score} onChange={(e) => setAssignmentForm({...assignmentForm, max_score: e.target.value})} />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="assignment_type">Type</Label>
+                              <Select value={assignmentForm.assignment_type} onValueChange={(value) => setAssignmentForm({...assignmentForm, assignment_type: value})}>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select type" />
+                                </SelectTrigger>
+                                <SelectContent className="z-[101]">
+                                  <SelectItem value="homework">Homework</SelectItem>
+                                  <SelectItem value="project">Project</SelectItem>
+                                  <SelectItem value="quiz">Quiz</SelectItem>
+                                  <SelectItem value="lab">Lab Report</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                          {renderError(formError)}
                         </div>
                         
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="teacher">Assigned Teacher</Label>
-                            <Select value={courseForm.teacher_id} onValueChange={(value) => setCourseForm({...courseForm, teacher_id: value})}>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select teacher" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {staff.map(s => (
-                                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="grade">Grade Level</Label>
-                            <Select value={courseForm.grade} onValueChange={(value) => setCourseForm({...courseForm, grade: value})}>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select grade" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {gradeLevels.map(grade => (
-                                  <SelectItem key={grade} value={grade}>
-                                    {grade}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
+                        <DialogFooter>
+                          <Button type="button" variant="outline" onClick={() => setIsAssignmentDialogOpen(false)} disabled={isSubmitting}>
+                            Cancel
+                          </Button>
+                          <Button type="submit" disabled={isSubmitting}>
+                            {isSubmitting ? 'Creating...' : 'Create Assignment'}
+                          </Button>
+                        </DialogFooter>
+                      </form>
+                    </DialogContent>
+                  </Dialog>
 
-                        <div className="space-y-2">
-                          <Label htmlFor="description">Description</Label>
-                          <textarea 
-                            id="description" 
-                            className="min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                            placeholder="Course description..."
-                            value={courseForm.description} onChange={(e) => setCourseForm({...courseForm, description: e.target.value})}
-                          />
+                  <Dialog open={isExamDialogOpen} onOpenChange={(open) => { setIsExamDialogOpen(open); setFormError(null); }}>
+                    <DialogTrigger asChild>
+                      <button className="bg-white border border-slate-300 text-slate-600 px-4 py-2 rounded-md font-medium flex items-center gap-2 transition-colors hover:border-slate-400">
+                        <Award size={18} />
+                        SCHEDULE EXAM
+                      </button>
+                    </DialogTrigger>
+                    <DialogContent className="z-[100] max-w-2xl">
+                      <form onSubmit={handleExamSubmit}>
+                        <DialogHeader>
+                          <DialogTitle>Schedule Examination</DialogTitle>
+                          <DialogDescription>
+                            Schedule a new examination for students
+                          </DialogDescription>
+                        </DialogHeader>
+                        
+                        <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto">
+                          <div className="space-y-2">
+                            <Label htmlFor="examTitle">Exam Title</Label>
+                            <Input id="examTitle" placeholder="Enter exam title" value={examForm.name} onChange={(e) => setExamForm({...examForm, name: e.target.value})} />
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="examCourse">Course</Label>
+                              <Select value={examForm.course_id} onValueChange={(value) => setExamForm({...examForm, course_id: value})}>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select course" />
+                                </SelectTrigger>
+                                <SelectContent className="z-[101]">
+                                  {courses.map(course => (
+                                    <SelectItem key={course.id} value={course.id}>{course.name}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="examDate">Exam Date & Time</Label>
+                              <Input id="examDate" type="datetime-local" value={examForm.exam_date} onChange={(e) => setExamForm({...examForm, exam_date: e.target.value})} />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="duration">Duration (minutes)</Label>
+                              <Input id="duration" type="number" placeholder="120" value={examForm.duration_minutes} onChange={(e) => setExamForm({...examForm, duration_minutes: e.target.value})} />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="examMarks">Total Marks</Label>
+                              <Input id="examMarks" type="number" placeholder="100" value={examForm.total_marks} onChange={(e) => setExamForm({...examForm, total_marks: e.target.value})} />
+                            </div>
+                          </div>
+
+                          {renderError(formError)}
                         </div>
-                        {renderError(formError)}
-                      </div>
-                      
-                      <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => setIsCourseDialogOpen(false)} disabled={isSubmitting}>
-                          Cancel
-                        </Button>
-                        <Button type="submit" disabled={isSubmitting}>
-                          {isSubmitting ? 'Creating...' : 'Create Course'}
-                        </Button>
-                      </DialogFooter>
-                    </form>
-                  </DialogContent>
-                </Dialog>
+                        
+                        <DialogFooter>
+                          <Button type="button" variant="outline" onClick={() => setIsExamDialogOpen(false)} disabled={isSubmitting}>
+                            Cancel
+                          </Button>
+                          <Button type="submit" disabled={isSubmitting}>
+                            {isSubmitting ? 'Scheduling...' : 'Schedule Exam'}
+                          </Button>
+                        </DialogFooter>
+                      </form>
+                    </DialogContent>
+                  </Dialog>
+                </>
               )}
+            </div>
+          </div>
 
-              <Dialog open={isAssignmentDialogOpen} onOpenChange={(open) => { setIsAssignmentDialogOpen(open); setFormError(null); }}>
-                <DialogTrigger asChild>
-                  <Button variant="outline">
-                    <FileText className="w-4 h-4 mr-2" />
-                    New Assignment
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-2xl">
-                  <form onSubmit={handleAssignmentSubmit}>
-                    <DialogHeader>
-                      <DialogTitle>Create Assignment</DialogTitle>
-                      <DialogDescription>
-                        Create a new assignment for your students
-                      </DialogDescription>
-                    </DialogHeader>
-                    
-                    <div className="grid gap-4 py-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="assignmentTitle">Assignment Title</Label>
-                        <Input id="assignmentTitle" placeholder="Enter assignment title" value={assignmentForm.title} onChange={(e) => setAssignmentForm({...assignmentForm, title: e.target.value})} />
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="course">Course</Label>
-                          <Select value={assignmentForm.course_id} onValueChange={(value) => setAssignmentForm({...assignmentForm, course_id: value})}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select course" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {courses.map(course => (
-                                <SelectItem key={course.id} value={course.id}>{course.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="dueDate">Due Date</Label>
-                          <Input id="dueDate" type="datetime-local" value={assignmentForm.due_date} onChange={(e) => setAssignmentForm({...assignmentForm, due_date: e.target.value})} />
-                        </div>
-                      </div>
+          {renderError(error)}
 
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="max_score">Total Marks</Label>
-                          <Input id="max_score" type="number" placeholder="100" value={assignmentForm.max_score} onChange={(e) => setAssignmentForm({...assignmentForm, max_score: e.target.value})} />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="assignment_type">Type</Label>
-                          <Select value={assignmentForm.assignment_type} onValueChange={(value) => setAssignmentForm({...assignmentForm, assignment_type: value})}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select type" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="homework">Homework</SelectItem>
-                              <SelectItem value="project">Project</SelectItem>
-                              <SelectItem value="quiz">Quiz</SelectItem>
-                              <SelectItem value="lab">Lab Report</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      {renderError(formError)}
+          {isLoading ? renderLoading() : (
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-0">
+                <div className="border-b border-slate-200 px-6 pt-6">
+                  <TabsList className="w-auto grid grid-cols-4 gap-0 bg-transparent p-0">
+                    <TabsTrigger value="courses" className="bg-transparent border-b-2 border-transparent data-[state=active]:border-teal-500 data-[state=active]:bg-transparent rounded-none px-4 py-2">Courses</TabsTrigger>
+                    <TabsTrigger value="assignments" className="bg-transparent border-b-2 border-transparent data-[state=active]:border-teal-500 data-[state=active]:bg-transparent rounded-none px-4 py-2">Assignments</TabsTrigger>
+                    <TabsTrigger value="exams" className="bg-transparent border-b-2 border-transparent data-[state=active]:border-teal-500 data-[state=active]:bg-transparent rounded-none px-4 py-2">Examinations</TabsTrigger>
+                    <TabsTrigger value="grading" className="bg-transparent border-b-2 border-transparent data-[state=active]:border-teal-500 data-[state=active]:bg-transparent rounded-none px-4 py-2">Grading</TabsTrigger>
+                  </TabsList>
+                </div>
+
+                <div className="p-6">
+                  <TabsContent value="courses" className="space-y-4">
+                    <div className="grid gap-4">
+                      {courses.map((course) => (
+                        <Card key={course.id} className="hover:shadow-md transition-shadow">
+                          <CardContent className="p-6">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-4">
+                                <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg flex items-center justify-center">
+                                  <BookOpen className="w-6 h-6 text-white" />
+                                </div>
+                                <div>
+                                  <h3 className="font-semibold text-gray-900">{course.name}</h3>
+                                  <p className="text-sm text-gray-600">{course.code} • {course.grade}</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-8">
+                                <div className="text-center">
+                                  <p className="text-sm font-medium text-gray-900">{course.teacher_name}</p>
+                                  <p className="text-xs text-gray-500">Instructor</p>
+                                </div>
+                                <Button variant="outline" size="sm" onClick={() => navigate(`/dashboard/academics/courses/${course.id}`)}>
+                                  View Details
+                                </Button>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
                     </div>
-                    
-                    <DialogFooter>
-                      <Button type="button" variant="outline" onClick={() => setIsAssignmentDialogOpen(false)} disabled={isSubmitting}>
-                        Cancel
-                      </Button>
-                      <Button type="submit" disabled={isSubmitting}>
-                        {isSubmitting ? 'Creating...' : 'Create Assignment'}
-                      </Button>
-                    </DialogFooter>
-                  </form>
-                </DialogContent>
-              </Dialog>
+                  </TabsContent>
 
-              <Dialog open={isExamDialogOpen} onOpenChange={(open) => { setIsExamDialogOpen(open); setFormError(null); }}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <Award className="w-4 h-4 mr-2" />
-                    Schedule Exam
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-2xl">
-                  <form onSubmit={handleExamSubmit}>
-                    <DialogHeader>
-                      <DialogTitle>Schedule Examination</DialogTitle>
-                      <DialogDescription>
-                        Schedule a new examination for students
-                      </DialogDescription>
-                    </DialogHeader>
-                    
-                    <div className="grid gap-4 py-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="examTitle">Exam Title</Label>
-                        <Input id="examTitle" placeholder="Enter exam title" value={examForm.name} onChange={(e) => setExamForm({...examForm, name: e.target.value})} />
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="examCourse">Course</Label>
-                          <Select value={examForm.course_id} onValueChange={(value) => setExamForm({...examForm, course_id: value})}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select course" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {courses.map(course => (
-                                <SelectItem key={course.id} value={course.id}>{course.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="examDate">Exam Date & Time</Label>
-                          <Input id="examDate" type="datetime-local" value={examForm.exam_date} onChange={(e) => setExamForm({...examForm, exam_date: e.target.value})} />
-                        </div>
-                      </div>
+                  <TabsContent value="assignments" className="space-y-4">
+                    <div className="grid gap-4">
+                      {assignments.map((assignment) => (
+                        <Card key={assignment.id} className="hover:shadow-md transition-shadow">
+                          <CardContent className="p-6">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-4">
+                                <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
+                                  <FileText className="w-6 h-6 text-white" />
+                                </div>
+                                <div>
+                                  <h3 className="font-semibold text-gray-900">{assignment.title}</h3>
+                                  <p className="text-sm text-gray-600">{assignment.course_name}</p>
+                                </div>
+                              </div>
 
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="duration">Duration (minutes)</Label>
-                          <Input id="duration" type="number" placeholder="120" value={examForm.duration_minutes} onChange={(e) => setExamForm({...examForm, duration_minutes: e.target.value})} />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="examMarks">Total Marks</Label>
-                          <Input id="examMarks" type="number" placeholder="100" value={examForm.total_marks} onChange={(e) => setExamForm({...examForm, total_marks: e.target.value})} />
-                        </div>
-                      </div>
+                              <div className="flex items-center space-x-8">
+                                <div className="text-center">
+                                  <p className="text-sm font-medium text-gray-900">{new Date(assignment.due_date).toLocaleDateString()}</p>
+                                  <p className="text-xs text-gray-500">Due Date</p>
+                                </div>
 
-                      {/* File uploads are complex and not handled by this form submit.
-                          You would need a separate file upload handler.
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="questionPaper">Question Paper</Label>
-                          <Input id="questionPaper" type="file" accept=".pdf,.doc,.docx" />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="answerKey">Answer Key</Label>
-                          <Input id="answerKey" type="file" accept=".pdf,.doc,.docx" />
-                        </div>
-                      </div>
-                      */}
-                      {renderError(formError)}
+                                <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                  assignment.status === 'active' 
+                                    ? 'bg-green-100 text-green-800'
+                                    : 'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {assignment.status}
+                                </span>
+
+                                <Button variant="outline" size="sm" onClick={() => navigate(`/dashboard/academics/assignments/${assignment.id}`)}>
+                                  View Submissions
+                                </Button>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
                     </div>
-                    
-                    <DialogFooter>
-                      <Button type="button" variant="outline" onClick={() => setIsExamDialogOpen(false)} disabled={isSubmitting}>
-                        Cancel
-                      </Button>
-                      <Button type="submit" disabled={isSubmitting}>
-                        {isSubmitting ? 'Scheduling...' : 'Schedule Exam'}
-                      </Button>
-                    </DialogFooter>
-                  </form>
-                </DialogContent>
-              </Dialog>
-            </>
+                  </TabsContent>
+
+                  <TabsContent value="exams" className="space-y-4">
+                    <div className="grid gap-4">
+                      {exams.map((exam) => (
+                        <Card key={exam.id} className="hover:shadow-md transition-shadow">
+                          <CardContent className="p-6">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-4">
+                                <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
+                                  <Award className="w-6 h-6 text-white" />
+                                </div>
+                                
+                                <div>
+                                  <h3 className="font-semibold text-gray-900">{exam.title}</h3>
+                                  <p className="text-sm text-gray-600">{exam.course_name}</p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center space-x-8">
+                                <div className="text-center">
+                                  <p className="text-sm font-medium text-gray-900">{new Date(exam.exam_date).toLocaleDateString()}</p>
+                                  <p className="text-xs text-gray-500">Exam Date</p>
+                                </div>
+                                
+                                <div className="text-center">
+                                  <p className="text-sm font-medium text-gray-900">{exam.duration_minutes} mins</p>
+                                  <p className="text-xs text-gray-500">Duration</p>
+                                </div>
+                                
+                                <div className="text-center">
+                                  <p className="text-sm font-medium text-gray-900">{exam.total_marks}</p>
+                                  <p className="text-xs text-gray-500">Total Marks</p>
+                                </div>
+
+                                <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                  exam.status === 'Scheduled'
+                                    ? 'bg-blue-100 text-blue-800'
+                                    : 'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {exam.status || 'Scheduled'}
+                                </span>
+
+                                <div className="flex space-x-2">
+                                  <Button variant="outline" size="sm">
+                                    <Download className="w-4 h-4 mr-1" />
+                                    Papers
+                                  </Button>
+                                  <Button variant="outline" size="sm" onClick={() => navigate(`/dashboard/academics/exams/${exam.id}`)}>
+                                    View Results
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="grading" className="space-y-4">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Gradebook</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-center py-12 text-gray-500">
+                          <Award className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                          <h3 className="text-lg font-medium mb-2">Grading System</h3>
+                          <p>Manage student grades, rubrics, and assessment criteria</p>
+                          <Button className="mt-4">Set Up Gradebook</Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+                </div>
+              </Tabs>
+            </div>
           )}
         </div>
-      </div>
-      
-      {/* Show main error block if data fetching failed */}
-      {renderError(error)}
-
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="courses">Courses</TabsTrigger>
-          <TabsTrigger value="assignments">Assignments</TabsTrigger>
-          <TabsTrigger value="exams">Examinations</TabsTrigger>
-          <TabsTrigger value="grading">Grading</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="courses" className="space-y-6">
-          {isLoading ? renderLoading() : (
-            <div className="grid gap-4">
-              {courses.map((course) => (
-                <Card key={course.id} className="hover:shadow-md transition-shadow">
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg flex items-center justify-center">
-                          <BookOpen className="w-6 h-6 text-white" />
-                        </div>
-                        <div>
-                          <h3 className="font-semibold text-gray-900">{course.name}</h3>
-                          <p className="text-sm text-gray-600">{course.code} • {course.grade}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-8">
-                        <div className="text-center">
-                          <p className="text-sm font-medium text-gray-900">{course.teacher_name}</p>
-                          <p className="text-xs text-gray-500">Instructor</p>
-                        </div>
-                        {/* NOTE: Your API does not return student count or schedule.
-                        You must update your backend 'GET /api/courses' in secure.js
-                        to include this data if you want to display it.
-                        <div className="text-center">
-                          <p className="text-sm font-medium text-gray-900">{course.students}</p>
-                          <p className="text-xs text-gray-500">Students</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-sm font-medium text-gray-900">{course.schedule}</p>
-                          <p className="text-xs text-gray-500">Schedule</p>
-                        </div>
-                        */}
-                        <Button variant="outline" size="sm" onClick={() => navigate(`/dashboard/academics/courses/${course.id}`)}>
-                          View Details
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="assignments" className="space-y-6">
-          {isLoading ? renderLoading() : (
-            <div className="grid gap-4">
-              {assignments.map((assignment) => (
-                <Card key={assignment.id} className="hover:shadow-md transition-shadow">
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
-                          <FileText className="w-6 h-6 text-white" />
-                        </div>
-                        <div>
-                          <h3 className="font-semibold text-gray-900">{assignment.title}</h3>
-                          <p className="text-sm text-gray-600">{assignment.course_name}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center space-x-8">
-                        <div className="text-center">
-                          <p className="text-sm font-medium text-gray-900">{new Date(assignment.due_date).toLocaleDateString()}</p>
-                          <p className="text-xs text-gray-500">Due Date</p>
-                        </div>
-                        
-                        {/*
-                        NOTE: Your API does not return submission counts.
-                        You must update your backend 'GET /api/assignments' in assignments.js
-                        to include this data if you want to display it.
-                        <div className="text-center">
-                          <p className="text-sm font-medium text-gray-900">{assignment.submissions}/{assignment.totalStudents}</p>
-                          <p className="text-xs text-gray-500">Submissions</p>
-                        </div>
-                        */}
-
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                          assignment.status === 'active' 
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-gray-100 text-gray-800'
-                        }`}>
-                          {assignment.status}
-                        </span>
-
-                        <Button variant="outline" size="sm" onClick={() => navigate(`/dashboard/academics/assignments/${assignment.id}`)}>
-                          View Submissions
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="exams" className="space-y-6">
-          {isLoading ? renderLoading() : (
-            <div className="grid gap-4">
-              {exams.map((exam) => (
-                <Card key={exam.id} className="hover:shadow-md transition-shadow">
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
-                          <Award className="w-6 h-6 text-white" />
-                        </div>
-                        
-                        <div>
-                          <h3 className="font-semibold text-gray-900">{exam.title}</h3>
-                          <p className="text-sm text-gray-600">{exam.course_name}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center space-x-8">
-                        <div className="text-center">
-                          <p className="text-sm font-medium text-gray-900">{new Date(exam.exam_date).toLocaleDateString()}</p>
-                          <p className="text-xs text-gray-500">Exam Date</p>
-                        </div>
-                        
-                        <div className="text-center">
-                          <p className="text-sm font-medium text-gray-900">{exam.duration_minutes} mins</p>
-                          <p className="text-xs text-gray-500">Duration</p>
-                        </div>
-                        
-                        <div className="text-center">
-                          <p className="text-sm font-medium text-gray-900">{exam.total_marks}</p>
-                          <p className="text-xs text-gray-500">Total Marks</p>
-                        </div>
-
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                          exam.status === 'Scheduled' // You may need to adjust this logic
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-gray-100 text-gray-800'
-                        }`}>
-                          {exam.status || 'Scheduled'}
-                        </span>
-
-                        <div className="flex space-x-2">
-                          <Button variant="outline" size="sm">
-                            <Download className="w-4 h-4 mr-1" />
-                            Papers
-                          </Button>
-                          <Button variant="outline" size="sm" onClick={() => navigate(`/dashboard/academics/exams/${exam.id}`)}>
-                            View Results
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="grading" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Gradebook</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-12 text-gray-500">
-                <Award className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                <h3 className="text-lg font-medium mb-2">Grading System</h3>
-                <p>Manage student grades, rubrics, and assessment criteria</p>
-                <Button className="mt-4">Set Up Gradebook</Button>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+      </main>
     </div>
   )
 }

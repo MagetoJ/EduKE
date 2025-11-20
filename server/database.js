@@ -12,7 +12,7 @@ const {
 
 // Database configuration
 const getDbConfig = () => {
-  const useProduction = process.env.USE_PRODUCTION_DB === 'true';
+  const useProduction = process.env.USE_PRODUCTION_DB !== 'false';
 
   if (useProduction) {
     return {
@@ -34,7 +34,7 @@ const getDbConfig = () => {
 
 // Database connection
 let db;
-const useProduction = process.env.USE_PRODUCTION_DB === 'true';
+const useProduction = process.env.USE_PRODUCTION_DB !== 'false';
 
 if (useProduction) {
   db = new Pool(getDbConfig());
@@ -58,7 +58,9 @@ if (useProduction) {
   console.log('Using SQLite database for local development.');
 }
 
-const schemaPath = path.join(__dirname, '..', 'database', 'schema.sql');
+const schemaPath = useProduction
+  ? path.join(__dirname, '..', 'database', 'schema.sql')
+  : path.join(__dirname, '..', 'database', 'schema_sqlite.sql');
 const initializeSchema = async () => {
   try {
     const schema = fs.readFileSync(schemaPath, 'utf-8');
@@ -447,6 +449,7 @@ const ensureSuperAdmin = async () => {
 
 // Run schema upgrades and ensure baseline data
 const initializeDatabase = async () => {
+  // Schema is already initialized at module level
   await ensureSchemaUpgrades();
   await ensureSubscriptionPlans();
   await ensureSuperAdmin();
@@ -458,7 +461,7 @@ initializeDatabase().catch((error) => {
 });
 
 module.exports = {
-  pool,
+  pool: db,
   dbRun,
   dbGet,
   dbAll

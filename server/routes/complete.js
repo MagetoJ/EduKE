@@ -762,6 +762,144 @@ router.put('/fee-structures/:id', authorizeRole(['admin']), async (req, res) => 
 });
 
 // ===================
+// PARENT PORTAL
+// ===================
+
+// Get children for a parent
+router.get('/parent/children', authorizeRole(['parent']), async (req, res) => {
+  try {
+    const { schoolId, user } = req;
+
+    const result = await query(`
+      SELECT
+        s.id,
+        s.first_name,
+        s.last_name,
+        s.email,
+        s.phone,
+        s.date_of_birth,
+        s.gender,
+        s.grade,
+        s.class_section as class_assigned,
+        s.student_id_number as admission_number,
+        s.status
+      FROM students s
+      JOIN parent_student_relations psr ON s.id = psr.student_id
+      WHERE psr.parent_id = $1 AND s.school_id = $2 AND s.status = 'active'
+      ORDER BY s.first_name, s.last_name
+    `, [user.id, schoolId]);
+
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error('Error fetching parent children:', err);
+    res.status(500).json({ success: false, error: 'Failed to fetch children' });
+  }
+});
+
+// Get dashboard metrics for a parent
+router.get('/parent/dashboard', authorizeRole(['parent']), async (req, res) => {
+  try {
+    const { schoolId, user } = req;
+
+    // Get children count
+    const childrenResult = await query(`
+      SELECT COUNT(*) as count
+      FROM students s
+      JOIN parent_student_relations psr ON s.id = psr.student_id
+      WHERE psr.parent_id = $1 AND s.school_id = $2 AND s.status = 'active'
+    `, [user.id, schoolId]);
+
+    const childrenCount = parseInt(childrenResult.rows[0].count);
+
+    if (childrenCount === 0) {
+      return res.json({
+        success: true,
+        data: {
+          childrenCount: 0,
+          totalAssignments: 0,
+          upcomingAssignments: 0,
+          totalFeesDue: 0,
+          totalFeesPaid: 0,
+          averageAttendance: 0,
+          averagePerformance: 0
+        }
+      });
+    }
+
+    // Get assignments metrics
+    const assignmentsResult = await query(`
+      SELECT COUNT(*) as total,
+             COUNT(CASE WHEN a.due_date > CURRENT_DATE THEN 1 END) as upcoming
+      FROM assignments a
+      JOIN courses c ON a.course_id = c.id
+      WHERE c.school_id = $1
+      AND c.grade IN (
+        SELECT DISTINCT s.grade
+        FROM students s
+        JOIN parent_student_relations psr ON s.id = psr.student_id
+        WHERE psr.parent_id = $2 AND s.school_id = $1 AND s.status = 'active'
+      )
+    `, [schoolId, user.id]);
+
+    // Get fees metrics
+    const feesResult = await query(`
+      SELECT
+        COALESCE(SUM(sf.amount_due), 0) as total_due,
+        COALESCE(SUM(sf.amount_paid), 0) as total_paid
+      FROM student_fees sf
+      JOIN students s ON sf.student_id = s.id
+      JOIN parent_student_relations psr ON s.id = psr.student_id
+      WHERE psr.parent_id = $1 AND sf.school_id = $2 AND s.status = 'active'
+    `, [user.id, schoolId]);
+
+    // Get attendance metrics (average across all children)
+    const attendanceResult = await query(`
+      SELECT
+        AVG(CASE
+          WHEN total_days > 0 THEN (present_days * 100.0 / total_days)
+          ELSE 0
+        END) as avg_attendance
+      FROM (
+        SELECT
+          s.id,
+          COUNT(a.id) as total_days,
+          COUNT(CASE WHEN a.status = 'present' THEN 1 END) as present_days
+        FROM students s
+        JOIN parent_student_relations psr ON s.id = psr.student_id
+        LEFT JOIN attendance a ON s.id = a.student_id
+        WHERE psr.parent_id = $1 AND s.school_id = $2 AND s.status = 'active'
+        GROUP BY s.id
+      ) attendance_stats
+    `, [user.id, schoolId]);
+
+    // Get performance metrics (average grade across all children)
+    const performanceResult = await query(`
+      SELECT AVG(CAST(p.score AS DECIMAL)) as avg_score
+      FROM performance p
+      JOIN students s ON p.student_id = s.id
+      JOIN parent_student_relations psr ON s.id = psr.student_id
+      WHERE psr.parent_id = $1 AND s.school_id = $2 AND s.status = 'active'
+      AND p.score IS NOT NULL AND p.score != ''
+    `, [user.id, schoolId]);
+
+    const metrics = {
+      childrenCount,
+      totalAssignments: parseInt(assignmentsResult.rows[0].total) || 0,
+      upcomingAssignments: parseInt(assignmentsResult.rows[0].upcoming) || 0,
+      totalFeesDue: parseFloat(feesResult.rows[0].total_due) || 0,
+      totalFeesPaid: parseFloat(feesResult.rows[0].total_paid) || 0,
+      averageAttendance: Math.round(parseFloat(attendanceResult.rows[0].avg_attendance) || 0),
+      averagePerformance: Math.round(parseFloat(performanceResult.rows[0].avg_score) || 0)
+    };
+
+    res.json({ success: true, data: metrics });
+  } catch (err) {
+    console.error('Error fetching parent dashboard metrics:', err);
+    res.status(500).json({ success: false, error: 'Failed to fetch dashboard metrics' });
+  }
+});
+
+// ===================
 // FEES
 // ===================
 
@@ -781,8 +919,24 @@ router.get('/fees', authorizeRole(['student', 'parent']), async (req, res) => {
       studentId = studentResult.rows[0].id;
     } else if (user.role === 'parent') {
       // Parents can see fees for all their children
-      // For now, return empty array - you might want to implement parent-child relationship
-      return res.json({ success: true, data: [] });
+      const result = await query(`
+        SELECT
+          sf.*,
+          fs.name as fee_name,
+          fs.fee_type,
+          fs.frequency,
+          s.first_name,
+          s.last_name,
+          s.grade
+        FROM student_fees sf
+        JOIN fee_structures fs ON sf.fee_structure_id = fs.id
+        JOIN students s ON sf.student_id = s.id
+        JOIN parent_student_relations psr ON s.id = psr.student_id
+        WHERE psr.parent_id = $1 AND sf.school_id = $2 AND s.status = 'active'
+        ORDER BY sf.due_date DESC
+      `, [user.id, schoolId]);
+
+      return res.json({ success: true, data: result.rows });
     }
 
     const result = await query(
@@ -958,6 +1112,57 @@ router.get('/leave-types', authorizeRole(['admin', 'teacher']), async (req, res)
   }
 });
 
+router.post('/leave-types', authorizeRole(['admin']), async (req, res) => {
+  try {
+    const { schoolId } = req;
+    const { name, description, max_days_per_year, requires_approval } = req.body;
+    
+    if (!name) {
+      return res.status(400).json({ success: false, error: 'Leave type name is required' });
+    }
+    
+    const result = await query(
+      'INSERT INTO leave_types (school_id, name, description, max_days_per_year, requires_approval, is_active) VALUES ($1, $2, $3, $4, $5, true) RETURNING *',
+      [schoolId, name, description || null, max_days_per_year || null, requires_approval !== false]
+    );
+    
+    res.status(201).json({ success: true, data: result.rows[0], message: 'Leave type created successfully' });
+  } catch (err) {
+    console.error('Error creating leave type:', err);
+    res.status(500).json({ success: false, error: 'Failed to create leave type' });
+  }
+});
+
+router.post('/leave-types/initialize', authorizeRole(['admin']), async (req, res) => {
+  try {
+    const { schoolId } = req;
+    
+    const defaultLeaveTypes = [
+      { name: 'Annual Leave', description: 'Paid annual leave', max_days_per_year: 30, requires_approval: true },
+      { name: 'Sick Leave', description: 'Paid sick leave', max_days_per_year: 10, requires_approval: false },
+      { name: 'Maternity', description: 'Maternity leave', max_days_per_year: 120, requires_approval: true },
+      { name: 'Paternity', description: 'Paternity leave', max_days_per_year: 14, requires_approval: true },
+      { name: 'Compassionate Leave', description: 'Leave due to family emergencies', max_days_per_year: 5, requires_approval: true },
+      { name: 'Study Leave', description: 'Leave for professional development', max_days_per_year: 10, requires_approval: true }
+    ];
+    
+    const insertedTypes = [];
+    
+    for (const leaveType of defaultLeaveTypes) {
+      const result = await query(
+        'INSERT INTO leave_types (school_id, name, description, max_days_per_year, requires_approval, is_active) VALUES ($1, $2, $3, $4, $5, true) RETURNING *',
+        [schoolId, leaveType.name, leaveType.description, leaveType.max_days_per_year, leaveType.requires_approval]
+      );
+      insertedTypes.push(result.rows[0]);
+    }
+    
+    res.status(201).json({ success: true, data: insertedTypes, message: `${insertedTypes.length} default leave types created successfully` });
+  } catch (err) {
+    console.error('Error initializing leave types:', err);
+    res.status(500).json({ success: false, error: 'Failed to initialize leave types' });
+  }
+});
+
 // Get leave requests
 router.get('/leave-requests', authorizeRole(['admin', 'teacher']), async (req, res) => {
   try {
@@ -984,13 +1189,31 @@ router.post('/leave-requests', authorizeRole(['admin', 'teacher']), async (req, 
     const { schoolId, user } = req;
     const { leave_type_id, start_date, end_date, reason } = req.body;
     
+    if (!leave_type_id || !start_date || !end_date || !reason) {
+      return res.status(400).json({ success: false, error: 'All fields are required' });
+    }
+    
+    const leaveTypeCheck = await query(
+      'SELECT id FROM leave_types WHERE id = $1 AND school_id = $2',
+      [leave_type_id, schoolId]
+    );
+    
+    if (leaveTypeCheck.rows.length === 0) {
+      return res.status(400).json({ success: false, error: 'Invalid leave type for this school' });
+    }
+    
+    const startDate = new Date(start_date);
+    const endDate = new Date(end_date);
+    const total_days = Math.floor((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+    
     const result = await query(
-      'INSERT INTO leave_requests (school_id, user_id, leave_type_id, start_date, end_date, reason, status) VALUES ($1, $2, $3, $4, $5, $6, \'pending\') RETURNING *',
-      [schoolId, user.id, leave_type_id, start_date, end_date, reason]
+      'INSERT INTO leave_requests (school_id, user_id, leave_type_id, start_date, end_date, total_days, reason, status) VALUES ($1, $2, $3, $4, $5, $6, $7, \'pending\') RETURNING *',
+      [schoolId, user.id, leave_type_id, start_date, end_date, total_days, reason]
     );
     
     res.status(201).json({ success: true, data: result.rows[0], message: 'Leave request submitted successfully' });
   } catch (err) {
+    console.error('Leave request error:', err);
     res.status(500).json({ success: false, error: 'Failed to create leave request' });
   }
 });
@@ -1000,11 +1223,11 @@ router.put('/leave-requests/:id/status', authorizeRole(['admin']), async (req, r
   try {
     const { schoolId, user } = req;
     const { id } = req.params;
-    const { status, admin_remarks } = req.body;
+    const { status, rejection_reason } = req.body;
     
     const result = await query(
-      'UPDATE leave_requests SET status = $1, admin_remarks = $2, approved_by = $3, approved_at = NOW(), updated_at = NOW() WHERE id = $4 AND school_id = $5 RETURNING *',
-      [status, admin_remarks, user.id, id, schoolId]
+      'UPDATE leave_requests SET status = $1, rejection_reason = $2, approved_by = $3, approved_at = NOW(), updated_at = NOW() WHERE id = $4 AND school_id = $5 RETURNING *',
+      [status, rejection_reason, user.id, id, schoolId]
     );
     
     if (result.rows.length === 0) {
@@ -1013,6 +1236,7 @@ router.put('/leave-requests/:id/status', authorizeRole(['admin']), async (req, r
     
     res.json({ success: true, data: result.rows[0], message: `Leave request ${status}` });
   } catch (err) {
+    console.error('Leave request update error:', err);
     res.status(500).json({ success: false, error: 'Failed to update leave request' });
   }
 });

@@ -21,13 +21,13 @@ export default function Progress() {
           api('/api/assignments'),
           api('/api/fees')
         ])
-        
+
         if (!assignmentsRes.ok) throw new Error('Failed to fetch assignments')
         if (!feesRes.ok) throw new Error('Failed to fetch fees')
-        
+
         const assignmentsData = await assignmentsRes.json()
         const feesData = await feesRes.json()
-        
+
         setAssignments(assignmentsData.data || [])
         setFees(feesData.data || [])
       } catch (err) {
@@ -36,7 +36,7 @@ export default function Progress() {
         setIsLoading(false)
       }
     }
-    
+
     if (user && (user.role === 'parent' || user.role === 'student')) {
       fetchData()
     }

@@ -10,6 +10,7 @@ import { Textarea } from '../components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Badge } from '../components/ui/badge'
 import { useApi } from '../contexts/AuthContext'
+import LessonPlanner from './LessonPlanner'
 
 type TeacherStudent = {
   id: string
@@ -489,6 +490,7 @@ export default function TeacherDashboard() {
           <TabsTrigger value="attendance">Attendance</TabsTrigger>
           <TabsTrigger value="assignments">Assignments</TabsTrigger>
           <TabsTrigger value="exams">Exams</TabsTrigger>
+          <TabsTrigger value="lesson-planner">Lesson Planner</TabsTrigger>
           <TabsTrigger value="students">My Students</TabsTrigger>
           <TabsTrigger value="discipline">Discipline</TabsTrigger>
           <TabsTrigger value="performance">Performance</TabsTrigger>
@@ -843,6 +845,10 @@ export default function TeacherDashboard() {
               </Card>
             ))}
           </div>
+        </TabsContent>
+
+        <TabsContent value="lesson-planner" className="space-y-4">
+          <LessonPlanner />
         </TabsContent>
 
         <TabsContent value="students" className="space-y-4">

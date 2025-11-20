@@ -130,8 +130,8 @@ export function SubscriptionStatusChart() {
           </TabsList>
 
           <TabsContent value="plans" className="space-y-4">
-            <div style={{ width: "100%", height: 300 }}>
-              <ResponsiveContainer>
+            <div style={{ width: "100%", height: 300, minWidth: 0 }}>
+              <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={subscriptionData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                   <XAxis dataKey="plan" />
                   <YAxis yAxisId="left" orientation="left" />
@@ -178,8 +178,8 @@ export function SubscriptionStatusChart() {
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               <div>
                 <h4 className="mb-4 text-sm font-medium">Subscriber Distribution</h4>
-                <div style={{ width: "100%", height: 250 }}>
-                  <ResponsiveContainer>
+                <div style={{ width: "100%", height: 250, minWidth: 0 }}>
+                  <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
                         data={statusData}
@@ -206,8 +206,8 @@ export function SubscriptionStatusChart() {
 
               <div>
                 <h4 className="mb-4 text-sm font-medium">Revenue by Status</h4>
-                <div style={{ width: "100%", height: 250 }}>
-                  <ResponsiveContainer>
+                <div style={{ width: "100%", height: 250, minWidth: 0 }}>
+                  <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={statusData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                       <XAxis dataKey="status" />
                       <YAxis />

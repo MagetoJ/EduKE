@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, Edit, Trash2, Loader2, AlertCircle } from 'lucide-react'
+import { Plus, Edit, Trash2, Loader2, AlertCircle, User, MoreHorizontal, MapPin, ChevronDown } from 'lucide-react'
 import { Button } from '../components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
 import { Label } from '../components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
@@ -19,7 +18,6 @@ import {
   AlertDialogTrigger,
 } from "../components/ui/alert-dialog"
 
-// --- Type Definitions ---
 type TimetableEntry = {
   id: string;
   day_of_week: string;
@@ -27,11 +25,10 @@ type TimetableEntry = {
   classroom: string;
   course_name: string;
   teacher_name: string;
-  period_name: string; // From join
-  start_time: string; // From join
-  end_time: string; // From join
-  is_break: boolean; // From join
-  // Fields needed for forms
+  period_name: string;
+  start_time: string;
+  end_time: string;
+  is_break: boolean;
   course_id: string;
   teacher_id: string;
   period_id: string;
@@ -86,7 +83,6 @@ export default function Timetable() {
   const { user } = useAuth()
   const api = useApi()
 
-  // --- State for Data ---
   const [timetableData, setTimetableData] = useState<TimetableEntry[]>([])
   const [courses, setCourses] = useState<Course[]>([])
   const [teachers, setTeachers] = useState<Teacher[]>([])
@@ -95,7 +91,6 @@ export default function Timetable() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // --- State for Dialogs ---
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isAddPeriodDialogOpen, setIsAddPeriodDialogOpen] = useState(false)
@@ -110,7 +105,6 @@ export default function Timetable() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
-  // --- Data Fetching ---
   useEffect(() => {
     const loadData = async () => {
       if (!user) {
@@ -122,22 +116,31 @@ export default function Timetable() {
       setIsLoading(true)
       setError(null)
       try {
-        const [tableRes, courseRes, teacherRes, periodRes] = await Promise.all([
+        const [tableRes, courseRes, periodRes] = await Promise.all([
           api('/api/timetable'),
           api('/api/courses'),
-          api('/api/teachers'),
           api('/api/timetable/periods')
         ])
 
         if (!tableRes.ok) throw new Error('Failed to fetch timetable')
         if (!courseRes.ok) throw new Error('Failed to fetch courses')
-        if (!teacherRes.ok) throw new Error('Failed to fetch teachers')
         if (!periodRes.ok) throw new Error('Failed to fetch time periods')
 
         const tableData = await tableRes.json()
         const courseData = await courseRes.json()
-        const teacherData = await teacherRes.json()
         const periodData = await periodRes.json()
+
+        let teacherData = { data: [] }
+        try {
+          const teacherRes = await api('/api/teachers')
+          if (teacherRes.ok) {
+            teacherData = await teacherRes.json()
+          } else {
+            console.warn('Teachers endpoint returned:', teacherRes.status)
+          }
+        } catch (err) {
+          console.warn('Failed to fetch teachers:', err)
+        }
 
         setTimetableData(tableData.data || [])
         setCourses(courseData.data || [])
@@ -161,13 +164,11 @@ export default function Timetable() {
     setPeriodFormData(prev => ({ ...prev, [field]: value }))
   }
 
-  // --- Add Entry ---
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
     setFormError(null)
 
-    // Validation
     if (!formData.course_id) {
       setFormError('Please select a course')
       setIsSubmitting(false)
@@ -203,14 +204,14 @@ export default function Timetable() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to create entry')
 
-      // Add new entry to state (manually joining names)
       const course = courses.find(c => c.id === data.data.course_id)
       const period = periods.find(p => p.id === data.data.period_id)
+      const teacher = teachers.find(t => t.id === data.data.teacher_id)
 
       const newEntry: TimetableEntry = {
         ...data.data,
         course_name: course?.name || 'Unknown',
-        teacher_name: 'N/A', // POST route doesn't join this, fine for now
+        teacher_name: teacher?.name || 'N/A',
         period_name: period?.name || 'Unknown',
         start_time: period?.start_time || '',
         end_time: period?.end_time || '',
@@ -227,13 +228,11 @@ export default function Timetable() {
     }
   }
 
-  // --- Add Period ---
   const handleAddPeriodSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
     setFormError(null)
 
-    // Validation
     if (!periodFormData.period_name) {
       setFormError('Please enter period name')
       setIsSubmitting(false)
@@ -259,7 +258,6 @@ export default function Timetable() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to create period')
 
-      // Add new period to state
       setPeriods(prev => [...prev, data.data])
       setIsAddPeriodDialogOpen(false)
       setPeriodFormData({
@@ -276,7 +274,6 @@ export default function Timetable() {
     }
   }
 
-  // --- Edit Entry ---
   const handleOpenEditDialog = (entry: TimetableEntry) => {
     setFormError(null)
     setFormData({
@@ -310,14 +307,14 @@ export default function Timetable() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to update entry')
 
-      // Update entry in state (manually joining names)
       const course = courses.find(c => c.id === data.data.course_id)
       const period = periods.find(p => p.id === data.data.period_id)
+      const teacher = teachers.find(t => t.id === data.data.teacher_id)
 
       const updatedEntry: TimetableEntry = {
         ...data.data,
         course_name: course?.name || 'Unknown',
-        teacher_name: 'N/A', // PUT route doesn't join this
+        teacher_name: teacher?.name || 'N/A',
         period_name: period?.name || 'Unknown',
         start_time: period?.start_time || '',
         end_time: period?.end_time || '',
@@ -334,7 +331,6 @@ export default function Timetable() {
     }
   }
 
-  // --- Delete Entry ---
   const handleDelete = async (id: string) => {
     try {
       const res = await api(`/api/timetable/${id}`, {
@@ -350,7 +346,6 @@ export default function Timetable() {
     }
   }
 
-  // Group data by day
   const groupedTimetable = timetableData.reduce((acc, entry) => {
     const day = entry.day_of_week;
     if (!acc[day]) {
@@ -380,245 +375,301 @@ export default function Timetable() {
   )
 
   const canManage = user?.role === 'admin'
+  
+  const getHeaderTitle = () => {
+    if (user?.role === 'student') return 'MY CLASS SCHEDULE'
+    if (user?.role === 'parent') return 'CHILDREN\'S CLASS SCHEDULE'
+    return 'ACADEMIC TIMETABLE'
+  }
+  
+  const getHeaderSubtitle = () => {
+    if (user?.role === 'student') return 'Your personal class timetable'
+    if (user?.role === 'parent') return 'Timetables for your children'
+    return 'Manage class schedules'
+  }
+
+  const getColorForCourse = (courseId: string, index: number) => {
+    const colors = ['sky', 'orange', 'green', 'purple', 'red']
+    return colors[index % colors.length]
+  }
+
+  const colorStyles = {
+    sky: 'bg-sky-200 border-l-sky-500 text-sky-900',
+    orange: 'bg-orange-200 border-l-orange-500 text-orange-900',
+    green: 'bg-green-200 border-l-green-500 text-green-900',
+    purple: 'bg-purple-200 border-l-purple-500 text-purple-900',
+    red: 'bg-red-300 border-l-red-500 text-red-900',
+  }
+
+  const labelColorStyles = {
+    sky: 'text-sky-700',
+    orange: 'text-orange-800',
+    green: 'text-green-800',
+    purple: 'text-purple-800',
+    red: 'text-red-900',
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Class Timetable</h1>
-          <p className="text-gray-600">View and manage class schedules</p>
-        </div>
-        {canManage && (
-          <div className="flex gap-2">
-            <Dialog open={isAddPeriodDialogOpen} onOpenChange={(open) => { setIsAddPeriodDialogOpen(open); setPeriodFormData({ period_name: '', start_time: '', end_time: '', is_break: false }); setFormError(null); }}>
-              <DialogTrigger asChild>
-                <Button variant="outline">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Period
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <form onSubmit={handleAddPeriodSubmit}>
-                  <DialogHeader>
-                    <DialogTitle>Add Time Period</DialogTitle>
-                  </DialogHeader>
-                  <div className="py-4 space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="period_name">Period Name</Label>
-                      <Input
-                        id="period_name"
-                        value={periodFormData.period_name}
-                        onChange={(e) => handlePeriodFormChange('period_name', e.target.value)}
-                        placeholder="e.g., Period 1"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="start_time">Start Time</Label>
-                      <Input
-                        id="start_time"
-                        type="time"
-                        value={periodFormData.start_time}
-                        onChange={(e) => handlePeriodFormChange('start_time', e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="end_time">End Time</Label>
-                      <Input
-                        id="end_time"
-                        type="time"
-                        value={periodFormData.end_time}
-                        onChange={(e) => handlePeriodFormChange('end_time', e.target.value)}
-                      />
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        id="is_break"
-                        checked={periodFormData.is_break}
-                        onChange={(e) => handlePeriodFormChange('is_break', e.target.checked)}
-                      />
-                      <Label htmlFor="is_break">Is Break Period</Label>
-                    </div>
-                    {formError && (
-                      <div className="text-red-600 text-sm">{formError}</div>
-                    )}
-                  </div>
-                  <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => setIsAddPeriodDialogOpen(false)}>
-                      Cancel
-                    </Button>
-                    <Button type="submit" disabled={isSubmitting}>
-                      {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                      Add Period
-                    </Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
-            <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); setFormData(EMPTY_FORM); setFormError(null); }}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Entry
-                </Button>
-              </DialogTrigger>
-            <DialogContent>
-              <form onSubmit={handleAddSubmit}>
-                <DialogHeader>
-                  <DialogTitle>Add Timetable Entry</DialogTitle>
-                </DialogHeader>
-                <div className="py-4 space-y-4">
-                  {/* Form fields... */}
-                  <div className="space-y-2">
-                    <Label htmlFor="day_of_week">Day of Week</Label>
-                    <Select value={formData.day_of_week} onValueChange={(val) => handleFormChange('day_of_week', val)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {DAYS_OF_WEEK.map(day => <SelectItem key={day} value={day}>{day.charAt(0).toUpperCase() + day.slice(1)}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="period_id">Time Period</Label>
-                    <Select value={formData.period_id} onValueChange={(val) => handleFormChange('period_id', val)}>
-                      <SelectTrigger><SelectValue placeholder="Select period" /></SelectTrigger>
-                      <SelectContent>
-                        {periods.map(p => <SelectItem key={p.id} value={p.id}>{p.name} ({p.start_time} - {p.end_time})</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="course_id">Course</Label>
-                    <Select value={formData.course_id} onValueChange={(val) => handleFormChange('course_id', val)}>
-                      <SelectTrigger><SelectValue placeholder="Select course" /></SelectTrigger>
-                      <SelectContent>
-                        {courses.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="teacher_id">Teacher</Label>
-                    <Select value={formData.teacher_id} onValueChange={(val) => handleFormChange('teacher_id', val)}>
-                      <SelectTrigger><SelectValue placeholder="Select teacher" /></SelectTrigger>
-                      <SelectContent>
-                        {teachers.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="grade">Grade</Label>
-                    <Input
-                      id="grade"
-                      value={formData.grade}
-                      onChange={(e) => handleFormChange('grade', e.target.value)}
-                      placeholder="e.g., Grade 10"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="classroom">Room</Label>
-                    <Input
-                      id="classroom"
-                      value={formData.classroom}
-                      onChange={(e) => handleFormChange('classroom', e.target.value)}
-                      placeholder="e.g., Room 101"
-                    />
-                  </div>
-                  {renderFormError(formError)}
-                </div>
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                    Add Entry
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+    <div className="flex h-screen w-full bg-slate-100 font-sans text-slate-900">
+      <main className="flex-1 flex flex-col overflow-hidden">
+        <header className="h-16 bg-slate-800 flex items-center justify-between px-8 shadow-sm z-10">
+          <h1 className="text-white font-semibold text-lg tracking-wide">
+            {getHeaderTitle()}
+          </h1>
+          <div className="h-9 w-9 bg-slate-600 rounded-full flex items-center justify-center text-white hover:bg-slate-500 cursor-pointer">
+            <User size={18} />
           </div>
-        )}
-      </div>
+        </header>
 
-      {renderError(error)}
+        <div className="flex-1 overflow-y-auto p-8">
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-slate-700 uppercase tracking-tight">
+              {getHeaderTitle()}
+            </h2>
+            <p className="text-sm text-slate-500 mt-1">{getHeaderSubtitle()}</p>
+          </div>
 
-      {isLoading ? renderLoading() : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-          {DAYS_OF_WEEK.map(day => (
-            <Card key={day} className="shadow-md hover:shadow-lg transition-shadow duration-200 border-2 border-gray-200">
-              <CardHeader className="bg-gray-100 border-b border-gray-200">
-                <CardTitle className="text-lg font-semibold text-gray-800">{day.charAt(0).toUpperCase() + day.slice(1)}</CardTitle>
-              </CardHeader>
-              <CardContent className="p-4">
-                <div className="space-y-3">
-                  {(groupedTimetable[day] || []).map(entry => (
-                    <div key={entry.id} className={`p-3 rounded-md border transition-all duration-200 hover:shadow-md ${
-                      entry.is_break
-                        ? 'bg-red-50 border-red-300'
-                        : 'bg-white border-gray-300'
-                    }`}>
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <h4 className={`font-semibold text-sm ${
-                            entry.is_break ? 'text-red-700' : 'text-gray-900'
-                          }`}>{entry.course_name}</h4>
-                          <div className="text-xs text-gray-600 space-y-1 mt-1">
-                            <div className="font-medium">{entry.period_name} ({entry.start_time} - {entry.end_time})</div>
-                            <div>Grade: {entry.grade}</div>
-                            <div>Room: {entry.classroom}</div>
-                            {entry.teacher_name && <div className="font-medium">Teacher: {entry.teacher_name}</div>}
+          {!canManage && timetableData.length === 0 && (
+            <div className="bg-blue-50 border border-blue-200 text-blue-700 p-4 rounded-lg mb-6 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium">No classes scheduled</p>
+                <p className="text-sm text-blue-600 mt-1">Your timetable appears to be empty or not yet scheduled by administrators.</p>
+              </div>
+            </div>
+          )}
+
+          {!canManage && timetableData.length > 0 && (
+            <div className="bg-teal-50 border border-teal-200 text-teal-700 p-4 rounded-lg mb-6 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium">Viewing personalized schedule</p>
+                <p className="text-sm text-teal-600 mt-1">Below is your class schedule. Contact your school administrator if you notice any issues.</p>
+              </div>
+            </div>
+          )}
+
+          <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-200 mb-6 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              {canManage && (
+                <>
+                  <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); setFormData(EMPTY_FORM); setFormError(null); }}>
+                    <DialogTrigger asChild>
+                      <button className="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-md font-medium flex items-center gap-2 transition-colors shadow-sm">
+                        <Plus size={18} />
+                        ADD NEW ENTRY
+                      </button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <form onSubmit={handleAddSubmit}>
+                        <DialogHeader>
+                          <DialogTitle>Add Timetable Entry</DialogTitle>
+                        </DialogHeader>
+                        <div className="py-4 space-y-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="day_of_week">Day of Week</Label>
+                            <Select value={formData.day_of_week} onValueChange={(val) => handleFormChange('day_of_week', val)}>
+                              <SelectTrigger><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                {DAYS_OF_WEEK.map(day => <SelectItem key={day} value={day}>{day.charAt(0).toUpperCase() + day.slice(1)}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
                           </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="period_id">Time Period</Label>
+                            <Select value={formData.period_id} onValueChange={(val) => handleFormChange('period_id', val)}>
+                              <SelectTrigger><SelectValue placeholder="Select period" /></SelectTrigger>
+                              <SelectContent>
+                                {periods.map(p => <SelectItem key={p.id} value={p.id}>{p.name} ({p.start_time} - {p.end_time})</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="course_id">Course</Label>
+                            <Select value={formData.course_id} onValueChange={(val) => handleFormChange('course_id', val)}>
+                              <SelectTrigger><SelectValue placeholder="Select course" /></SelectTrigger>
+                              <SelectContent>
+                                {courses.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="teacher_id">Teacher</Label>
+                            <Select value={formData.teacher_id} onValueChange={(val) => handleFormChange('teacher_id', val)}>
+                              <SelectTrigger><SelectValue placeholder={teachers.length === 0 ? "No teachers available" : "Select teacher"} /></SelectTrigger>
+                              <SelectContent>
+                                {teachers.length === 0 ? (
+                                  <SelectItem disabled value="">No teachers available</SelectItem>
+                                ) : (
+                                  teachers.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)
+                                )}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="grade">Grade</Label>
+                            <Input
+                              id="grade"
+                              value={formData.grade}
+                              onChange={(e) => handleFormChange('grade', e.target.value)}
+                              placeholder="e.g., Grade 10"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="classroom">Room</Label>
+                            <Input
+                              id="classroom"
+                              value={formData.classroom}
+                              onChange={(e) => handleFormChange('classroom', e.target.value)}
+                              placeholder="e.g., Room 101"
+                            />
+                          </div>
+                          {renderFormError(formError)}
                         </div>
-                        {canManage && (
-                          <div className="flex gap-1 ml-2">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleOpenEditDialog(entry)}
-                              className="h-8 w-8 p-0"
-                            >
-                              <Edit className="w-3 h-3" />
-                            </Button>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-600 hover:text-red-700">
-                                  <Trash2 className="w-3 h-3" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Delete Timetable Entry</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Are you sure you want to delete this timetable entry? This action cannot be undone.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => handleDelete(entry.id)} className="bg-red-600 hover:bg-red-700">
-                                    Delete
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                  {(groupedTimetable[day] || []).length === 0 && (
-                    <div className="text-center text-gray-500 text-sm py-4">
-                      No classes scheduled
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+                        <DialogFooter>
+                          <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                            Cancel
+                          </Button>
+                          <Button type="submit" disabled={isSubmitting}>
+                            {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                            Add Entry
+                          </Button>
+                        </DialogFooter>
+                      </form>
+                    </DialogContent>
+                  </Dialog>
 
-      {/* Edit Dialog */}
+                  <Dialog open={isAddPeriodDialogOpen} onOpenChange={(open) => { setIsAddPeriodDialogOpen(open); setPeriodFormData({ period_name: '', start_time: '', end_time: '', is_break: false }); setFormError(null); }}>
+                    <DialogTrigger asChild>
+                      <button className="flex items-center gap-2 bg-white border border-slate-300 text-slate-600 px-4 py-2 rounded-md text-sm hover:border-slate-400 transition-colors">
+                        Add Period
+                        <ChevronDown size={14} />
+                      </button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <form onSubmit={handleAddPeriodSubmit}>
+                        <DialogHeader>
+                          <DialogTitle>Add Time Period</DialogTitle>
+                        </DialogHeader>
+                        <div className="py-4 space-y-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="period_name">Period Name</Label>
+                            <Input
+                              id="period_name"
+                              value={periodFormData.period_name}
+                              onChange={(e) => handlePeriodFormChange('period_name', e.target.value)}
+                              placeholder="e.g., Period 1"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="start_time">Start Time</Label>
+                            <Input
+                              id="start_time"
+                              type="time"
+                              value={periodFormData.start_time}
+                              onChange={(e) => handlePeriodFormChange('start_time', e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="end_time">End Time</Label>
+                            <Input
+                              id="end_time"
+                              type="time"
+                              value={periodFormData.end_time}
+                              onChange={(e) => handlePeriodFormChange('end_time', e.target.value)}
+                            />
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="checkbox"
+                              id="is_break"
+                              checked={periodFormData.is_break}
+                              onChange={(e) => handlePeriodFormChange('is_break', e.target.checked)}
+                            />
+                            <Label htmlFor="is_break">Is Break Period</Label>
+                          </div>
+                          {formError && (
+                            <div className="text-red-600 text-sm">{formError}</div>
+                          )}
+                        </div>
+                        <DialogFooter>
+                          <Button type="button" variant="outline" onClick={() => setIsAddPeriodDialogOpen(false)}>
+                            Cancel
+                          </Button>
+                          <Button type="submit" disabled={isSubmitting}>
+                            {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                            Add Period
+                          </Button>
+                        </DialogFooter>
+                      </form>
+                    </DialogContent>
+                  </Dialog>
+                </>
+              )}
+            </div>
+          </div>
+
+          {renderError(error)}
+
+          {isLoading ? renderLoading() : (
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[600px]">
+              <div className="grid grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] bg-slate-800 text-white font-semibold text-sm uppercase text-center sticky top-0">
+                <div className="p-4 border-r border-slate-700"></div>
+                {['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].map(day => (
+                  <div key={day} className="p-4 border-r border-slate-700 last:border-r-0">
+                    {day.charAt(0).toUpperCase() + day.slice(1)}
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex-1 relative overflow-y-auto">
+                <div className="absolute inset-0 grid grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] grid-rows-[repeat(auto-fit,120px)]">
+                  <div className="border-r border-slate-200 bg-slate-50 flex flex-col text-xs text-slate-400 font-medium text-right pr-3 pt-2 gap-[105px]">
+                    {periods.map((p, i) => (
+                      <span key={p.id}>{p.start_time}</span>
+                    ))}
+                  </div>
+                  {[...Array(25)].map((_, i) => (
+                    <div key={i} className="border-r border-b border-slate-100 opacity-50" />
+                  ))}
+                </div>
+
+                <div className="absolute inset-0 grid grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] grid-rows-[repeat(auto-fit,120px)] pointer-events-none">
+                  {timetableData.map((entry, idx) => {
+                    const dayIndex = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].indexOf(entry.day_of_week);
+                    const periodIndex = periods.findIndex(p => p.id === entry.period_id);
+                    const color = getColorForCourse(entry.course_id, idx) as keyof typeof colorStyles
+                    
+                    if (dayIndex < 0 || periodIndex < 0) return null
+
+                    return (
+                      <div
+                        key={entry.id}
+                        className={`col-start-${dayIndex + 2} row-start-${periodIndex + 1} p-2 pointer-events-auto`}
+                        style={{
+                          gridColumn: dayIndex + 2,
+                          gridRow: periodIndex + 1
+                        }}
+                      >
+                        <ClassCardWithActions
+                          entry={entry}
+                          color={color}
+                          colorStyle={colorStyles[color]}
+                          labelColorStyle={labelColorStyles[color]}
+                          canManage={canManage}
+                          onEdit={() => handleOpenEditDialog(entry)}
+                          onDelete={() => handleDelete(entry.id)}
+                        />
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </main>
+
       {canManage && (
         <Dialog open={isEditDialogOpen} onOpenChange={(open) => { setIsEditDialogOpen(open); setFormData(EMPTY_FORM); setFormError(null); }}>
           <DialogContent>
@@ -657,9 +708,13 @@ export default function Timetable() {
                 <div className="space-y-2">
                   <Label htmlFor="edit_teacher_id">Teacher</Label>
                   <Select value={formData.teacher_id} onValueChange={(val) => handleFormChange('teacher_id', val)}>
-                    <SelectTrigger><SelectValue placeholder="Select teacher" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={teachers.length === 0 ? "No teachers available" : "Select teacher"} /></SelectTrigger>
                     <SelectContent>
-                      {teachers.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                      {teachers.length === 0 ? (
+                        <SelectItem disabled value="">No teachers available</SelectItem>
+                      ) : (
+                        teachers.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -695,6 +750,81 @@ export default function Timetable() {
             </form>
           </DialogContent>
         </Dialog>
+      )}
+    </div>
+  )
+}
+
+interface ClassCardWithActionsProps {
+  entry: TimetableEntry
+  color: keyof typeof colorStyles
+  colorStyle: string
+  labelColorStyle: string
+  canManage: boolean
+  onEdit: () => void
+  onDelete: () => void
+}
+
+function ClassCardWithActions({ entry, color, colorStyle, labelColorStyle, canManage, onEdit, onDelete }: ClassCardWithActionsProps) {
+  const [showDelete, setShowDelete] = React.useState(false)
+
+  return (
+    <div className={`h-full w-full rounded-r-md border-l-[6px] p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer flex flex-col justify-between relative group ${colorStyle}`}>
+      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-50">
+        <div className="bg-white/40 p-1 rounded-full">
+          <MoreHorizontal size={14} />
+        </div>
+      </div>
+
+      <div>
+        <h3 className="font-bold text-sm leading-tight mb-1">{entry.course_name}</h3>
+      </div>
+
+      <div className={`text-xs space-y-1 ${labelColorStyle} font-medium opacity-90`}>
+        <div className="flex items-center gap-1">
+          <User size={12} /> {entry.teacher_name || 'N/A'}
+        </div>
+        <div className="flex items-center gap-1">
+          <MapPin size={12} /> Room: {entry.classroom}
+        </div>
+      </div>
+
+      {canManage && (
+        <div className="absolute inset-0 bg-black/0 hover:bg-black/5 rounded-r-md opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onEdit()
+            }}
+            className="p-1 bg-white rounded-full shadow hover:shadow-md"
+          >
+            <Edit size={14} className="text-slate-600" />
+          </button>
+          <AlertDialog open={showDelete} onOpenChange={setShowDelete}>
+            <AlertDialogTrigger asChild>
+              <button
+                onClick={(e) => e.stopPropagation()}
+                className="p-1 bg-white rounded-full shadow hover:shadow-md"
+              >
+                <Trash2 size={14} className="text-red-600" />
+              </button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete Entry</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to delete this timetable entry? This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => onDelete()} className="bg-red-600 hover:bg-red-700">
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
       )}
     </div>
   )

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
+import { Button } from '../components/ui/button'
 import {
   Users,
   BookOpen,
@@ -7,9 +8,13 @@ import {
   TrendingUp,
   School,
   UserCheck,
-  MessageSquare
+  MessageSquare,
+  Clock,
+  CheckCircle,
+  XCircle
 } from 'lucide-react'
 import { useApi, useAuth } from '../contexts/AuthContext'
+import { useNavigate } from 'react-router'
 
 type SchoolRecord = {
   id: string
@@ -29,11 +34,15 @@ type StudentRecord = {
   fees: string | null
 }
 
-type StaffRecord = {
+type LeaveRequest = {
   id: string
-  name: string
-  role: string
-  status: string | null
+  staff_name: string
+  leave_type_name: string
+  start_date: string
+  end_date: string
+  reason: string
+  status: 'pending' | 'approved' | 'rejected'
+  created_at: string
 }
 
 const parseCurrency = (value: string | null | undefined) => {
@@ -44,12 +53,22 @@ const parseCurrency = (value: string | null | undefined) => {
   return Number.isNaN(numeric) ? 0 : numeric
 }
 
+interface AdminMetricsData {
+  totalStudents: number
+  activeStudents: number
+  totalStaff: number
+  outstandingFees: number
+  uniqueCourses: number
+}
+
 export default function Dashboard() {
   const { user } = useAuth()
   const apiFetch = useApi()
+  const navigate = useNavigate()
   const [schools, setSchools] = useState<SchoolRecord[]>([])
+  const [adminStats, setAdminStats] = useState<AdminMetricsData | null>(null)
   const [students, setStudents] = useState<StudentRecord[]>([])
-  const [staff, setStaff] = useState<StaffRecord[]>([])
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -61,8 +80,9 @@ export default function Dashboard() {
       setIsLoading(true)
       setError(null)
       setSchools([])
+      setAdminStats(null)
       setStudents([])
-      setStaff([])
+      setLeaveRequests([])
 
       try {
         if (user.role === 'super_admin') {
@@ -73,20 +93,23 @@ export default function Dashboard() {
           const data = await response.json()
           setSchools(Array.isArray(data) ? data : (data.data || []))
         } else if (user.role === 'admin') {
-          const [studentsResponse, staffResponse] = await Promise.all([
-            apiFetch('/api/students'),
-            apiFetch('/api/staff')
+          const [statsResponse, leaveResponse] = await Promise.all([
+            apiFetch('/api/dashboard/stats'),
+            apiFetch('/api/leave-requests')
           ])
-          if (!studentsResponse.ok) {
-            throw new Error('Failed to load students')
+          
+          if (!statsResponse.ok) {
+            console.error('Dashboard stats response error:', statsResponse.status, statsResponse.statusText)
+            throw new Error('Failed to load dashboard stats')
           }
-          if (!staffResponse.ok) {
-            throw new Error('Failed to load staff')
+          const data = await statsResponse.json()
+          console.log('Dashboard stats received:', data)
+          setAdminStats(data?.data || null)
+          
+          if (leaveResponse.ok) {
+            const leaveData = await leaveResponse.json()
+            setLeaveRequests(leaveData.data || [])
           }
-          const studentData = await studentsResponse.json()
-          const staffData = await staffResponse.json()
-          setStudents(studentData.data || [])
-          setStaff(staffData.data || [])
         } else if (user.role === 'teacher') {
           const studentsResponse = await apiFetch('/api/students')
           if (!studentsResponse.ok) {
@@ -116,15 +139,24 @@ export default function Dashboard() {
   }, [schools])
 
   const adminMetrics = useMemo(() => {
-    const studentsArray = Array.isArray(students) ? students : []
-    const staffArray = Array.isArray(staff) ? staff : []
-    const totalStudents = studentsArray.length
-    const activeStudents = studentsArray.filter((student) => student.status === 'Active').length
-    const uniqueCourses = new Set(studentsArray.map((student) => student.grade ?? '')).size
-    const totalStaff = staffArray.length
-    const outstandingFees = studentsArray.reduce((sum, student) => sum + parseCurrency(student.fees), 0)
-    return { totalStudents, activeStudents, uniqueCourses, totalStaff, outstandingFees }
-  }, [students, staff])
+    const defaultMetrics = {
+      totalStudents: 0,
+      activeStudents: 0,
+      uniqueCourses: 0,
+      totalStaff: 0,
+      outstandingFees: 0
+    }
+
+    if (!adminStats) return defaultMetrics
+
+    return {
+      totalStudents: Number(adminStats.totalStudents) || 0,
+      activeStudents: Number(adminStats.activeStudents) || 0,
+      uniqueCourses: Number(adminStats.uniqueCourses) || 0,
+      totalStaff: Number(adminStats.totalStaff) || 0,
+      outstandingFees: Number(adminStats.outstandingFees) || 0
+    }
+  }, [adminStats])
 
   const teacherMetrics = useMemo(() => {
     const studentsArray = Array.isArray(students) ? students : []
@@ -207,11 +239,13 @@ export default function Dashboard() {
     </div>
   )
 
+  const pendingLeaves = leaveRequests.filter(lr => lr.status === 'pending')
+
   const renderAdminDashboard = () => (
-    <div>
+    <div className="space-y-6">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">School Dashboard</h1>
-        <p className="text-gray-600">Overview of {user.schoolName}</p>
+        <h1 className="text-3xl font-bold text-slate-900">School Dashboard</h1>
+        <p className="text-slate-600">Overview of {user.schoolName}</p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
@@ -243,7 +277,7 @@ export default function Dashboard() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${adminMetrics.outstandingFees.toLocaleString()}</div>
+            <div className="text-2xl font-bold">${(adminMetrics.outstandingFees || 0).toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">Across all students</p>
           </CardContent>
         </Card>
@@ -258,6 +292,48 @@ export default function Dashboard() {
             <p className="text-xs text-muted-foreground">Active faculty</p>
           </CardContent>
         </Card>
+      </div>
+
+      <div className="mt-8">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900">Pending Leave Requests</h2>
+            <p className="text-slate-600">{pendingLeaves.length} awaiting approval</p>
+          </div>
+          <Button onClick={() => navigate('/dashboard/leave')} variant="outline">
+            View All
+          </Button>
+        </div>
+
+        {pendingLeaves.length === 0 ? (
+          <Card>
+            <CardContent className="pt-6 text-center text-slate-500">
+              <p>No pending leave requests</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-3">
+            {pendingLeaves.slice(0, 5).map((leave) => (
+              <Card key={leave.id} className="hover:shadow-md transition-shadow">
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <p className="font-medium text-slate-900">{leave.staff_name}</p>
+                      <p className="text-sm text-slate-600">{leave.leave_type_name}</p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        {new Date(leave.start_date).toLocaleDateString()} - {new Date(leave.end_date).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-slate-400" />
+                      <span className="px-3 py-1 bg-yellow-50 text-yellow-700 text-xs font-medium rounded-full">Pending</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

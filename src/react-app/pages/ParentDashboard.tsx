@@ -6,7 +6,7 @@ import { Label } from '../components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Badge } from '../components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
-import { useApi } from '../contexts/AuthContext'
+import { useApi, useAuth } from '../contexts/AuthContext'
 
 type DisciplineRecord = {
   id: number
@@ -73,13 +73,42 @@ type Child = {
   status: string
 }
 
+type DashboardMetrics = {
+  childrenCount: number
+  totalAssignments: number
+  upcomingAssignments: number
+  totalFeesDue: number
+  totalFeesPaid: number
+  averageAttendance: number
+  averagePerformance: number
+}
+
 export default function ParentDashboard() {
+  const { user } = useAuth()
   const apiFetch = useApi()
   const [children, setChildren] = useState<Child[]>([])
   const [selectedChildId, setSelectedChildId] = useState<string>('')
   const [studentData, setStudentData] = useState<StudentDashboardData | null>(null)
+  const [dashboardMetrics, setDashboardMetrics] = useState<DashboardMetrics | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [metricsLoading, setMetricsLoading] = useState(false)
+
+  // Check if user is a parent
+  if (!user || user.role !== 'parent') {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="text-center text-red-600">Access Denied</CardTitle>
+            <CardDescription className="text-center">
+              This page is only accessible to parent users.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    )
+  }
 
   const attendanceCards = useMemo(() => {
     if (!studentData) {
@@ -88,28 +117,42 @@ export default function ParentDashboard() {
     return studentData.attendance
   }, [studentData])
 
-  // Load children on mount
+  // Load children and dashboard metrics on mount
   useEffect(() => {
-    const loadChildren = async () => {
+    const loadInitialData = async () => {
       setIsLoading(true)
+      setMetricsLoading(true)
       setError(null)
       try {
-        const response = await apiFetch('/api/parent/children')
-        if (!response.ok) {
+        const [childrenResponse, metricsResponse] = await Promise.all([
+          apiFetch('/api/parent/children'),
+          apiFetch('/api/parent/dashboard')
+        ])
+
+        if (!childrenResponse.ok) {
           throw new Error('Failed to load children')
         }
-        const data = await response.json()
-        setChildren(data.data || [])
-        if (data.data && data.data.length > 0) {
-          setSelectedChildId(data.data[0].id)
+        if (!metricsResponse.ok) {
+          throw new Error('Failed to load dashboard metrics')
+        }
+
+        const childrenData = await childrenResponse.json()
+        const metricsData = await metricsResponse.json()
+
+        setChildren(childrenData.data || [])
+        setDashboardMetrics(metricsData.data)
+
+        if (childrenData.data && childrenData.data.length > 0) {
+          setSelectedChildId(childrenData.data[0].id)
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load children')
+        setError(err instanceof Error ? err.message : 'Failed to load data')
       } finally {
         setIsLoading(false)
+        setMetricsLoading(false)
       }
     }
-    loadChildren()
+    loadInitialData()
   }, [apiFetch])
 
   // Load student data when child is selected
@@ -218,7 +261,38 @@ export default function ParentDashboard() {
     setSelectedChildId(childId)
   }
 
-  if (children.length === 0 && !isLoading) {
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading parent dashboard...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="text-center text-red-600">Error Loading Dashboard</CardTitle>
+            <CardDescription className="text-center">{error}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={() => window.location.reload()} className="w-full">
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (children.length === 0) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <Card className="w-full max-w-md">
@@ -231,7 +305,7 @@ export default function ParentDashboard() {
     )
   }
 
-  if (!studentData && !isLoading) {
+  if (!studentData) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <Card className="w-full max-w-md">
@@ -307,51 +381,115 @@ export default function ParentDashboard() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Grade</CardTitle>
-                <BookOpen className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{studentData?.grade ?? 'N/A'}</div>
-                <p className="text-xs text-muted-foreground">Class {studentData?.className ?? 'N/A'}</p>
-              </CardContent>
-            </Card>
+          {metricsLoading ? (
+            <div className="flex items-center justify-center h-32">
+              <div className="text-sm text-muted-foreground">Loading dashboard metrics...</div>
+            </div>
+          ) : dashboardMetrics ? (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Children</CardTitle>
+                  <User className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{dashboardMetrics.childrenCount}</div>
+                  <p className="text-xs text-muted-foreground">Enrolled children</p>
+                </CardContent>
+              </Card>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Average Grade</CardTitle>
-                <User className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{studentData!.performance.overallAverage}%</div>
-                <p className="text-xs text-muted-foreground">Overall performance</p>
-              </CardContent>
-            </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Assignments</CardTitle>
+                  <BookOpen className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{dashboardMetrics.totalAssignments}</div>
+                  <p className="text-xs text-muted-foreground">{dashboardMetrics.upcomingAssignments} upcoming</p>
+                </CardContent>
+              </Card>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Attendance</CardTitle>
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{attendanceCards.percentage}%</div>
-                <p className="text-xs text-muted-foreground">Present rate</p>
-              </CardContent>
-            </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Average Attendance</CardTitle>
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{dashboardMetrics.averageAttendance}%</div>
+                  <p className="text-xs text-muted-foreground">Across all children</p>
+                </CardContent>
+              </Card>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Fees Status</CardTitle>
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">${studentData!.financial.feesDue}</div>
-                <p className="text-xs text-muted-foreground">Outstanding</p>
-              </CardContent>
-            </Card>
-          </div>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Average Performance</CardTitle>
+                  <User className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{dashboardMetrics.averagePerformance}%</div>
+                  <p className="text-xs text-muted-foreground">Overall average</p>
+                </CardContent>
+              </Card>
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">No dashboard metrics available</p>
+            </div>
+          )}
+
+          {/* Individual Child Overview */}
+          {studentData && (
+            <>
+              <div className="border-t pt-6">
+                <h3 className="text-lg font-semibold mb-4">Individual Child Overview</h3>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Grade</CardTitle>
+                      <BookOpen className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{studentData.grade ?? 'N/A'}</div>
+                      <p className="text-xs text-muted-foreground">Class {studentData.className ?? 'N/A'}</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Average Grade</CardTitle>
+                      <User className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{studentData.performance.overallAverage}%</div>
+                      <p className="text-xs text-muted-foreground">Overall performance</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Attendance</CardTitle>
+                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{attendanceCards.percentage}%</div>
+                      <p className="text-xs text-muted-foreground">Present rate</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Fees Status</CardTitle>
+                      <DollarSign className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">${studentData.financial.feesDue}</div>
+                      <p className="text-xs text-muted-foreground">Outstanding</p>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            </>
+          )}
         </TabsContent>
 
         <TabsContent value="performance" className="space-y-4">

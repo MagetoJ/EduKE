@@ -18,11 +18,25 @@ async function checkUsers() {
       console.log(`- ${teacher.name} (${teacher.email})`);
     });
 
-    // Get super admin
-    const superAdmin = await dbAll('SELECT id, name, email, role FROM users WHERE role = ?', ['super_admin']);
-    console.log('\nSuper Admin:');
-    superAdmin.forEach(admin => {
-      console.log(`- ${admin.name} (${admin.email})`);
+    // Get parents
+    const parents = await dbAll('SELECT id, name, email, role FROM users WHERE role = ?', ['parent']);
+    console.log('\nParents:');
+    parents.forEach(parent => {
+      console.log(`- ${parent.name} (${parent.email})`);
+    });
+
+    // Get parent-student relationships
+    const relations = await dbAll('SELECT * FROM parent_student_relations');
+    console.log('\nParent-Student Relations:');
+    relations.forEach(relation => {
+      console.log(`- Parent ID: ${relation.parent_id}, Student ID: ${relation.student_id}`);
+    });
+
+    // Get students
+    const students = await dbAll('SELECT id, first_name, last_name, grade FROM students LIMIT 5');
+    console.log('\nSample Students:');
+    students.forEach(student => {
+      console.log(`- ${student.first_name} ${student.last_name} (Grade: ${student.grade})`);
     });
 
     process.exit(0);

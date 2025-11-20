@@ -1,5 +1,5 @@
 import { useEffect, useState, FormEvent, useMemo } from 'react'
-import { Plus, DollarSign, CheckCircle, AlertCircle, Clock, Loader2 } from 'lucide-react'
+import { Plus, DollarSign, CheckCircle, AlertCircle, Clock, Loader2, User } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card'
@@ -325,38 +325,40 @@ export default function Fees() {
   )
 
   const renderAdminView = () => (
-    <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-      <TabsList>
-        <TabsTrigger value="structure">Fee Structure</TabsTrigger>
-        <TabsTrigger value="collection">Fee Collection</TabsTrigger>
-        <TabsTrigger value="reports">Reports</TabsTrigger>
-      </TabsList>
+    <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6 w-full">
+      <div className="border-b border-slate-200">
+        <TabsList className="bg-transparent border-none">
+          <TabsTrigger value="structure" className="border-b-2 border-transparent data-[state=active]:border-teal-500 data-[state=active]:bg-transparent rounded-none">Fee Structure</TabsTrigger>
+          <TabsTrigger value="collection" className="border-b-2 border-transparent data-[state=active]:border-teal-500 data-[state=active]:bg-transparent rounded-none">Fee Collection</TabsTrigger>
+          <TabsTrigger value="reports" className="border-b-2 border-transparent data-[state=active]:border-teal-500 data-[state=active]:bg-transparent rounded-none">Reports</TabsTrigger>
+        </TabsList>
+      </div>
       
       {renderError(error)}
 
-      <TabsContent value="structure" className="space-y-6">
+      <TabsContent value="structure" className="space-y-6 mt-6">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-semibold">Fee Structure Management</h2>
-            <p className="text-gray-600">Configure fee types and amounts for different grades</p>
+            <h3 className="text-lg font-semibold text-slate-900">Fee Structure Management</h3>
+            <p className="text-sm text-slate-600">Configure fee types and amounts for different grades</p>
           </div>
           
           {/* --- "ADD" DIALOG TRIGGER --- */}
           <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); setFormError(null); }}>
             <DialogTrigger asChild>
-              <Button>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Fee Structure
-              </Button>
+              <button className="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-md font-medium flex items-center gap-2 transition-colors shadow-sm">
+                <Plus className="w-4 h-4" />
+                ADD FEE STRUCTURE
+              </button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="z-[100] max-w-2xl">
               <form onSubmit={handleAddSubmit}>
                 <DialogHeader>
                   <DialogTitle>Add Fee Structure</DialogTitle>
                   <DialogDescription>Create a new fee type for students</DialogDescription>
                 </DialogHeader>
                 
-                <div className="grid gap-4 py-4">
+                <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto">
                   <div className="space-y-2">
                     <Label htmlFor="feeName">Fee Name</Label>
                     <Input id="feeName" placeholder="e.g., Tuition Fee" value={addStructureForm.fee_type} onChange={e => setAddStructureForm({...addStructureForm, fee_type: e.target.value})} />
@@ -373,7 +375,7 @@ export default function Fees() {
                         <SelectTrigger>
                           <SelectValue placeholder="Select type" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="z-[101]">
                           <SelectItem value="monthly">Monthly</SelectItem>
                           <SelectItem value="semester">Semester</SelectItem>
                           <SelectItem value="annual">Annual</SelectItem>
@@ -395,7 +397,7 @@ export default function Fees() {
                         <SelectTrigger id="academic_year">
                           <SelectValue placeholder="Select academic year" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="z-[101]">
                           {academicYears.map((year) => (
                             <SelectItem key={year.id} value={year.id}>
                               {year.label}
@@ -423,14 +425,14 @@ export default function Fees() {
 
         {/* --- "EDIT" DIALOG (Mostly hidden) --- */}
         <Dialog open={isEditDialogOpen} onOpenChange={(open) => { setIsEditDialogOpen(open); setFormError(null); }}>
-          <DialogContent>
+          <DialogContent className="z-[100] max-w-2xl">
             <form onSubmit={handleEditSubmit}>
               <DialogHeader>
                 <DialogTitle>Edit Fee Structure</DialogTitle>
                 <DialogDescription>Update the details for this fee item.</DialogDescription>
               </DialogHeader>
               
-              <div className="grid gap-4 py-4">
+              <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto">
                 <div className="space-y-2">
                   <Label htmlFor="editFeeName">Fee Name</Label>
                   <Input id="editFeeName" placeholder="e.g., Tuition Fee" value={editStructureForm.fee_type} onChange={e => setEditStructureForm({...editStructureForm, fee_type: e.target.value})} />
@@ -447,7 +449,7 @@ export default function Fees() {
                       <SelectTrigger>
                         <SelectValue placeholder="Select type" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="z-[101]">
                         <SelectItem value="monthly">Monthly</SelectItem>
                         <SelectItem value="semester">Semester</SelectItem>
                         <SelectItem value="annual">Annual</SelectItem>
@@ -469,7 +471,7 @@ export default function Fees() {
                       <SelectTrigger id="editAcademicYear">
                         <SelectValue placeholder="Select academic year" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="z-[101]">
                         {academicYears.map((year) => (
                           <SelectItem key={year.id} value={year.id}>
                             {year.label}
@@ -498,9 +500,9 @@ export default function Fees() {
         {/* --- FEE STRUCTURES LIST --- */}
         {isLoading ? renderLoading() : (
           <div className="grid gap-4">
-            {feeStructures.length === 0 && !error && <p className="text-sm text-gray-500">No fee structures created yet.</p>}
+            {feeStructures.length === 0 && !error && <p className="text-sm text-slate-500">No fee structures created yet.</p>}
             {feeStructures.map((fee) => (
-              <Card key={fee.id}>
+              <Card key={fee.id} className="border-slate-200">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-4">
@@ -508,15 +510,15 @@ export default function Fees() {
                         <DollarSign className="w-6 h-6 text-white" />
                       </div>
                       <div>
-                        <h3 className="font-semibold text-gray-900">{fee.fee_type}</h3>
-                        <p className="text-sm text-gray-600">{fee.grade} • {fee.term}</p>
+                        <h3 className="font-semibold text-slate-900">{fee.fee_type}</h3>
+                        <p className="text-sm text-slate-600">{fee.grade} • {fee.term}</p>
                       </div>
                     </div>
                     
                     <div className="flex items-center space-x-6">
                       <div className="text-right">
-                        <p className="text-2xl font-bold text-gray-900">${fee.amount}</p>
-                        <p className="text-xs text-gray-500">{fee.term}</p>
+                        <p className="text-2xl font-bold text-slate-900">${fee.amount}</p>
+                        <p className="text-xs text-slate-500">{fee.term}</p>
                       </div>
                       
                       <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
@@ -536,41 +538,41 @@ export default function Fees() {
         )}
       </TabsContent>
 
-      <TabsContent value="collection" className="space-y-6">
+      <TabsContent value="collection" className="space-y-6 mt-6">
         <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Fee Collection Overview</h2>
+            <h3 className="text-lg font-semibold text-slate-900">Fee Collection Overview</h3>
         </div>
         
         <div className="space-y-4">
           {isLoading ? renderLoading() : 
-            feeCollection.length === 0 && !error && <p className="text-sm text-gray-500">No fee collections found.</p>}
+            feeCollection.length === 0 && !error && <p className="text-sm text-slate-500">No fee collections found.</p>}
             {feeCollection.map((student) => (
-              <Card key={student.studentId}>
+              <Card key={student.studentId} className="border-slate-200">
                 <CardContent className="p-6">
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between">
                     <div>
-                      <h3 className="font-semibold text-gray-900">{student.studentName}</h3>
-                      <p className="text-sm text-gray-600">Grade: {student.grade}</p>
+                      <h3 className="font-semibold text-slate-900">{student.studentName}</h3>
+                      <p className="text-sm text-slate-600">Grade: {student.grade}</p>
                     </div>
                     
                     <div className="flex items-center space-x-8 mt-4 md:mt-0">
                       <div className="text-center">
-                        <p className="text-sm font-medium text-gray-900">${student.totalDue}</p>
-                        <p className="text-xs text-gray-500">Total Due</p>
+                        <p className="text-sm font-medium text-slate-900">${student.totalDue}</p>
+                        <p className="text-xs text-slate-500">Total Due</p>
                       </div>
                       <div className="text-center">
                         <p className="text-sm font-medium text-green-600">${student.paid}</p>
-                        <p className="text-xs text-gray-500">Paid</p>
+                        <p className="text-xs text-slate-500">Paid</p>
                       </div>
                       <div className="text-center">
                         <p className={`text-sm font-medium ${student.outstanding > 0 ? 'text-red-600' : 'text-green-600'}`}>
                           ${student.outstanding}
                         </p>
-                        <p className="text-xs text-gray-500">Outstanding</p>
+                        <p className="text-xs text-slate-500">Outstanding</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-sm font-medium text-gray-900">{student.lastPayment}</p>
-                        <p className="text-xs text-gray-500">Last Payment</p>
+                        <p className="text-sm font-medium text-slate-900">{student.lastPayment}</p>
+                        <p className="text-xs text-slate-500">Last Payment</p>
                       </div>
 
                       <Button variant="outline" size="sm" onClick={() => navigate(`/dashboard/students/${student.studentId}`)}>
@@ -585,14 +587,14 @@ export default function Fees() {
         </div>
       </TabsContent>
       
-      <TabsContent value="reports" className="space-y-6">
-          <Card>
+      <TabsContent value="reports" className="space-y-6 mt-6">
+          <Card className="border-slate-200">
             <CardHeader>
-                <CardTitle>Financial Reports</CardTitle>
-                <CardDescription>Generate and view financial summaries</CardDescription>
+                <CardTitle className="text-lg text-slate-900">Financial Reports</CardTitle>
+                <CardDescription className="text-slate-600">Generate and view financial summaries</CardDescription>
             </CardHeader>
             <CardContent>
-                <p>Financial reporting tools will be available here.</p>
+                <p className="text-slate-600">Financial reporting tools will be available here.</p>
             </CardContent>
           </Card>
       </TabsContent>
@@ -600,30 +602,30 @@ export default function Fees() {
   )
 
   const renderParentStudentView = () => (
-    <div className="space-y-6">
+    <div className="space-y-6 mt-6">
       <div className="grid gap-4 md:grid-cols-3">
-        <Card>
+        <Card className="border-slate-200">
           <CardHeader>
-            <CardTitle>Total Due</CardTitle>
+            <CardTitle className="text-sm text-slate-600">Total Due</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold">${feeSummary.totalDue.toFixed(2)}</p>
+            <p className="text-3xl font-bold text-slate-900">${feeSummary.totalDue.toFixed(2)}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border-slate-200">
           <CardHeader>
-            <CardTitle>Total Paid</CardTitle>
+            <CardTitle className="text-sm text-slate-600">Total Paid</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold text-green-600">${feeSummary.totalPaid.toFixed(2)}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border-slate-200">
           <CardHeader>
-            <CardTitle>Outstanding</CardTitle>
+            <CardTitle className="text-sm text-slate-600">Outstanding</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className={`text-3xl font-bold ${feeSummary.outstanding > 0 ? 'text-red-600' : 'text-gray-900'}`}>
+            <p className={`text-3xl font-bold ${feeSummary.outstanding > 0 ? 'text-red-600' : 'text-slate-900'}`}>
               ${feeSummary.outstanding.toFixed(2)}
             </p>
           </CardContent>
@@ -632,16 +634,16 @@ export default function Fees() {
       
       {renderError(error)}
 
-      <Card>
+      <Card className="border-slate-200">
         <CardHeader>
-          <CardTitle>Fee Details</CardTitle>
+          <CardTitle className="text-lg text-slate-900">Fee Details</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? renderLoading() : (
             <div className="space-y-4">
-              {studentFees.length === 0 && !error && <p>No fee records found.</p>}
+              {studentFees.length === 0 && !error && <p className="text-slate-600">No fee records found.</p>}
               {studentFees.map((fee) => (
-                <div key={fee.id} className="flex flex-col md:flex-row md:items-center md:justify-between p-4 border rounded-lg">
+                <div key={fee.id} className="flex flex-col md:flex-row md:items-center md:justify-between p-4 border border-slate-200 rounded-lg">
                   <div className="flex items-center space-x-4">
                     <div className={`w-3 h-3 rounded-full ${
                       fee.payment_status === 'paid' ? 'bg-green-500' :
@@ -649,15 +651,15 @@ export default function Fees() {
                       'bg-yellow-500'
                     }`}></div>
                     <div>
-                      <h4 className="font-medium">{fee.fee_type}</h4>
-                      <p className="text-sm text-gray-600">{fee.description || fee.fee_type}</p>
+                      <h4 className="font-medium text-slate-900">{fee.fee_type}</h4>
+                      <p className="text-sm text-slate-600">{fee.description || fee.fee_type}</p>
                     </div>
                   </div>
 
                   <div className="flex items-center space-x-6 mt-4 md:mt-0">
                     <div className="text-right">
-                      <p className="font-semibold">${fee.amount_due}</p>
-                      <p className="text-sm text-gray-500">Due: {new Date(fee.due_date).toLocaleDateString()}</p>
+                      <p className="font-semibold text-slate-900">${fee.amount_due}</p>
+                      <p className="text-sm text-slate-500">Due: {new Date(fee.due_date).toLocaleDateString()}</p>
                     </div>
 
                     <div className="flex items-center space-x-2">
@@ -679,7 +681,7 @@ export default function Fees() {
                     </div>
 
                     {fee.payment_status !== 'paid' && (
-                      <Button size="sm">Pay Now</Button>
+                      <Button size="sm" className="bg-teal-500 hover:bg-teal-600">Pay Now</Button>
                     )}
                   </div>
                 </div>
@@ -692,17 +694,31 @@ export default function Fees() {
   )
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Fees Management</h1>
-          <p className="text-gray-600">
-            {isAdmin ? 'Manage fee structures and track collections' : 'View and manage your fee payments'}
-          </p>
-        </div>
-      </div>
+    <div className="flex h-screen w-full bg-slate-100 font-sans text-slate-900">
+      <main className="flex-1 flex flex-col overflow-hidden">
+        <header className="h-16 bg-slate-800 flex items-center justify-between px-8 shadow-sm z-10">
+          <h1 className="text-white font-semibold text-lg tracking-wide">
+            FEES MANAGEMENT
+          </h1>
+          <div className="h-9 w-9 bg-slate-600 rounded-full flex items-center justify-center text-white hover:bg-slate-500 cursor-pointer">
+            <User size={18} />
+          </div>
+        </header>
 
-      {isAdmin ? renderAdminView() : renderParentStudentView()}
+        <div className="flex-1 overflow-y-auto p-8">
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-slate-700 uppercase tracking-tight">
+              {isAdmin ? 'Manage Fee Structures & Collections' : 'View Fee Payments'}
+            </h2>
+          </div>
+
+          <div className="bg-white rounded-lg shadow-sm border border-slate-200">
+            <div className="p-8">
+              {isAdmin ? renderAdminView() : renderParentStudentView()}
+            </div>
+          </div>
+        </div>
+      </main>
     </div>
   )
 }

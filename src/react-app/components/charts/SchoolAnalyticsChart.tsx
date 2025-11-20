@@ -77,8 +77,8 @@ export function SchoolAnalyticsChart() {
           </TabsList>
 
           <TabsContent value="growth" className="space-y-4">
-            <div style={{ width: "100%", height: 300 }}>
-              <ResponsiveContainer>
+            <div style={{ width: "100%", height: 300, minWidth: 0 }}>
+              <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={schoolData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                   <XAxis dataKey="month" />
                   <YAxis yAxisId="left" />
@@ -113,8 +113,8 @@ export function SchoolAnalyticsChart() {
           </TabsContent>
 
           <TabsContent value="activity" className="space-y-4">
-            <div style={{ width: "100%", height: 300 }}>
-              <ResponsiveContainer>
+            <div style={{ width: "100%", height: 300, minWidth: 0 }}>
+              <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={schoolData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                   <XAxis dataKey="month" />
                   <YAxis />

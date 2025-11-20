@@ -103,6 +103,22 @@ router.post('/register-school', registerRateLimiter, async (req, res) => {
 
     await ensureTrialSubscriptionForSchool(schoolId);
 
+    const defaultLeaveTypes = [
+      { name: 'Annual Leave', description: 'Annual vacation leave', max_days_per_year: 21, requires_approval: true },
+      { name: 'Sick Leave', description: 'Leave due to illness', max_days_per_year: 10, requires_approval: true },
+      { name: 'Maternity Leave', description: 'Maternity leave for female employees', max_days_per_year: 90, requires_approval: true },
+      { name: 'Paternity Leave', description: 'Paternity leave for male employees', max_days_per_year: 14, requires_approval: true },
+      { name: 'Compassionate Leave', description: 'Leave due to family emergencies', max_days_per_year: 5, requires_approval: true },
+      { name: 'Study Leave', description: 'Leave for professional development', max_days_per_year: 10, requires_approval: true }
+    ];
+
+    for (const leaveType of defaultLeaveTypes) {
+      await query(
+        'INSERT INTO leave_types (school_id, name, description, max_days_per_year, requires_approval, is_active) VALUES ($1, $2, $3, $4, $5, true)',
+        [schoolId, leaveType.name, leaveType.description, leaveType.max_days_per_year, leaveType.requires_approval]
+      );
+    }
+
     // Using "role" in quotes as it's a reserved word in PostgreSQL
     const userResult = await query(
       'INSERT INTO users (name, email, password_hash, "role", school_id) VALUES ($1, $2, $3, $4, $5) RETURNING id',

@@ -1010,52 +1010,47 @@ function getMonthName(monthStr) {
   return new Date(year, month - 1, 1).toLocaleString('default', { month: 'long' });
 }
 
-secureRouter.get('/reports/financial-summary', authorizeRole(['admin']), async (req, res) => {
+secureRouter.get('/reports/financial-summary', authorizeRole(['super_admin', 'admin']), async (req, res) => {
   try {
     const { schoolId } = req;
     const { rows } = await query(`
       SELECT 
-        payment_status, 
-        SUM(amount_due) as total_due,
-        SUM(amount_paid) as total_paid,
-        COUNT(*) as invoice_count
+        DATE_TRUNC('month', created_at)::date as month_date,
+        TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') as name,
+        SUM(CASE WHEN LOWER(payment_status) = 'paid' THEN amount_paid ELSE 0 END) as "Collected",
+        SUM(CASE WHEN LOWER(payment_status) IN ('pending', 'overdue') THEN amount_due ELSE 0 END) as "Pending"
       FROM student_fees 
       WHERE school_id = $1
-      GROUP BY payment_status;
+      GROUP BY month_date, name
+      ORDER BY month_date DESC
+      LIMIT 6
     `, [schoolId]);
     
-    const summary = {
-      paid: rows.find(r => r.payment_status === 'paid') || { total_paid: 0, invoice_count: 0 },
-      pending: rows.find(r => r.payment_status === 'pending') || { total_due: 0, invoice_count: 0 },
-      partial: rows.find(r => r.payment_status === 'partial') || { total_due: 0, total_paid: 0, invoice_count: 0 },
-      overdue: rows.find(r => r.payment_status === 'overdue') || { total_due: 0, invoice_count: 0 }
-    };
-
-    res.json({ success: true, data: summary });
+    res.json(rows.reverse());
   } catch (error) {
     console.error('Error fetching financial-summary:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-secureRouter.get('/reports/performance-summary', authorizeRole(['admin', 'teacher']), async (req, res) => {
+secureRouter.get('/reports/performance-summary', authorizeRole(['super_admin', 'admin', 'teacher']), async (req, res) => {
   try {
     const { schoolId } = req;
-    const { rows } = await query(`
+    const result = await query(`
       SELECT 
-        grade, 
-        AVG(percentage) as average_score
-      FROM exam_results er
-      JOIN students s ON er.student_id = s.id
-      WHERE s.school_id = $1
-      GROUP BY s.grade
-      ORDER BY s.grade ASC;
+        COALESCE(p.subject, 'General') as subject,
+        ROUND(AVG(p.grade)::numeric, 2) as average,
+        COUNT(DISTINCT p.student_id) as students
+      FROM performance p
+      WHERE p.school_id = $1
+      GROUP BY p.subject
+      ORDER BY p.subject ASC
     `, [schoolId]);
     
-    res.json({ success: true, data: rows });
+    res.json(result.rows);
   } catch (error) {
     console.error('Error fetching performance-summary:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Failed to fetch performance summary' });
   }
 });
 
@@ -1094,19 +1089,19 @@ secureRouter.get('/reports/subscription-status', authorizeRole(['super_admin']),
       SELECT 
         sp.name as plan,
         sp.slug,
+        COALESCE(s.status, 'Active') as status,
         COUNT(DISTINCT s.school_id) as subscribers,
-        COALESCE(SUM(sp.price), 0) as revenue,
-        s.status
+        COALESCE(sp.price * COUNT(DISTINCT s.school_id), 0) as revenue
       FROM subscription_plans sp
       LEFT JOIN subscriptions s ON sp.id = s.plan_id
       GROUP BY sp.id, sp.name, sp.slug, sp.price, s.status
       ORDER BY sp.price DESC
     `);
     
-    res.json({ success: true, data: rows });
+    res.json(rows);
   } catch (error) {
     console.error('Error fetching subscription-status:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -1190,6 +1185,43 @@ secureRouter.get('/parent/children', authorizeRole(['parent']), async (req, res)
   } catch (err) {
     console.error('Error fetching parent children:', err);
     res.status(500).json({ success: false, error: 'Failed to fetch children' });
+  }
+});
+
+secureRouter.get('/dashboard/stats', authorizeRole(['admin']), async (req, res) => {
+  try {
+    const { schoolId } = req;
+
+    if (!schoolId) {
+      return res.status(400).json({ success: false, error: 'School ID is required' });
+    }
+
+    const [studentsResult, staffResult, feesResult, gradesResult] = await Promise.all([
+      query('SELECT COUNT(*) as count, SUM(CASE WHEN LOWER(status) = \'active\' THEN 1 ELSE 0 END) as active_count FROM students WHERE school_id = $1', [schoolId]),
+      query('SELECT COUNT(*) as count FROM staff WHERE school_id = $1', [schoolId]),
+      query('SELECT COALESCE(SUM(amount_due), 0) as total_outstanding FROM student_fees WHERE school_id = $1 AND LOWER(payment_status) != \'paid\'', [schoolId]),
+      query('SELECT COUNT(DISTINCT NULLIF(grade, \'\')) as count FROM students WHERE school_id = $1 AND grade IS NOT NULL AND grade != \'\'', [schoolId])
+    ]);
+
+    const totalStudents = parseInt(studentsResult.rows[0].count) || 0;
+    const activeStudents = parseInt(studentsResult.rows[0].active_count) || 0;
+    const totalStaff = parseInt(staffResult.rows[0].count) || 0;
+    const outstandingFees = parseFloat(feesResult.rows[0].total_outstanding) || 0;
+    const uniqueCourses = parseInt(gradesResult.rows[0].count) || 0;
+
+    res.json({
+      success: true,
+      data: {
+        totalStudents,
+        activeStudents,
+        totalStaff,
+        outstandingFees,
+        uniqueCourses
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching dashboard stats:', err);
+    res.status(500).json({ success: false, error: 'Failed to fetch dashboard stats' });
   }
 });
 

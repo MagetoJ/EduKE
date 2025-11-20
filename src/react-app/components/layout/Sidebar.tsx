@@ -141,41 +141,37 @@ export default function Sidebar() {
   )
 
   return (
-    <div className="w-64 bg-card border-r border-border h-screen flex flex-col">
-      <div className="p-6">
-        <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 bg-gradient-to-r from-primary to-primary/80 rounded-lg flex items-center justify-center">
-            <GraduationCap className="w-5 h-5 text-primary-foreground" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-card-foreground">EduKE</h1>
-            {user.schoolName && (
-              <p className="text-sm text-muted-foreground">{user.schoolName}</p>
-            )}
-          </div>
+    <aside className="w-64 bg-white border-r border-slate-200 flex flex-col hidden md:flex shadow-sm">
+      <div className="h-16 flex items-center px-6 border-b border-slate-100 bg-white">
+        <div className="h-8 w-8 bg-slate-900 rounded-md flex items-center justify-center mr-3 shadow-sm">
+          <GraduationCap className="w-5 h-5 text-white" />
+        </div>
+        <div>
+          <span className="font-bold text-slate-800 text-lg tracking-tight">EduKE</span>
         </div>
       </div>
 
-      <nav className="flex-1 px-4 space-y-2">
+      <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto">
         {filteredNavItems.map((item) => {
           const Icon = item.icon
-          const isActive = location.pathname === item.href || 
-            (item.href !== '/dashboard' && location.pathname.startsWith(item.href))
+          const isActive = item.href === '/dashboard' 
+            ? location.pathname === '/dashboard'
+            : location.pathname.startsWith(item.href)
 
           return (
             <Link
               key={item.href}
               to={item.href}
               className={cn(
-                'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
-                isActive
-                  ? 'bg-accent text-accent-foreground border-r-2 border-primary'
-                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                'flex items-center gap-3 px-3 py-2.5 rounded-md transition-all duration-200 text-sm font-medium group',
+                isActive 
+                  ? 'bg-teal-50 text-teal-700 shadow-sm border border-teal-100' 
+                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
               )}
             >
               <Icon className={cn(
-                'mr-3 h-4 w-4',
-                isActive ? 'text-primary' : 'text-muted-foreground'
+                'w-5 h-5 transition-colors',
+                isActive ? 'text-teal-600' : 'text-slate-400 group-hover:text-slate-600'
               )} />
               {item.title}
             </Link>
@@ -183,23 +179,14 @@ export default function Sidebar() {
         })}
       </nav>
 
-      <div className="p-4 border-t border-border">
-        <div className="flex items-center space-x-3">
-          <img
-            src={user.avatar}
-            alt={user.name}
-            className="w-8 h-8 rounded-full"
-          />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-card-foreground truncate">
-              {user.name}
-            </p>
-            <p className="text-xs text-muted-foreground capitalize">
-              {user.role.replace('_', ' ')}
-            </p>
+      <div className="p-4 border-t border-slate-100 bg-slate-50/50">
+        {user.schoolName && (
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <School className="w-3 h-3" />
+            <span className="truncate font-medium">{user.schoolName}</span>
           </div>
-        </div>
+        )}
       </div>
-    </div>
+    </aside>
   )
 }

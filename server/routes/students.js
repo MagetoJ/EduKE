@@ -88,35 +88,6 @@ router.delete('/:id', authorizeRole(['admin']), async (req, res) => {
   }
 });
 
-// Get student performance
-router.get('/:id/performance', authorizeRole(['admin', 'teacher', 'parent', 'student']), async (req, res) => {
-  try {
-    const { schoolId } = req;
-    const { id } = req.params;
-    
-    const performance = await studentService.getStudentPerformance(id, schoolId);
-    res.json({ success: true, data: performance });
-  } catch (err) {
-    console.error('Error fetching student performance:', err);
-    res.status(500).json({ success: false, error: 'Failed to fetch performance' });
-  }
-});
-
-// Get student attendance
-router.get('/:id/attendance', authorizeRole(['admin', 'teacher', 'parent', 'student']), async (req, res) => {
-  try {
-    const { schoolId } = req;
-    const { id } = req.params;
-    const { startDate, endDate } = req.query;
-    
-    const attendance = await studentService.getStudentAttendance(id, schoolId, { startDate, endDate });
-    res.json({ success: true, data: attendance });
-  } catch (err) {
-    console.error('Error fetching student attendance:', err);
-    res.status(500).json({ success: false, error: 'Failed to fetch attendance' });
-  }
-});
-
 // Get courses for a specific student
 router.get('/:id/courses', authorizeRole(['admin', 'teacher', 'student', 'parent']), async (req, res) => {
   try {

@@ -4,17 +4,26 @@ const { query } = require('../db/connection');
 const { authorizeRole } = require('../middleware/auth');
 
 // Get all assignments
-router.get('/', authorizeRole(['admin', 'teacher', 'student']), async (req, res) => {
+router.get('/', authorizeRole(['admin', 'teacher', 'student', 'parent']), async (req, res) => {
   try {
     const { user } = req;
     let sql = 'SELECT a.*, c.name as course_name, c.grade FROM assignments a JOIN courses c ON a.course_id = c.id WHERE c.school_id = $1';
     const params = [req.schoolId];
-    
+
     if (user.role === 'teacher') {
       sql += ' AND c.teacher_id = $2';
       params.push(user.id);
+    } else if (user.role === 'parent') {
+      // For parents, get assignments for courses their children are enrolled in
+      sql += ` AND c.grade IN (
+        SELECT DISTINCT s.grade
+        FROM students s
+        JOIN parent_student_relations psr ON s.id = psr.student_id
+        WHERE psr.parent_id = $2 AND s.school_id = $1 AND s.status = 'active'
+      )`;
+      params.push(user.id);
     }
-    
+
     sql += ' ORDER BY a.due_date DESC';
     const result = await query(sql, params);
     res.json({ success: true, data: result.rows });
