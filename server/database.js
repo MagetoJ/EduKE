@@ -15,8 +15,14 @@ const getDbConfig = () => {
   const useProduction = process.env.USE_PRODUCTION_DB !== 'false';
 
   if (useProduction) {
+    const connectionString = process.env.DATABASE_URL;
+    // Ensure SSL mode is set for Render PostgreSQL
+    const sslConnectionString = connectionString.includes('?') ?
+      connectionString + '&sslmode=require' :
+      connectionString + '?sslmode=require';
+
     return {
-      connectionString: process.env.DATABASE_URL,
+      connectionString: sslConnectionString,
       ssl: {
         rejectUnauthorized: false
       }

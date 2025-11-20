@@ -94,22 +94,6 @@ export default function ParentDashboard() {
   const [isLoading, setIsLoading] = useState(false)
   const [metricsLoading, setMetricsLoading] = useState(false)
 
-  // Check if user is a parent
-  if (!user || user.role !== 'parent') {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle className="text-center text-red-600">Access Denied</CardTitle>
-            <CardDescription className="text-center">
-              This page is only accessible to parent users.
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    )
-  }
-
   const attendanceCards = useMemo(() => {
     if (!studentData) {
       return { present: 0, absent: 0, late: 0, percentage: 0 }
@@ -259,6 +243,22 @@ export default function ParentDashboard() {
 
   const handleChildChange = (childId: string) => {
     setSelectedChildId(childId)
+  }
+
+  // Check if user is a parent
+  if (!user || user.role !== 'parent') {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="text-center text-red-600">Access Denied</CardTitle>
+            <CardDescription className="text-center">
+              This page is only accessible to parent users.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    )
   }
 
   // Show loading state

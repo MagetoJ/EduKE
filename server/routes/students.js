@@ -18,18 +18,40 @@ router.get('/', authorizeRole(['admin', 'teacher']), async (req, res) => {
   }
 });
 
+// Get current student's own information
+router.get('/me', authorizeRole(['student']), async (req, res) => {
+  try {
+    const { schoolId, user } = req;
+
+    // Find the student record for this user
+    const result = await query(
+      `SELECT s.* FROM students s WHERE s.user_id = $1 AND s.school_id = $2 AND s.status = 'active'`,
+      [user.id, schoolId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Student record not found' });
+    }
+
+    res.json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    console.error('Error fetching student info:', err);
+    res.status(500).json({ success: false, error: 'Failed to fetch student information' });
+  }
+});
+
 // Get student by ID
 router.get('/:id', authorizeRole(['admin', 'teacher', 'parent']), async (req, res) => {
   try {
     const { schoolId } = req;
     const { id } = req.params;
-    
+
     const student = await studentService.getStudentById(id, schoolId);
-    
+
     if (!student) {
       return res.status(404).json({ success: false, error: 'Student not found' });
     }
-    
+
     res.json({ success: true, data: student });
   } catch (err) {
     console.error('Error fetching student:', err);

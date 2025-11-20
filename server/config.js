@@ -1,4 +1,9 @@
-const JWT_SECRET = process.env.JWT_SECRET || 'change-me';
+const NODE_ENV = process.env.NODE_ENV || 'development';
+const APP_ENV = process.env.APP_ENV || NODE_ENV;
+const isProduction = NODE_ENV === 'production' || APP_ENV === 'production';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'change-me-refresh-in-production';
 const SALT_ROUNDS = Number.isInteger(Number(process.env.BCRYPT_SALT_ROUNDS))
   ? Number(process.env.BCRYPT_SALT_ROUNDS)
   : 12;
@@ -98,7 +103,11 @@ const CURRICULUM_LEVELS = {
 };
 
 module.exports = {
+  NODE_ENV,
+  APP_ENV,
+  isProduction,
   JWT_SECRET,
+  JWT_REFRESH_SECRET,
   SALT_ROUNDS,
   JWT_ACCESS_EXPIRES_IN,
   JWT_REFRESH_TTL_MS,

@@ -66,11 +66,20 @@ const createOrLinkParent = async (client, parentData, studentId, school_id, pass
     parentUserId = parentUserResult.rows[0].id;
   }
 
-  // 3. Link student to this parent (this table might not exist, but 'parent_id' on student is better)
-  // Your schema has 'parent_id' on the student, so let's use it.
+  // 3. Link student to this parent using both tables for consistency
+  // Update parent_id on student table
   await client.query(
     'UPDATE students SET parent_id = $1 WHERE id = $2',
     [parentUserId, studentId]
+  );
+
+  // Create entry in parent_student_relations table
+  const relationType = relationship || 'guardian';
+  await client.query(
+    `INSERT INTO parent_student_relations (parent_id, student_id, relation_type, is_primary_contact, is_financial_responsible)
+     VALUES ($1, $2, $3, true, true)
+     ON CONFLICT (parent_id, student_id) DO NOTHING`,
+    [parentUserId, studentId, relationType]
   );
 
   return parentUserId;

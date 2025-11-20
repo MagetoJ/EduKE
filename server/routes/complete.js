@@ -801,7 +801,7 @@ router.get('/parent/dashboard', authorizeRole(['parent']), async (req, res) => {
   try {
     const { schoolId, user } = req;
 
-    // Get children count
+    // Get children count using parent_student_relations table
     const childrenResult = await query(`
       SELECT COUNT(*) as count
       FROM students s
@@ -826,22 +826,23 @@ router.get('/parent/dashboard', authorizeRole(['parent']), async (req, res) => {
       });
     }
 
-    // Get assignments metrics
+    // Get assignments metrics - assignments for courses that the parent's children are enrolled in
     const assignmentsResult = await query(`
       SELECT COUNT(*) as total,
              COUNT(CASE WHEN a.due_date > CURRENT_DATE THEN 1 END) as upcoming
       FROM assignments a
       JOIN courses c ON a.course_id = c.id
       WHERE c.school_id = $1
-      AND c.grade IN (
-        SELECT DISTINCT s.grade
-        FROM students s
+      AND c.id IN (
+        SELECT DISTINCT ce.course_id
+        FROM course_enrollments ce
+        JOIN students s ON ce.student_id = s.id
         JOIN parent_student_relations psr ON s.id = psr.student_id
         WHERE psr.parent_id = $2 AND s.school_id = $1 AND s.status = 'active'
       )
     `, [schoolId, user.id]);
 
-    // Get fees metrics
+    // Get fees metrics using parent_student_relations
     const feesResult = await query(`
       SELECT
         COALESCE(SUM(sf.amount_due), 0) as total_due,
@@ -863,7 +864,7 @@ router.get('/parent/dashboard', authorizeRole(['parent']), async (req, res) => {
         SELECT
           s.id,
           COUNT(a.id) as total_days,
-          COUNT(CASE WHEN a.status = 'present' THEN 1 END) as present_days
+          COUNT(CASE WHEN LOWER(a.status) = 'present' THEN 1 END) as present_days
         FROM students s
         JOIN parent_student_relations psr ON s.id = psr.student_id
         LEFT JOIN attendance a ON s.id = a.student_id
@@ -874,12 +875,12 @@ router.get('/parent/dashboard', authorizeRole(['parent']), async (req, res) => {
 
     // Get performance metrics (average grade across all children)
     const performanceResult = await query(`
-      SELECT AVG(CAST(p.score AS DECIMAL)) as avg_score
+      SELECT AVG(CAST(p.grade AS DECIMAL)) as avg_score
       FROM performance p
       JOIN students s ON p.student_id = s.id
       JOIN parent_student_relations psr ON s.id = psr.student_id
       WHERE psr.parent_id = $1 AND s.school_id = $2 AND s.status = 'active'
-      AND p.score IS NOT NULL AND p.score != ''
+      AND p.grade IS NOT NULL AND p.grade != ''
     `, [user.id, schoolId]);
 
     const metrics = {

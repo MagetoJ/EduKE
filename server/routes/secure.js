@@ -1,5 +1,5 @@
 const express = require('express');
-const { query } = require('../db/connection');
+const { query, transaction } = require('../db/connection');
 const multer = require('multer');
 const path = require('path');
 
@@ -693,18 +693,35 @@ secureRouter.get('/students', authorizeRole(['admin', 'teacher']), async (req, r
 secureRouter.post('/students', authorizeRole(['admin']), async (req, res) => {
   try {
     const { schoolId } = req;
-    const { first_name, last_name, email, grade, parent_id, admission_number } = req.body;
-    
+    const { first_name, last_name, email, grade, parent_id, admission_number, relationship } = req.body;
+
     // TODO: Add logic to check student limit based on subscription
-    
-    const sql = `
-      INSERT INTO students (school_id, first_name, last_name, email, grade, parent_id, admission_number, status)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, 'active')
-      RETURNING *
-    `;
-    
-    const result = await query(sql, [schoolId, first_name, last_name, email, grade, parent_id, admission_number]);
-    res.status(201).json({ success: true, data: result.rows[0], message: 'Student created successfully' });
+
+    const student = await transaction(async (client) => {
+      const sql = `
+        INSERT INTO students (school_id, first_name, last_name, email, grade, parent_id, admission_number, status)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, 'active')
+        RETURNING *
+      `;
+
+      const result = await client.query(sql, [schoolId, first_name, last_name, email, grade, parent_id, admission_number]);
+      const student = result.rows[0];
+
+      // Create parent-student relationship if parent_id is provided
+      if (parent_id) {
+        const relationType = relationship || 'guardian';
+        await client.query(
+          `INSERT INTO parent_student_relations (parent_id, student_id, relation_type, is_primary_contact, is_financial_responsible)
+           VALUES ($1, $2, $3, true, true)
+           ON CONFLICT (parent_id, student_id) DO NOTHING`,
+          [parent_id, student.id, relationType]
+        );
+      }
+
+      return student;
+    });
+
+    res.status(201).json({ success: true, data: student, message: 'Student created successfully' });
   } catch (err) {
     console.error('Error creating student:', err);
     res.status(500).json({ success: false, error: 'Failed to create student' });
@@ -1174,10 +1191,12 @@ secureRouter.get('/parent/children', authorizeRole(['parent']), async (req, res)
   try {
     const parentId = req.user.id;
     const result = await query(`
-      SELECT s.id, s.first_name, s.last_name, s.admission_number, s.grade, s.class_assigned,
-             s.email, s.phone, s.date_of_birth, s.gender, s.status
+      SELECT s.id, s.first_name, s.last_name, s.admission_number, s.grade, s.class_section as class_assigned,
+             s.email, s.phone, s.date_of_birth, s.gender, s.status,
+             psr.relation_type, psr.is_primary_contact, psr.is_financial_responsible
       FROM students s
-      WHERE s.parent_id = $1
+      JOIN parent_student_relations psr ON s.id = psr.student_id
+      WHERE psr.parent_id = $1 AND s.status = 'active'
       ORDER BY s.first_name, s.last_name
     `, [parentId]);
 

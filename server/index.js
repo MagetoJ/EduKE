@@ -7,6 +7,9 @@ require('dotenv').config();
 // Import PostgreSQL database connection
 const { getDatabaseInfo } = require('./db/connection');
 
+// Import environment config
+const { isProduction, NODE_ENV, APP_ENV } = require('./config');
+
 // Import routes
 const authRoutes = require('./routes/auth');
 const { publicRouter } = require('./routes/public');
@@ -29,10 +32,7 @@ const { tenantContext } = require('./middleware/tenant');
 const app = express();
 
 // Middleware
-const isProduction = process.env.NODE_ENV === 'production';
-
 const corsOptions = {
-  // Use the production URL from env, or fall back to localhost for development
   origin: isProduction ? process.env.CORS_ORIGIN : 'http://localhost:5173',
   credentials: true
 };
@@ -102,11 +102,14 @@ const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;
 
 // Start server with database info
 app.listen(PORT, '0.0.0.0', async () => {
-  console.log('\n' + '='.repeat(60));
+  console.log('\n' + '='.repeat(70));
   console.log('🚀 EduKE Server Started');
-  console.log('='.repeat(60));
+  console.log('='.repeat(70));
   console.log(`📍 Server listening on port: ${PORT}`);
-  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🌍 NODE_ENV: ${NODE_ENV}`);
+  console.log(`🌍 APP_ENV: ${APP_ENV}`);
+  console.log(`⚙️  Environment Mode: ${isProduction ? 'PRODUCTION 🔒' : 'DEVELOPMENT'}`);
+  console.log(`🔗 CORS Origin: ${process.env.CORS_ORIGIN || 'http://localhost:5173'}`);
   
   try {
     const dbInfo = await getDatabaseInfo();
@@ -119,7 +122,7 @@ app.listen(PORT, '0.0.0.0', async () => {
     console.error('❌ Database connection error:', error.message);
   }
   
-  console.log('='.repeat(60));
+  console.log('='.repeat(70));
   console.log('✅ Ready to accept requests!\n');
 });
 
