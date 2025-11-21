@@ -25,7 +25,7 @@ const getDbConfig = () => {
 
 // Create connection
 let db;
-const useProduction = process.env.USE_PRODUCTION_DB === 'true';
+const useProduction = process.env.NODE_ENV === 'production' || Boolean(process.env.DATABASE_URL);
 
 if (useProduction) {
   db = new Pool(getDbConfig());
@@ -37,8 +37,11 @@ if (useProduction) {
 
 // Test connection
 if (useProduction) {
-  db.on('connect', () => {
+  db.connect().then(client => {
     console.log('✓ Connected to PostgreSQL database');
+    client.release();
+  }).catch(err => {
+    console.error('Unable to connect to PostgreSQL:', err);
   });
 
   db.on('error', (err) => {
@@ -60,21 +63,17 @@ const query = async (text, params) => {
           reject(err);
         } else {
           const duration = Date.now() - start;
-          console.log('Executed query', { text, duration, rows: res.rowCount });
           resolve(res);
         }
       });
     } else {
-      // For SQLite, use appropriate method based on query type
       if (text.trim().toUpperCase().startsWith('SELECT') || text.trim().toUpperCase().startsWith('PRAGMA')) {
         db.all(text, params, (err, rows) => {
           if (err) {
             console.error('Query error:', err);
             reject(err);
           } else {
-            const duration = Date.now() - start;
-            console.log('Executed query', { text, duration, rows: rows.length });
-            resolve({ rows });
+            resolve({ rows, rowCount: rows.length });
           }
         });
       } else {
@@ -83,9 +82,7 @@ const query = async (text, params) => {
             console.error('Query error:', err);
             reject(err);
           } else {
-            const duration = Date.now() - start;
-            console.log('Executed query', { text, duration, rows: this.changes });
-            resolve({ rowCount: this.changes, lastID: this.lastID });
+            resolve({ rowCount: this.changes, lastID: this.lastID, rows: [] }); 
           }
         });
       }
@@ -97,29 +94,8 @@ const query = async (text, params) => {
 const getClient = async () => {
   if (useProduction) {
     const client = await db.connect();
-    const originalQuery = client.query.bind(client);
-    const originalRelease = client.release.bind(client);
-
-    // Set a timeout of 5 seconds, after which we will log this client's last query
-    const timeout = setTimeout(() => {
-      console.error('A client has been checked out for more than 5 seconds!');
-    }, 5000);
-
-    // Monkey patch the query method to track queries
-    client.query = (...args) => {
-      return originalQuery(...args);
-    };
-
-    client.release = () => {
-      clearTimeout(timeout);
-      client.query = originalQuery;
-      client.release = originalRelease;
-      return originalRelease();
-    };
-
     return client;
   } else {
-    // For SQLite, just return the database instance
     return db;
   }
 };
@@ -128,7 +104,6 @@ const getClient = async () => {
 const transaction = async (callback) => {
   if (useProduction) {
     const client = await getClient();
-
     try {
       await client.query('BEGIN');
       const result = await callback(client);
@@ -141,7 +116,6 @@ const transaction = async (callback) => {
       client.release();
     }
   } else {
-    // For SQLite, transactions are simpler
     return new Promise((resolve, reject) => {
       db.serialize(() => {
         db.run('BEGIN TRANSACTION');
@@ -160,6 +134,10 @@ const transaction = async (callback) => {
 
 // Helper function to check if table exists
 const tableExists = async (tableName) => {
+  if (!useProduction) {
+     const result = await query(`SELECT name FROM sqlite_master WHERE type='table' AND name=$1`, [tableName]);
+     return result.rows.length > 0;
+  }
   const result = await query(
     `SELECT EXISTS (
       SELECT FROM information_schema.tables 
@@ -176,27 +154,26 @@ const getDatabaseInfo = async () => {
   try {
     const config = getDbConfig();
     const dbName = config.database || (config.connectionString ? 'production' : 'unknown');
-    const isProduction = !!config.connectionString;
     
     // Get table count
-    const tableCountResult = await query(`
-      SELECT COUNT(*) as count 
-      FROM information_schema.tables 
-      WHERE table_schema = 'public'
-    `);
+    let count = 0;
+    if (useProduction) {
+      const res = await query(`SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema = 'public'`);
+      count = parseInt(res.rows[0].count);
+    } else {
+      const res = await query(`SELECT count(*) as count FROM sqlite_master WHERE type='table'`);
+      count = res.rows[0].count;
+    }
     
     return {
       database: dbName,
-      isProduction,
-      tableCount: parseInt(tableCountResult.rows[0].count),
-      config: isProduction ? 'Production (Render)' : 'Local PostgreSQL'
+      isProduction: useProduction,
+      tableCount: count,
+      config: useProduction ? 'Production (Render)' : 'Local SQLite'
     };
   } catch (error) {
     console.error('Error getting database info:', error);
-    return {
-      database: 'unknown',
-      error: error.message
-    };
+    return { database: 'unknown', error: error.message };
   }
 };
 

@@ -32,6 +32,8 @@ const { tenantContext } = require('./middleware/tenant');
 
 const app = express();
 
+app.set('trust proxy', 1);
+
 // Middleware
 const corsOptions = {
   origin: isProduction ? process.env.CORS_ORIGIN : 'http://localhost:5173',
