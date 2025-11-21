@@ -136,7 +136,8 @@ router.post('/register-school', registerRateLimiter, async (req, res) => {
       [userId, verificationHash, verificationExpiresAt]
     );
 
-    await sendVerificationEmail(normalizedEmail, verificationToken);
+    sendVerificationEmail(normalizedEmail, verificationToken)
+      .catch(err => console.error('Failed to send verification email:', err));
 
     res.status(201).json({
       message: 'Registration successful. Please verify your email address to activate your account.'
@@ -245,7 +246,8 @@ router.post('/forgot-password', authRateLimiter, async (req, res) => {
       [user.id, resetHash, resetExpiresAt]
     );
 
-    await sendPasswordResetEmail(normalizedEmail, resetToken);
+    sendPasswordResetEmail(normalizedEmail, resetToken)
+      .catch(err => console.error('Failed to send password reset email:', err));
 
     res.json({ message: 'If the email exists, reset instructions have been sent.' });
   } catch (error) {
