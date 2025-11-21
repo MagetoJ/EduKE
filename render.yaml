@@ -13,7 +13,7 @@ services:
     name: eduke
     env: node
     rootDir: .
-    buildCommand: npm install --include=dev && npm run build && cd server && npm install
+    buildCommand: npm install --include=dev --legacy-peer-deps && npm run build && cd server && npm install
     startCommand: cd server && npm start
     healthCheckPath: /health
     healthCheckTimeout: 30
