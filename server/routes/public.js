@@ -19,6 +19,7 @@ const {
   hashToken
 } = require('../utils');
 const { query } = require('../db/connection'); // Correct import
+const { sendVerificationEmail, sendPasswordResetEmail } = require('../services/emailService');
 
 const router = express.Router();
 
@@ -135,9 +136,7 @@ router.post('/register-school', registerRateLimiter, async (req, res) => {
       [userId, verificationHash, verificationExpiresAt]
     );
 
-    console.log(
-      `Email verification link for ${normalizedEmail}: ${FRONTEND_URL}/verify-email?token=${verificationToken}`
-    );
+    await sendVerificationEmail(normalizedEmail, verificationToken);
 
     res.status(201).json({
       message: 'Registration successful. Please verify your email address to activate your account.'
@@ -246,9 +245,7 @@ router.post('/forgot-password', authRateLimiter, async (req, res) => {
       [user.id, resetHash, resetExpiresAt]
     );
 
-    console.log(
-      `Password reset link for ${normalizedEmail}: ${FRONTEND_URL}/reset-password?token=${resetToken}`
-    );
+    await sendPasswordResetEmail(normalizedEmail, resetToken);
 
     res.json({ message: 'If the email exists, reset instructions have been sent.' });
   } catch (error) {
