@@ -1,7 +1,6 @@
-import { useEffect, useState, FormEvent } from 'react'
+import { useEffect, useState } from 'react'
 import { 
   Calendar as CalendarIcon, 
-  BookOpen, 
   Plus, 
   Clock, 
   FileText, 
@@ -20,13 +19,13 @@ import {
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Textarea } from '../components/ui/textarea'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '../components/ui/card'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Badge } from '../components/ui/badge'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '../components/ui/dropdown-menu'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
-import { useAuth, useApi } from '../contexts/AuthContext'
+import { useApi } from '../contexts/AuthContext'
 
 type LessonPlan = {
   id: string;
@@ -66,13 +65,11 @@ const MOCK_LESSONS: LessonPlan[] = [
 ]
 
 export default function LessonPlanner() {
-  const { user } = useAuth()
   const api = useApi()
   
   const [lessons, setLessons] = useState<LessonPlan[]>(MOCK_LESSONS)
   const [courses, setCourses] = useState<Course[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [selectedDate, setSelectedDate] = useState(new Date())
+  const [selectedDate] = useState(new Date())
   
   const [isEditorOpen, setIsEditorOpen] = useState(false)
   const [editingLesson, setEditingLesson] = useState<Partial<LessonPlan>>({})
@@ -88,8 +85,6 @@ export default function LessonPlanner() {
         }
       } catch (error) {
         console.error("Failed to fetch courses", error)
-      } finally {
-        setIsLoading(false)
       }
     }
     fetchCourses()

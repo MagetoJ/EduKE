@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '../components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
-import { useApi, useAuth } from '../contexts/AuthContext'
+import { useApi } from '../contexts/AuthContext'
 // Import AlertDialog components
 import {
   AlertDialog,

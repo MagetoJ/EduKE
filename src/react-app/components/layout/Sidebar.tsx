@@ -13,7 +13,9 @@ import {
   UserCheck,
   FileText,
   Clock,
-  CreditCard
+  CreditCard,
+  Menu,
+  X
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { useAuth } from '../../contexts/AuthContext'
@@ -130,7 +132,12 @@ const navItems: NavItem[] = [
   }
 ]
 
-export default function Sidebar() {
+interface SidebarProps {
+  isOpen?: boolean
+  onClose?: () => void
+}
+
+export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const location = useLocation()
   const { user } = useAuth()
 
@@ -140,8 +147,8 @@ export default function Sidebar() {
     item.roles.includes(user.role)
   )
 
-  return (
-    <aside className="w-64 bg-white border-r border-slate-200 flex flex-col hidden md:flex shadow-sm">
+  const NavContent = () => (
+    <>
       <div className="h-16 flex items-center px-6 border-b border-slate-100 bg-white">
         <div className="h-8 w-8 bg-slate-900 rounded-md flex items-center justify-center mr-3 shadow-sm">
           <GraduationCap className="w-5 h-5 text-white" />
@@ -162,6 +169,7 @@ export default function Sidebar() {
             <Link
               key={item.href}
               to={item.href}
+              onClick={onClose}
               className={cn(
                 'flex items-center gap-3 px-3 py-2.5 rounded-md transition-all duration-200 text-sm font-medium group',
                 isActive 
@@ -187,6 +195,56 @@ export default function Sidebar() {
           </div>
         )}
       </div>
-    </aside>
+    </>
+  )
+
+  return (
+    <>
+      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col hidden md:flex shadow-sm">
+        <NavContent />
+      </aside>
+
+      {isOpen && (
+        <div className="fixed inset-0 z-40 md:hidden">
+          <div 
+            className="absolute inset-0 bg-black/50 transition-opacity duration-300"
+            onClick={onClose}
+          />
+        </div>
+      )}
+
+      <div 
+        className={cn(
+          'fixed left-0 top-0 h-full w-64 bg-white flex flex-col shadow-lg z-50 md:hidden transition-transform duration-300 ease-in-out',
+          isOpen ? 'translate-x-0' : '-translate-x-full'
+        )}
+      >
+        <NavContent />
+      </div>
+    </>
+  )
+}
+
+export function MobileMenuButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="md:hidden inline-flex items-center justify-center p-2 rounded-md text-slate-700 hover:bg-slate-100 transition-colors"
+      aria-label="Toggle menu"
+    >
+      <Menu className="w-6 h-6" />
+    </button>
+  )
+}
+
+export function MobileMenuClose({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="inline-flex items-center justify-center p-2 rounded-md text-slate-700 hover:bg-slate-100 transition-colors"
+      aria-label="Close menu"
+    >
+      <X className="w-6 h-6" />
+    </button>
   )
 }

@@ -120,6 +120,7 @@ export default function Timetable() {
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const [selectedDay, setSelectedDay] = useState('monday')
 
   useEffect(() => {
     const loadData = async () => {
@@ -362,15 +363,6 @@ export default function Timetable() {
     }
   }
 
-  const groupedTimetable = timetableData.reduce((acc, entry) => {
-    const day = entry.day_of_week;
-    if (!acc[day]) {
-      acc[day] = [];
-    }
-    acc[day].push(entry);
-    return acc;
-  }, {} as Record<string, TimetableEntry[]>);
-
   const renderLoading = () => (
     <div className="flex items-center justify-center p-8 text-gray-600">
       <Loader2 className="w-6 h-6 animate-spin mr-2" />
@@ -404,7 +396,7 @@ export default function Timetable() {
     return 'Manage class schedules'
   }
 
-  const getColorForCourse = (courseId: string, index: number) => {
+  const getColorForCourse = (index: number) => {
     const colors = ['sky', 'orange', 'green', 'purple', 'red']
     return colors[index % colors.length]
   }
@@ -412,52 +404,55 @@ export default function Timetable() {
   return (
     <div className="flex h-screen w-full bg-slate-100 font-sans text-slate-900">
       <main className="flex-1 flex flex-col overflow-hidden">
-        <header className="h-16 bg-slate-800 flex items-center justify-between px-8 shadow-sm z-10">
-          <h1 className="text-white font-semibold text-lg tracking-wide">
+        <header className="h-12 sm:h-16 bg-slate-800 flex items-center justify-between px-4 sm:px-6 lg:px-8 shadow-sm z-10">
+          <h1 className="text-white font-semibold text-sm sm:text-lg tracking-wide truncate">
             {getHeaderTitle()}
           </h1>
-          <div className="h-9 w-9 bg-slate-600 rounded-full flex items-center justify-center text-white hover:bg-slate-500 cursor-pointer">
-            <User size={18} />
+          <div className="h-8 w-8 sm:h-9 sm:w-9 bg-slate-600 rounded-full flex items-center justify-center text-white hover:bg-slate-500 cursor-pointer flex-shrink-0">
+            <User size={16} className="sm:block hidden" />
+            <User size={14} className="sm:hidden block" />
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-8">
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold text-slate-700 uppercase tracking-tight">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+          <div className="mb-6 sm:mb-8">
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-700 uppercase tracking-tight">
               {getHeaderTitle()}
             </h2>
-            <p className="text-sm text-slate-500 mt-1">{getHeaderSubtitle()}</p>
+            <p className="text-xs sm:text-sm text-slate-500 mt-1">{getHeaderSubtitle()}</p>
           </div>
 
           {!canManage && timetableData.length === 0 && (
-            <div className="bg-blue-50 border border-blue-200 text-blue-700 p-4 rounded-lg mb-6 flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <div className="bg-blue-50 border border-blue-200 text-blue-700 p-3 sm:p-4 rounded-lg mb-6 flex items-start gap-2 sm:gap-3">
+              <AlertCircle className="w-4 sm:w-5 h-4 sm:h-5 flex-shrink-0 mt-0.5" />
               <div>
-                <p className="font-medium">No classes scheduled</p>
-                <p className="text-sm text-blue-600 mt-1">Your timetable appears to be empty or not yet scheduled by administrators.</p>
+                <p className="font-medium text-sm sm:text-base">No classes scheduled</p>
+                <p className="text-xs sm:text-sm text-blue-600 mt-1">Your timetable appears to be empty or not yet scheduled by administrators.</p>
               </div>
             </div>
           )}
 
           {!canManage && timetableData.length > 0 && (
-            <div className="bg-teal-50 border border-teal-200 text-teal-700 p-4 rounded-lg mb-6 flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <div className="bg-teal-50 border border-teal-200 text-teal-700 p-3 sm:p-4 rounded-lg mb-6 flex items-start gap-2 sm:gap-3">
+              <AlertCircle className="w-4 sm:w-5 h-4 sm:h-5 flex-shrink-0 mt-0.5" />
               <div>
-                <p className="font-medium">Viewing personalized schedule</p>
-                <p className="text-sm text-teal-600 mt-1">Below is your class schedule. Contact your school administrator if you notice any issues.</p>
+                <p className="font-medium text-sm sm:text-base">Viewing personalized schedule</p>
+                <p className="text-xs sm:text-sm text-teal-600 mt-1">Below is your class schedule. Contact your school administrator if you notice any issues.</p>
               </div>
             </div>
           )}
 
-          <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-200 mb-6 flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
+          <div className="bg-white p-3 sm:p-4 rounded-lg shadow-sm border border-slate-200 mb-6 flex flex-wrap items-center justify-between gap-2 sm:gap-4">
+            <div className="flex items-center gap-2 sm:gap-4 flex-wrap w-full sm:w-auto">
               {canManage && (
                 <>
                   <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); setFormData(EMPTY_FORM); setFormError(null); }}>
                     <DialogTrigger asChild>
-                      <button className="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-md font-medium flex items-center gap-2 transition-colors shadow-sm">
-                        <Plus size={18} />
-                        ADD NEW ENTRY
+                      <button className="bg-teal-500 hover:bg-teal-600 text-white px-3 sm:px-4 py-2 rounded-md font-medium text-sm flex items-center gap-1 sm:gap-2 transition-colors shadow-sm flex-1 sm:flex-none justify-center">
+                        <Plus size={16} className="sm:block hidden" />
+                        <Plus size={14} className="sm:hidden block" />
+                        <span className="hidden sm:inline">ADD NEW ENTRY</span>
+                        <span className="sm:hidden">Add</span>
                       </button>
                     </DialogTrigger>
                     <DialogContent>
@@ -541,9 +536,9 @@ export default function Timetable() {
 
                   <Dialog open={isAddPeriodDialogOpen} onOpenChange={(open) => { setIsAddPeriodDialogOpen(open); setPeriodFormData({ period_name: '', start_time: '', end_time: '', is_break: false }); setFormError(null); }}>
                     <DialogTrigger asChild>
-                      <button className="flex items-center gap-2 bg-white border border-slate-300 text-slate-600 px-4 py-2 rounded-md text-sm hover:border-slate-400 transition-colors">
-                        Add Period
-                        <ChevronDown size={14} />
+                      <button className="flex items-center gap-1 bg-white border border-slate-300 text-slate-600 px-3 sm:px-4 py-2 rounded-md text-sm hover:border-slate-400 transition-colors flex-1 sm:flex-none justify-center">
+                        <span>Add Period</span>
+                        <ChevronDown size={14} className="hidden sm:inline" />
                       </button>
                     </DialogTrigger>
                     <DialogContent>
@@ -612,59 +607,122 @@ export default function Timetable() {
           {renderError(error)}
 
           {isLoading ? renderLoading() : (
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[600px]">
-              <div className="grid grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] bg-slate-800 text-white font-semibold text-sm uppercase text-center sticky top-0">
-                <div className="p-4 border-r border-slate-700"></div>
-                {['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].map(day => (
-                  <div key={day} className="p-4 border-r border-slate-700 last:border-r-0">
-                    {day.charAt(0).toUpperCase() + day.slice(1)}
-                  </div>
-                ))}
+            <>
+              <div className="md:hidden mb-4">
+                <label className="block text-sm font-medium text-slate-700 mb-2">Select Day</label>
+                <Select value={selectedDay} onValueChange={setSelectedDay}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {DAYS_OF_WEEK.map(day => <SelectItem key={day} value={day}>{day.charAt(0).toUpperCase() + day.slice(1)}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
 
-              <div className="flex-1 relative overflow-y-auto">
-                <div className="absolute inset-0 grid grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] grid-rows-[repeat(auto-fit,120px)]">
-                  <div className="border-r border-slate-200 bg-slate-50 flex flex-col text-xs text-slate-400 font-medium text-right pr-3 pt-2 gap-[105px]">
-                    {periods.map((p, i) => (
-                      <span key={p.id}>{p.start_time}</span>
-                    ))}
-                  </div>
-                  {[...Array(25)].map((_, i) => (
-                    <div key={i} className="border-r border-b border-slate-100 opacity-50" />
+              <div className="hidden md:block bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[600px]">
+                <div className="grid grid-cols-[60px_1fr_1fr_1fr_1fr_1fr] lg:grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] bg-slate-800 text-white font-semibold text-xs lg:text-sm uppercase text-center sticky top-0">
+                  <div className="p-2 lg:p-4 border-r border-slate-700"></div>
+                  {['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].map(day => (
+                    <div key={day} className="p-2 lg:p-4 border-r border-slate-700 last:border-r-0">
+                      {day.charAt(0).toUpperCase() + day.slice(1)}
+                    </div>
                   ))}
                 </div>
 
-                <div className="absolute inset-0 grid grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] grid-rows-[repeat(auto-fit,120px)] pointer-events-none">
-                  {timetableData.map((entry, idx) => {
-                    const dayIndex = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].indexOf(entry.day_of_week);
-                    const periodIndex = periods.findIndex(p => p.id === entry.period_id);
-                    const color = getColorForCourse(entry.course_id, idx) as keyof typeof colorStyles
-                    
-                    if (dayIndex < 0 || periodIndex < 0) return null
+                <div className="flex-1 relative overflow-y-auto">
+                  <div className="absolute inset-0 grid grid-cols-[60px_1fr_1fr_1fr_1fr_1fr] lg:grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] grid-rows-[repeat(auto-fit,100px_lg:120px)]">
+                    <div className="border-r border-slate-200 bg-slate-50 flex flex-col text-xs text-slate-400 font-medium text-right pr-2 lg:pr-3 pt-2 gap-[85px] lg:gap-[105px]">
+                      {periods.map((p) => (
+                        <span key={p.id} className="text-xs">{p.start_time}</span>
+                      ))}
+                    </div>
+                    {[...Array(25)].map((_, idx) => (
+                      <div key={idx} className="border-r border-b border-slate-100 opacity-50" />
+                    ))}
+                  </div>
 
-                    return (
-                      <div
-                        key={entry.id}
-                        className={`col-start-${dayIndex + 2} row-start-${periodIndex + 1} p-2 pointer-events-auto`}
-                        style={{
-                          gridColumn: dayIndex + 2,
-                          gridRow: periodIndex + 1
-                        }}
-                      >
-                        <ClassCardWithActions
-                          entry={entry}
-                          colorStyle={colorStyles[color]}
-                          labelColorStyle={labelColorStyles[color]}
-                          canManage={canManage}
-                          onEdit={() => handleOpenEditDialog(entry)}
-                          onDelete={() => handleDelete(entry.id)}
-                        />
-                      </div>
-                    )
-                  })}
+                  <div className="absolute inset-0 grid grid-cols-[60px_1fr_1fr_1fr_1fr_1fr] lg:grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] grid-rows-[repeat(auto-fit,100px_lg:120px)] pointer-events-none">
+                    {timetableData.map((entry, idx) => {
+                      const dayIndex = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].indexOf(entry.day_of_week);
+                      const periodIndex = periods.findIndex(p => p.id === entry.period_id);
+                      const color = getColorForCourse(idx) as keyof typeof colorStyles
+                      
+                      if (dayIndex < 0 || periodIndex < 0) return null
+
+                      return (
+                        <div
+                          key={entry.id}
+                          className={`col-start-${dayIndex + 2} row-start-${periodIndex + 1} p-1 lg:p-2 pointer-events-auto`}
+                          style={{
+                            gridColumn: dayIndex + 2,
+                            gridRow: periodIndex + 1
+                          }}
+                        >
+                          <ClassCardWithActions
+                            entry={entry}
+                            colorStyle={colorStyles[color]}
+                            labelColorStyle={labelColorStyles[color]}
+                            canManage={canManage}
+                            onEdit={() => handleOpenEditDialog(entry)}
+                            onDelete={() => handleDelete(entry.id)}
+                          />
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
               </div>
-            </div>
+
+              <div className="md:hidden space-y-3">
+                {periods.map((period) => {
+                  const dayEntries = timetableData.filter(e => e.day_of_week === selectedDay && e.period_id === period.id);
+                  return (
+                    <div key={period.id} className="bg-white rounded-lg border border-slate-200 p-3 sm:p-4">
+                      <div className="font-semibold text-sm text-slate-700 mb-2">
+                        {period.name} ({period.start_time} - {period.end_time})
+                      </div>
+                      {dayEntries.length === 0 ? (
+                        <p className="text-xs sm:text-sm text-slate-500">No classes scheduled</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {dayEntries.map((entry, idx) => {
+                            const color = getColorForCourse(idx) as keyof typeof colorStyles
+                            return (
+                              <div key={entry.id} className={`rounded-md p-3 text-sm ${colorStyles[color]}`}>
+                                <div className="font-semibold mb-1">{entry.course_name}</div>
+                                <div className={`text-xs space-y-1 ${labelColorStyles[color]}`}>
+                                  <div className="flex items-center gap-1">
+                                    <User size={12} /> {entry.teacher_name || 'N/A'}
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <MapPin size={12} /> Room: {entry.classroom}
+                                  </div>
+                                </div>
+                                {canManage && (
+                                  <div className="flex gap-1 mt-2">
+                                    <button
+                                      onClick={() => handleOpenEditDialog(entry)}
+                                      className="flex-1 text-xs bg-white/50 hover:bg-white px-2 py-1 rounded transition-colors"
+                                    >
+                                      <Edit size={12} className="inline mr-1" /> Edit
+                                    </button>
+                                    <button
+                                      onClick={() => handleDelete(entry.id)}
+                                      className="flex-1 text-xs bg-red-100 hover:bg-red-200 text-red-700 px-2 py-1 rounded transition-colors"
+                                    >
+                                      <Trash2 size={12} className="inline mr-1" /> Delete
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </>
           )}
         </div>
       </main>
@@ -767,23 +825,24 @@ function ClassCardWithActions({ entry, colorStyle, labelColorStyle, canManage, o
   const [showDelete, setShowDelete] = React.useState(false)
 
   return (
-    <div className={`h-full w-full rounded-r-md border-l-[6px] p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer flex flex-col justify-between relative group ${colorStyle}`}>
-      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-50">
+    <div className={`h-full w-full rounded-r-md border-l-[6px] p-2 lg:p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer flex flex-col justify-between relative group ${colorStyle}`}>
+      <div className="absolute top-1 lg:top-2 right-1 lg:right-2 opacity-0 group-hover:opacity-50">
         <div className="bg-white/40 p-1 rounded-full">
-          <MoreHorizontal size={14} />
+          <MoreHorizontal size={12} className="lg:hidden" />
+          <MoreHorizontal size={14} className="hidden lg:block" />
         </div>
       </div>
 
       <div>
-        <h3 className="font-bold text-sm leading-tight mb-1">{entry.course_name}</h3>
+        <h3 className="font-bold text-xs lg:text-sm leading-tight mb-1 line-clamp-2">{entry.course_name}</h3>
       </div>
 
-      <div className={`text-xs space-y-1 ${labelColorStyle} font-medium opacity-90`}>
-        <div className="flex items-center gap-1">
-          <User size={12} /> {entry.teacher_name || 'N/A'}
+      <div className={`text-xs space-y-0.5 lg:space-y-1 ${labelColorStyle} font-medium opacity-90`}>
+        <div className="flex items-center gap-0.5 lg:gap-1 truncate">
+          <User size={10} className="flex-shrink-0 lg:w-3 lg:h-3" /> <span className="truncate text-xs">{entry.teacher_name || 'N/A'}</span>
         </div>
-        <div className="flex items-center gap-1">
-          <MapPin size={12} /> Room: {entry.classroom}
+        <div className="flex items-center gap-0.5 lg:gap-1 truncate">
+          <MapPin size={10} className="flex-shrink-0 lg:w-3 lg:h-3" /> <span className="truncate text-xs">Rm: {entry.classroom}</span>
         </div>
       </div>
 

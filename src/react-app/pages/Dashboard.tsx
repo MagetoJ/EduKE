@@ -9,9 +9,7 @@ import {
   School,
   UserCheck,
   MessageSquare,
-  Clock,
-  CheckCircle,
-  XCircle
+  Clock
 } from 'lucide-react'
 import { useApi, useAuth } from '../contexts/AuthContext'
 import { useNavigate } from 'react-router'

@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { NotificationsProvider } from "./contexts/NotificationsContext";
 import DashboardLayout from "./components/layout/DashboardLayout";
 import Login from "./pages/Login";
 import RegisterSchool from "./pages/RegisterSchool";
@@ -110,9 +111,11 @@ function AppRoutes() {
 export default function App() {
   return (
     <AuthProvider>
-      <Router>
-        <AppRoutes />
-      </Router>
+      <NotificationsProvider>
+        <Router>
+          <AppRoutes />
+        </Router>
+      </NotificationsProvider>
     </AuthProvider>
   );
 }

@@ -24,6 +24,7 @@ const coursesRoutes = require('./routes/courses');
 const teacherRoutes = require('./routes/teacher');
 const timetableRoutes = require('./routes/timetable');
 const messagesRoutes = require('./routes/messages');
+const notificationsRoutes = require('./routes/notifications');
 
 // Import middleware
 const { authenticateToken } = require('./middleware/auth');
@@ -82,6 +83,7 @@ app.use('/api', authenticateToken, tenantContext, coursesRoutes);
 app.use('/api/teacher', authenticateToken, tenantContext, teacherRoutes);
 app.use('/api/timetable', authenticateToken, tenantContext, timetableRoutes);
 app.use('/api/messages', authenticateToken, tenantContext, messagesRoutes);
+app.use('/api', authenticateToken, tenantContext, notificationsRoutes);
 app.use('/api', authenticateToken, tenantContext, secureRouter);
 app.use('/api', authenticateToken, tenantContext, completeRoutes);
 
