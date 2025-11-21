@@ -87,12 +87,20 @@ app.use('/api', authenticateToken, tenantContext, completeRoutes);
 
 // Client-side routing fallback (for React Router)
 // Any route not matched by API or static files serves index.html
-app.get('*', (req, res) => {
+app.use((req, res) => {
+  // Skip API routes and static files
+  if (req.path.startsWith('/api/') || req.path.startsWith('/uploads/') || req.path === '/health') {
+    return res.status(404).json({
+      success: false,
+      error: 'Endpoint not found'
+    });
+  }
+
   res.sendFile(path.join(frontendPath, 'index.html'), (err) => {
     if (err) {
-      res.status(404).json({ 
+      res.status(404).json({
         success: false,
-        error: 'Not found' 
+        error: 'Not found'
       });
     }
   });

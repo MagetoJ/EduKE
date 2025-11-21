@@ -8,13 +8,13 @@
     "npm": ">=9.0.0"
   },
   "scripts": {
-    "start": "NODE_ENV=production node index.js",
-    "dev": "NODE_ENV=development nodemon index.js",
-    "prod": "NODE_ENV=production node index.js",
+    "start": "cross-env NODE_ENV=production node index.js",
+    "dev": "cross-env NODE_ENV=development nodemon index.js",
+    "prod": "cross-env NODE_ENV=production node index.js",
     "db:init": "node scripts/init-db.js",
-    "db:init:prod": "NODE_ENV=production node scripts/init-db.js --production",
+    "db:init:prod": "cross-env NODE_ENV=production node scripts/init-db.js --production",
     "db:reset": "node scripts/reset-db.js",
-    "db:reset:prod": "NODE_ENV=production node scripts/reset-db.js --production",
+    "db:reset:prod": "cross-env NODE_ENV=production node scripts/reset-db.js --production",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -41,6 +41,7 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
+    "cross-env": "^10.1.0",
     "nodemon": "^3.1.11"
   }
 }
