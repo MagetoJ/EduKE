@@ -653,7 +653,6 @@ export default function Timetable() {
                       >
                         <ClassCardWithActions
                           entry={entry}
-                          color={color}
                           colorStyle={colorStyles[color]}
                           labelColorStyle={labelColorStyles[color]}
                           canManage={canManage}
@@ -757,7 +756,6 @@ export default function Timetable() {
 
 interface ClassCardWithActionsProps {
   entry: TimetableEntry
-  color: keyof typeof colorStyles
   colorStyle: string
   labelColorStyle: string
   canManage: boolean
@@ -765,7 +763,7 @@ interface ClassCardWithActionsProps {
   onDelete: () => void
 }
 
-function ClassCardWithActions({ entry, color, colorStyle, labelColorStyle, canManage, onEdit, onDelete }: ClassCardWithActionsProps) {
+function ClassCardWithActions({ entry, colorStyle, labelColorStyle, canManage, onEdit, onDelete }: ClassCardWithActionsProps) {
   const [showDelete, setShowDelete] = React.useState(false)
 
   return (
@@ -792,7 +790,7 @@ function ClassCardWithActions({ entry, color, colorStyle, labelColorStyle, canMa
       {canManage && (
         <div className="absolute inset-0 bg-black/0 hover:bg-black/5 rounded-r-md opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
           <button
-            onClick={(e) => {
+            onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
               e.stopPropagation()
               onEdit()
             }}
@@ -803,7 +801,7 @@ function ClassCardWithActions({ entry, color, colorStyle, labelColorStyle, canMa
           <AlertDialog open={showDelete} onOpenChange={setShowDelete}>
             <AlertDialogTrigger asChild>
               <button
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e: React.MouseEvent<HTMLButtonElement>) => e.stopPropagation()}
                 className="p-1 bg-white rounded-full shadow hover:shadow-md"
               >
                 <Trash2 size={14} className="text-red-600" />
