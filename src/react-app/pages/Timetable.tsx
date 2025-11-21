@@ -79,6 +79,22 @@ const EMPTY_FORM: FormData = {
 
 const DAYS_OF_WEEK = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
+const colorStyles = {
+  sky: 'bg-sky-200 border-l-sky-500 text-sky-900',
+  orange: 'bg-orange-200 border-l-orange-500 text-orange-900',
+  green: 'bg-green-200 border-l-green-500 text-green-900',
+  purple: 'bg-purple-200 border-l-purple-500 text-purple-900',
+  red: 'bg-red-300 border-l-red-500 text-red-900',
+}
+
+const labelColorStyles = {
+  sky: 'text-sky-700',
+  orange: 'text-orange-800',
+  green: 'text-green-800',
+  purple: 'text-purple-800',
+  red: 'text-red-900',
+}
+
 export default function Timetable() {
   const { user } = useAuth()
   const api = useApi()
@@ -391,22 +407,6 @@ export default function Timetable() {
   const getColorForCourse = (courseId: string, index: number) => {
     const colors = ['sky', 'orange', 'green', 'purple', 'red']
     return colors[index % colors.length]
-  }
-
-  const colorStyles = {
-    sky: 'bg-sky-200 border-l-sky-500 text-sky-900',
-    orange: 'bg-orange-200 border-l-orange-500 text-orange-900',
-    green: 'bg-green-200 border-l-green-500 text-green-900',
-    purple: 'bg-purple-200 border-l-purple-500 text-purple-900',
-    red: 'bg-red-300 border-l-red-500 text-red-900',
-  }
-
-  const labelColorStyles = {
-    sky: 'text-sky-700',
-    orange: 'text-orange-800',
-    green: 'text-green-800',
-    purple: 'text-purple-800',
-    red: 'text-red-900',
   }
 
   return (
