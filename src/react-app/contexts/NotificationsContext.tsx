@@ -37,8 +37,7 @@ const NotificationsProvider = ({ children }: { children: React.ReactNode }) => {
   const fetchNotifications = useCallback(async () => {
     try {
       setIsLoading(true);
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-      const response = await api(`${API_URL}/api/notifications`);
+      const response = await api(`/api/notifications`);
       
       if (!response.ok) {
         throw new Error('Failed to fetch notifications');
@@ -56,8 +55,7 @@ const NotificationsProvider = ({ children }: { children: React.ReactNode }) => {
 
   const markAsRead = useCallback(async (id: number) => {
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-      const response = await api(`${API_URL}/api/notifications/${id}/read`, {
+      const response = await api(`/api/notifications/${id}/read`, {
         method: 'POST'
       });
 
@@ -76,8 +74,7 @@ const NotificationsProvider = ({ children }: { children: React.ReactNode }) => {
 
   const markAllAsRead = useCallback(async () => {
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-      const response = await api(`${API_URL}/api/notifications/read-all`, {
+      const response = await api(`/api/notifications/read-all`, {
         method: 'POST'
       });
 
@@ -96,8 +93,7 @@ const NotificationsProvider = ({ children }: { children: React.ReactNode }) => {
 
   const deleteNotification = useCallback(async (id: number) => {
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-      const response = await api(`${API_URL}/api/notifications/${id}`, {
+      const response = await api(`/api/notifications/${id}`, {
         method: 'DELETE'
       });
 
@@ -119,8 +115,7 @@ const NotificationsProvider = ({ children }: { children: React.ReactNode }) => {
 
   const clearAllNotifications = useCallback(async () => {
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-      const response = await api(`${API_URL}/api/notifications`, {
+      const response = await api(`/api/notifications`, {
         method: 'DELETE'
       });
 

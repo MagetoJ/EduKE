@@ -159,8 +159,7 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
 
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-      const response = await fetch(`${API_URL}/api/auth/refresh-token`, {
+      const response = await fetch(`/api/auth/refresh-token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -186,8 +185,7 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     async (email: string, password: string, remember = true) => {
       setIsLoading(true);
       try {
-        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-        const response = await fetch(`${API_URL}/api/auth/login`, {
+        const response = await fetch(`/api/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
@@ -214,17 +212,13 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
         setStoragePreference(storageType);
         setToken(data.data.accessToken);
-        // Refresh token is in httpOnly cookie, but store a flag
         setRefreshToken('stored-in-cookie');
         setUserState(normalizedUser);
         writeAuthToStorage(storageType, data.data.accessToken, 'stored-in-cookie', normalizedUser);
 
-        // --- ADD THIS LOGIC ---
-        // Check if user must change password
         if (normalizedUser.must_change_password) {
-          return 'redirect_change_password'; // Return a special flag
+          return 'redirect_change_password';
         }
-        // --- END ADDED LOGIC ---
 
       } finally {
         setIsLoading(false);
