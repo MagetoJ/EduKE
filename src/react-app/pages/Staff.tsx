@@ -36,6 +36,9 @@ type StaffMember = {
   hire_date: string;
   subject?: string;
   class_assigned?: string;
+  tsc_number?: string;
+  tpad_deadline?: string;
+  tpad_submitted?: boolean;
 };
 
 const initialStaffForm = {
@@ -49,6 +52,9 @@ const initialStaffForm = {
   password: '',
   classAssigned: '',
   subject: '',
+  tscNumber: '',
+  tpadDeadline: '',
+  tpadSubmitted: false,
   school_id: 1
 }
 
@@ -74,7 +80,10 @@ export default function Staff() {
     classAssigned: '',
     subject: '',
     joinDate: '',
-    status: ''
+    status: '',
+    tscNumber: '',
+    tpadDeadline: '',
+    tpadSubmitted: false
   })
 
   useEffect(() => {
@@ -260,7 +269,10 @@ export default function Staff() {
       classAssigned: member.classAssigned ?? '',
       subject: member.subject ?? '',
       joinDate: member.joinDate ?? '',
-      status: member.status ?? 'Active'
+      status: member.status ?? 'Active',
+      tscNumber: member.tsc_number ?? '',
+      tpadDeadline: member.tpad_deadline ?? '',
+      tpadSubmitted: member.tpad_submitted ?? false
     })
     setEditingStaffId(member.id)
     setIsEditStaffDialogOpen(true)
@@ -284,7 +296,10 @@ export default function Staff() {
           department: editStaffForm.department,
           class_assigned: editStaffForm.role === 'Teacher' ? editStaffForm.classAssigned : null,
           subject: editStaffForm.role === 'Teacher' ? editStaffForm.subject : null,
-          status: editStaffForm.status.toLowerCase()
+          status: editStaffForm.status.toLowerCase(),
+          tsc_number: editStaffForm.tscNumber || null,
+          tpad_deadline: editStaffForm.tpadDeadline || null,
+          tpad_submitted: editStaffForm.tpadSubmitted
         })
       })
 
@@ -595,6 +610,41 @@ export default function Staff() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                <div className="border-t pt-4">
+                  <h3 className="font-semibold text-sm text-gray-700 mb-4">TSC Compliance</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="tscNumber">TSC Number</Label>
+                      <Input 
+                        id="tscNumber" 
+                        value={editStaffForm.tscNumber} 
+                        onChange={handleEditStaffInputChange}
+                        placeholder="e.g., 123456" 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="tpadDeadline">TPAD Deadline</Label>
+                      <Input 
+                        id="tpadDeadline" 
+                        type="date"
+                        value={editStaffForm.tpadDeadline} 
+                        onChange={handleEditStaffInputChange}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2 mt-4">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input 
+                        type="checkbox"
+                        checked={editStaffForm.tpadSubmitted}
+                        onChange={(e) => setEditStaffForm(prev => ({ ...prev, tpadSubmitted: e.target.checked }))}
+                        className="rounded"
+                      />
+                      <span className="text-sm text-gray-700">TPAD Submitted</span>
+                    </label>
+                  </div>
+                </div>
               </div>
 
               <DialogFooter>
@@ -639,7 +689,7 @@ export default function Staff() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-4">
                       <img
-                        src={member.avatar_url}
+                        src={member.avatar}
                         alt={member.name}
                         className="w-12 h-12 rounded-full"
                       />
@@ -667,12 +717,12 @@ export default function Staff() {
                       
                       <div className="flex items-center space-x-2 text-gray-600">
                         <Calendar className="w-4 h-4" />
-                        <span className="text-sm">Joined {new Date(member.hire_date).getFullYear()}</span>
+                        <span className="text-sm">Joined {new Date(member.joinDate).getFullYear()}</span>
                       </div>
 
-                      {member.class_assigned && (
+                      {member.classAssigned && (
                         <div className="text-center">
-                          <p className="text-sm font-medium text-gray-900">{member.class_assigned}</p>
+                          <p className="text-sm font-medium text-gray-900">{member.classAssigned}</p>
                           <p className="text-xs text-gray-500">Class</p>
                         </div>
                       )}

@@ -25,6 +25,9 @@ const teacherRoutes = require('./routes/teacher');
 const timetableRoutes = require('./routes/timetable');
 const messagesRoutes = require('./routes/messages');
 const notificationsRoutes = require('./routes/notifications');
+const kenyaFeaturesRoutes = require('./routes/kenya-features');
+const transportBoardingRoutes = require('./routes/transport-boarding');
+const curriculumAssessmentRoutes = require('./routes/curriculum-assessment');
 
 // Import middleware
 const { authenticateToken } = require('./middleware/auth');
@@ -82,12 +85,16 @@ app.use('/api', authenticateToken, tenantContext, schoolsRoutes);
 app.use('/api', authenticateToken, tenantContext, subscriptionRoutes);
 app.use('/api', authenticateToken, tenantContext, examsRoutes);
 app.use('/api', authenticateToken, tenantContext, coursesRoutes);
-app.use('/api/teacher', authenticateToken, tenantContext, teacherRoutes);
+app.use('/api/teachers', authenticateToken, tenantContext, teacherRoutes);
+
 app.use('/api/timetable', authenticateToken, tenantContext, timetableRoutes);
 app.use('/api/messages', authenticateToken, tenantContext, messagesRoutes);
 app.use('/api', authenticateToken, tenantContext, notificationsRoutes);
 app.use('/api', authenticateToken, tenantContext, secureRouter);
 app.use('/api', authenticateToken, tenantContext, completeRoutes);
+app.use('/api/kenya-features', authenticateToken, tenantContext, kenyaFeaturesRoutes);
+app.use('/api/transport', authenticateToken, tenantContext, transportBoardingRoutes);
+app.use('/api/curriculum', authenticateToken, tenantContext, curriculumAssessmentRoutes);
 
 // Client-side routing fallback (for React Router)
 // Any route not matched by API or static files serves index.html

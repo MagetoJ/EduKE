@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Plus, Edit, Trash2, Loader2, AlertCircle, User, MoreHorizontal, MapPin, ChevronDown } from 'lucide-react'
 import { Button } from '../components/ui/button'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
 import { Label } from '../components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { useAuth, useApi } from '../contexts/AuthContext'
@@ -459,6 +459,9 @@ export default function Timetable() {
                       <form onSubmit={handleAddSubmit}>
                         <DialogHeader>
                           <DialogTitle>Add Timetable Entry</DialogTitle>
+                        <DialogDescription>
+                          Add a new timetable entry for the academic schedule
+                        </DialogDescription>
                         </DialogHeader>
                         <div className="py-4 space-y-4">
                           <div className="space-y-2">
@@ -545,6 +548,9 @@ export default function Timetable() {
                       <form onSubmit={handleAddPeriodSubmit}>
                         <DialogHeader>
                           <DialogTitle>Add Time Period</DialogTitle>
+                        <DialogDescription>
+                          Define a new time period for the school schedule
+                        </DialogDescription>
                         </DialogHeader>
                         <div className="py-4 space-y-4">
                           <div className="space-y-2">

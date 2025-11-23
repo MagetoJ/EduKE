@@ -15,7 +15,13 @@ import {
   Clock,
   CreditCard,
   Menu,
-  X
+  X,
+  Zap,
+  FileCheck,
+  Award,
+  Bus,
+  Home,
+  TrendingUp
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { useAuth } from '../../contexts/AuthContext'
@@ -123,6 +129,42 @@ const navItems: NavItem[] = [
     href: '/dashboard/reports',
     icon: BarChart3,
     roles: ['admin', 'super_admin']
+  },
+  {
+    title: 'CBC',
+    href: '/dashboard/cbc',
+    icon: Zap,
+    roles: ['admin', 'teacher']
+  },
+  {
+    title: 'NEMIS',
+    href: '/dashboard/nemis',
+    icon: FileCheck,
+    roles: ['admin']
+  },
+  {
+    title: 'KNEC',
+    href: '/dashboard/knec',
+    icon: Award,
+    roles: ['admin']
+  },
+  {
+    title: 'Transport',
+    href: '/dashboard/transport',
+    icon: Bus,
+    roles: ['admin']
+  },
+  {
+    title: 'Boarding',
+    href: '/dashboard/boarding',
+    icon: Home,
+    roles: ['admin']
+  },
+  {
+    title: 'Curriculum Assessment',
+    href: '/dashboard/curriculum-assessment',
+    icon: TrendingUp,
+    roles: ['admin', 'teacher']
   },
   {
     title: 'Settings',
