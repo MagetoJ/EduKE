@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getApi } = require('../db/connection');
+const { query } = require('../db/connection');
 
 const requireAuth = (req, res, next) => {
   if (!req.user) {
@@ -24,7 +24,6 @@ const requireRole = (roles) => (req, res, next) => {
 router.get('/grading-schemes', requireAuth, async (req, res) => {
   try {
     const { curriculum } = req.query;
-    const query = getApi();
     
     let sql = 'SELECT * FROM grading_schemes WHERE school_id = $1';
     let params = [req.user.school_id];
@@ -50,7 +49,6 @@ router.get('/grading-schemes', requireAuth, async (req, res) => {
 // GET 8-4-4 assessments for student
 router.get('/844/student/:studentId', requireAuth, async (req, res) => {
   try {
-    const query = getApi();
     const result = await query(
       `SELECT * FROM assessment_844_system 
        WHERE student_id = $1 AND school_id = $2
@@ -73,7 +71,6 @@ router.post('/844', requireAuth, requireRole(['admin', 'teacher']), async (req, 
       return res.status(400).json({ error: 'Student, subject, and marks are required' });
     }
 
-    const query = getApi();
     const result = await query(
       `INSERT INTO assessment_844_system 
        (school_id, student_id, academic_year_id, term_id, form, stream, subject, marks_obtained, max_marks, grade_letter, points, is_compulsory)
@@ -96,7 +93,6 @@ router.post('/844', requireAuth, requireRole(['admin', 'teacher']), async (req, 
 // GET British curriculum assessments
 router.get('/british/student/:studentId', requireAuth, async (req, res) => {
   try {
-    const query = getApi();
     const result = await query(
       `SELECT * FROM assessment_british_curriculum
        WHERE student_id = $1 AND school_id = $2
@@ -119,7 +115,6 @@ router.post('/british', requireAuth, requireRole(['admin', 'teacher']), async (r
       return res.status(400).json({ error: 'Student and subject are required' });
     }
 
-    const query = getApi();
     const result = await query(
       `INSERT INTO assessment_british_curriculum
        (school_id, student_id, academic_year_id, term_id, key_stage, subject, attainment_grade, effort_grade, predicted_grade, mock_result, checkpoint_score)
@@ -142,7 +137,6 @@ router.post('/british', requireAuth, requireRole(['admin', 'teacher']), async (r
 // GET American curriculum assessments
 router.get('/american/student/:studentId', requireAuth, async (req, res) => {
   try {
-    const query = getApi();
     const result = await query(
       `SELECT * FROM assessment_american_curriculum
        WHERE student_id = $1 AND school_id = $2
@@ -165,7 +159,6 @@ router.post('/american', requireAuth, requireRole(['admin', 'teacher']), async (
       return res.status(400).json({ error: 'Student and subject are required' });
     }
 
-    const query = getApi();
     const result = await query(
       `INSERT INTO assessment_american_curriculum
        (school_id, student_id, academic_year_id, course_id, grade_level, subject, letter_grade, gpa_points, credits_earned, map_rit_score, map_percentile)
@@ -188,7 +181,6 @@ router.post('/american', requireAuth, requireRole(['admin', 'teacher']), async (
 // GET IB assessments
 router.get('/ib/student/:studentId', requireAuth, async (req, res) => {
   try {
-    const query = getApi();
     const result = await query(
       `SELECT * FROM assessment_ib
        WHERE student_id = $1 AND school_id = $2
@@ -214,7 +206,6 @@ router.post('/ib', requireAuth, requireRole(['admin', 'teacher']), async (req, r
     const total_criteria_score = criterion_a + criterion_b + criterion_c + criterion_d;
     const final_grade = Math.ceil(total_criteria_score / 4.5);
 
-    const query = getApi();
     const result = await query(
       `INSERT INTO assessment_ib
        (school_id, student_id, academic_year_id, subject, programme, criterion_a, criterion_b, criterion_c, criterion_d, total_criteria_score, final_grade, internal_assessment_score, external_assessment_score)
@@ -237,7 +228,6 @@ router.post('/ib', requireAuth, requireRole(['admin', 'teacher']), async (req, r
 // GET CAS activities for student
 router.get('/ib-cas/student/:studentId', requireAuth, async (req, res) => {
   try {
-    const query = getApi();
     const result = await query(
       `SELECT c.*, u.name as supervisor_name
        FROM ib_cas_portfolio c
@@ -262,7 +252,6 @@ router.post('/ib-cas', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Title, type, and student are required' });
     }
 
-    const query = getApi();
     const result = await query(
       `INSERT INTO ib_cas_portfolio
        (school_id, student_id, activity_title, activity_type, start_date, end_date, hours_logged, description, evidence_url, reflection)

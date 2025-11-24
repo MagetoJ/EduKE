@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { transaction } = require('../db/connection');
-const { getApi } = require('../db/connection');
+const { transaction, query } = require('../db/connection');
 
 const requireAuth = (req, res, next) => {
   if (!req.user) {
@@ -24,7 +23,6 @@ const requireRole = (roles) => (req, res, next) => {
 // GET all transport routes for school
 router.get('/routes', requireAuth, async (req, res) => {
   try {
-    const query = getApi();
     const result = await query(
       'SELECT * FROM transport_routes WHERE school_id = $1 ORDER BY route_name',
       [req.user.school_id]
@@ -39,7 +37,6 @@ router.get('/routes', requireAuth, async (req, res) => {
 // GET single transport route
 router.get('/routes/:id', requireAuth, async (req, res) => {
   try {
-    const query = getApi();
     const result = await query(
       'SELECT * FROM transport_routes WHERE id = $1 AND school_id = $2',
       [req.params.id, req.user.school_id]
@@ -63,7 +60,6 @@ router.post('/routes', requireAuth, requireRole(['admin']), async (req, res) => 
       return res.status(400).json({ error: 'Route name and code are required' });
     }
 
-    const query = getApi();
     const result = await query(
       `INSERT INTO transport_routes (school_id, route_name, route_code, start_location, end_location, pickup_time, dropoff_time, vehicle_type, capacity, fare_amount)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -86,7 +82,6 @@ router.put('/routes/:id', requireAuth, requireRole(['admin']), async (req, res) 
   try {
     const { route_name, start_location, end_location, pickup_time, dropoff_time, vehicle_type, capacity, fare_amount, status } = req.body;
     
-    const query = getApi();
     const result = await query(
       `UPDATE transport_routes 
        SET route_name = COALESCE($1, route_name),
@@ -118,7 +113,6 @@ router.put('/routes/:id', requireAuth, requireRole(['admin']), async (req, res) 
 // DELETE transport route
 router.delete('/routes/:id', requireAuth, requireRole(['admin']), async (req, res) => {
   try {
-    const query = getApi();
     const result = await query(
       'DELETE FROM transport_routes WHERE id = $1 AND school_id = $2 RETURNING id',
       [req.params.id, req.user.school_id]
@@ -142,7 +136,6 @@ router.delete('/routes/:id', requireAuth, requireRole(['admin']), async (req, re
 // GET student's transport enrollments
 router.get('/enrollments', requireAuth, async (req, res) => {
   try {
-    const query = getApi();
     const result = await query(
       `SELECT e.*, tr.route_name, s.first_name, s.last_name 
        FROM transport_enrollments e
@@ -168,7 +161,6 @@ router.post('/enrollments', requireAuth, requireRole(['admin']), async (req, res
       return res.status(400).json({ error: 'Student and route are required' });
     }
 
-    const query = getApi();
     const result = await query(
       `INSERT INTO transport_enrollments (school_id, student_id, route_id, amount_due, start_date, end_date)
        VALUES ($1, $2, $3, $4, $5, $6)
@@ -193,7 +185,6 @@ router.post('/enrollments', requireAuth, requireRole(['admin']), async (req, res
 // GET all boarding houses
 router.get('/boarding-houses', requireAuth, async (req, res) => {
   try {
-    const query = getApi();
     const result = await query(
       `SELECT bh.*, 
               u1.name as house_master_name,
@@ -221,7 +212,6 @@ router.post('/boarding-houses', requireAuth, requireRole(['admin']), async (req,
       return res.status(400).json({ error: 'House name and code are required' });
     }
 
-    const query = getApi();
     const result = await query(
       `INSERT INTO boarding_houses (school_id, house_name, house_code, capacity, gender_type, fee_amount)
        VALUES ($1, $2, $3, $4, $5, $6)
@@ -246,7 +236,6 @@ router.post('/boarding-houses', requireAuth, requireRole(['admin']), async (req,
 // GET boarding enrollments
 router.get('/boarding-enrollments', requireAuth, async (req, res) => {
   try {
-    const query = getApi();
     const result = await query(
       `SELECT be.*, 
               s.first_name, s.last_name, s.admission_number,
@@ -274,7 +263,6 @@ router.post('/boarding-enrollments', requireAuth, requireRole(['admin']), async 
       return res.status(400).json({ error: 'Student and boarding house are required' });
     }
 
-    const query = getApi();
     const result = await query(
       `INSERT INTO boarding_enrollments (school_id, student_id, boarding_house_id, room_id, amount_due, academic_year_id, check_in_date)
        VALUES ($1, $2, $3, $4, $5, $6, CURRENT_DATE)
