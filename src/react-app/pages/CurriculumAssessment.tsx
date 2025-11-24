@@ -3,11 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../co
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
-import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { useApi, useAuth } from '../contexts/AuthContext'
-import { BookOpen, Plus, TrendingUp, BarChart3, Search } from 'lucide-react'
+import { BookOpen, Plus, TrendingUp, BarChart3 } from 'lucide-react'
 
 type CurriculumType = '844' | 'british' | 'american' | 'ib' | 'cbc'
 
@@ -22,43 +21,19 @@ type MeritListEntry = {
   total_students_in_class: number
 }
 
-type Assessment844 = {
-  id: number
-  student_id: number
-  subject: string
-  marks_obtained: number
-  max_marks: number
-  grade_letter: string
-  points: number
-  form: number
-  stream: string
-}
-
-type AssessmentBritish = {
-  id: number
-  subject: string
-  attainment_grade: string
-  effort_grade: number
-  predicted_grade: string
-  mock_result: string
-  key_stage: string
-}
-
 export default function CurriculumAssessment() {
   const { user } = useAuth()
   const apiFetch = useApi()
   const [curriculum, setCurriculum] = useState<CurriculumType>('cbc')
   const [meritLists, setMeritLists] = useState<MeritListEntry[]>([])
-  const [assessments844, setAssessments844] = useState<Assessment844[]>([])
-  const [assessmentsBritish, setAssessmentsBritish] = useState<AssessmentBritish[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [searchTerm, setSearchTerm] = useState('')
+  const [searchTerm] = useState('')
   const [selectedAcademicYear, setSelectedAcademicYear] = useState('')
 
   useEffect(() => {
     loadData()
-  }, [curriculum, selectedAcademicYear])
+  }, [curriculum, selectedAcademicYear, searchTerm])
 
   const loadData = async () => {
     setIsLoading(true)

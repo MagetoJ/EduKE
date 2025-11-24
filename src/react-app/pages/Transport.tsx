@@ -6,7 +6,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogTitle, AlertDialogTrigger } from '../components/ui/alert-dialog'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { useApi, useAuth } from '../contexts/AuthContext'
 import { Bus, MapPin, Clock, DollarSign, Plus, Edit2, Trash2, Search } from 'lucide-react'
 
@@ -46,7 +45,6 @@ export default function Transport() {
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [showRouteDialog, setShowRouteDialog] = useState(false)
-  const [editingRoute, setEditingRoute] = useState<TransportRoute | null>(null)
   const [formData, setFormData] = useState({
     route_name: '',
     route_code: '',

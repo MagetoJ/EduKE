@@ -1,9 +1,9 @@
 import { useEffect, useState, FormEvent } from 'react'
-import { Plus, Search, Edit2, Trash2, BookOpen, TrendingUp, AlertCircle, Loader2 } from 'lucide-react'
+import { Plus, Search, Edit2, Trash2, BookOpen, AlertCircle, Loader2 } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
 import { Label } from '../components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
@@ -30,17 +30,6 @@ type CBCStrand = {
   created_at?: string;
 }
 
-type CBCAssessment = {
-  id: string;
-  student_id: string;
-  strand_id: string;
-  assessment_type: 'formative' | 'summative';
-  marks: number;
-  grade: number;
-  comments?: string;
-  assessment_date?: string;
-}
-
 const initialStrandForm = {
   name: '',
   code: '',
@@ -54,7 +43,6 @@ export default function CBC() {
 
   const [activeTab, setActiveTab] = useState('strands')
   const [strands, setStrands] = useState<CBCStrand[]>([])
-  const [assessments, setAssessments] = useState<CBCAssessment[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -193,7 +181,6 @@ export default function CBC() {
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'Failed to create assessment')
 
-      setAssessments(prev => [...prev, data.data])
       setIsAssessmentDialogOpen(false)
       setAssessmentForm({
         student_id: '',

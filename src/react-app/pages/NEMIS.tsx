@@ -3,7 +3,7 @@ import { Plus, Search, Download, AlertCircle, Loader2, CheckCircle, Clock } from
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
 import { Label } from '../components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
@@ -133,10 +133,6 @@ export default function NEMIS() {
     } finally {
       setIsExporting(false)
     }
-  }
-
-  const getRegistrationStudent = (studentId: string) => {
-    return students.find(s => s.id.toString() === studentId)
   }
 
   const filteredRegistrations = registrations.filter(reg =>

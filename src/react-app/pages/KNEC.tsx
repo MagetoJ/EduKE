@@ -1,11 +1,11 @@
 import { useEffect, useState, FormEvent } from 'react'
-import { Plus, Search, AlertCircle, Loader2, CheckCircle, Clock, Edit2, Trash2 } from 'lucide-react'
+import { Plus, Search, AlertCircle, Loader2, CheckCircle, Clock, Trash2 } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
 import { Label } from '../components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup } from '../components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { useAuth, useApi } from '../contexts/AuthContext'
 import {
@@ -63,7 +63,6 @@ export default function KNEC() {
   const [error, setError] = useState<string | null>(null)
 
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [isEditingId, setIsEditingId] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [form, setForm] = useState(initialForm)
@@ -143,10 +142,6 @@ export default function KNEC() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete')
     }
-  }
-
-  const getRegistrationStudent = (studentId: string) => {
-    return students.find(s => s.id.toString() === studentId)
   }
 
   const filteredRegistrations = registrations.filter(reg =>

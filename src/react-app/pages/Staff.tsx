@@ -1,5 +1,5 @@
 import { type ChangeEvent, type FormEvent, useEffect, useState } from 'react'
-import { Plus, Search, Filter, UserCheck, Mail, Phone, Calendar, Clock, CheckCircle, XCircle, DollarSign, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Search, Filter, UserCheck, Mail, Phone, Calendar, CheckCircle, XCircle, DollarSign, Pencil, Trash2 } from 'lucide-react'
 import { Link } from 'react-router'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -9,7 +9,6 @@ import { Label } from '../components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { useApi } from '../contexts/AuthContext'
-// Import AlertDialog components
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,7 +21,6 @@ import {
   AlertDialogTrigger,
 } from "../components/ui/alert-dialog"
 
-// Add this type definition
 type StaffMember = {
   id: string;
   name: string;
@@ -32,13 +30,20 @@ type StaffMember = {
   department: string;
   status: string;
   avatar_url?: string;
-  employee_id: string;
+  employee_id?: string;
   hire_date: string;
   subject?: string;
   class_assigned?: string;
-  tsc_number?: string;
-  tpad_deadline?: string;
-  tpad_submitted?: boolean;
+};
+
+type LeaveRequest = {
+  id: string;
+  staffName: string;
+  type: string;
+  startDate: string;
+  endDate: string;
+  reason: string;
+  status: string;
 };
 
 const initialStaffForm = {
@@ -52,9 +57,6 @@ const initialStaffForm = {
   password: '',
   classAssigned: '',
   subject: '',
-  tscNumber: '',
-  tpadDeadline: '',
-  tpadSubmitted: false,
   school_id: 1
 }
 
@@ -62,7 +64,7 @@ export default function Staff() {
   const api = useApi()
   const [activeTab, setActiveTab] = useState('directory')
   const [staff, setStaff] = useState<StaffMember[]>([])
-  const [leaveRequests, setLeaveRequests] = useState<any[]>([])
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([])
   const [isStaffDialogOpen, setIsStaffDialogOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [formData, setFormData] = useState(initialStaffForm)
@@ -80,10 +82,7 @@ export default function Staff() {
     classAssigned: '',
     subject: '',
     joinDate: '',
-    status: '',
-    tscNumber: '',
-    tpadDeadline: '',
-    tpadSubmitted: false
+    status: ''
   })
 
   useEffect(() => {
@@ -94,24 +93,30 @@ export default function Staff() {
         const data = await response.json()
 
         if (response.ok && data.success) {
-          const mappedStaff = data.data.map((member: any) => ({
-            id: member.id.toString(),
-            name: member.name || `${member.first_name} ${member.last_name}`.trim(),
-            email: member.email,
-            phone: member.phone || '',
-            role: member.role ? member.role.charAt(0).toUpperCase() + member.role.slice(1) : 'Staff',
-            department: member.department || 'General',
-            joinDate: member.hire_date || new Date().toISOString(),
-            status: member.status ? member.status.charAt(0).toUpperCase() + member.status.slice(1) : 'Active',
-            avatar: member.avatar_url || 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&h=150&fit=crop&crop=face'
-          }))
+          const mappedStaff: StaffMember[] = data.data.map((member: Record<string, unknown>) => {
+            const id = member.id as unknown as number
+            const role = member.role as unknown as string
+            const status = member.status as unknown as string
+            return {
+              id: id.toString(),
+              name: member.name || `${member.first_name} ${member.last_name}`.trim(),
+              email: member.email,
+              phone: member.phone || '',
+              role: role ? role.charAt(0).toUpperCase() + role.slice(1) : 'Staff',
+              department: member.department || 'General',
+              hire_date: member.hire_date || new Date().toISOString(),
+              status: status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Active',
+              avatar_url: member.avatar_url || 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&h=150&fit=crop&crop=face',
+              class_assigned: member.class_assigned,
+              subject: member.subject
+            }
+          })
           setStaff(mappedStaff)
         } else {
           throw new Error(data.error || `HTTP ${response.status}: ${response.statusText}`)
         }
       } catch (err) {
         console.error('Error fetching staff:', err)
-        // Optionally show error to user
       } finally {
         setLoading(false)
       }
@@ -127,15 +132,19 @@ export default function Staff() {
         const data = await response.json()
 
         if (response.ok && data.success) {
-          const mappedRequests = data.data.map((request: any) => ({
-            id: request.id.toString(),
-            staffName: request.staff_name || `${request.first_name} ${request.last_name}`.trim(),
-            type: request.leave_type_name || 'Leave',
-            startDate: request.start_date,
-            endDate: request.end_date,
-            reason: request.reason || '',
-            status: request.status ? request.status.charAt(0).toUpperCase() + request.status.slice(1) : 'Pending'
-          }))
+          const mappedRequests = data.data.map((request: Record<string, unknown>) => {
+            const id = request.id as unknown as number
+            const requestStatus = request.status as unknown as string
+            return {
+              id: id.toString(),
+              staffName: request.staff_name || `${request.first_name} ${request.last_name}`.trim(),
+              type: request.leave_type_name || 'Leave',
+              startDate: request.start_date,
+              endDate: request.end_date,
+              reason: request.reason || '',
+              status: requestStatus ? requestStatus.charAt(0).toUpperCase() + requestStatus.slice(1) : 'Pending'
+            }
+          })
           setLeaveRequests(mappedRequests)
         } else {
           throw new Error(data.error || `HTTP ${response.status}: ${response.statusText}`)
@@ -236,17 +245,24 @@ export default function Staff() {
       const staffData = await response.json()
       
       if (response.ok && staffData.success) {
-        const mappedStaff = staffData.data.map((member: any) => ({
-          id: member.id.toString(),
-          name: member.name || `${member.first_name} ${member.last_name}`.trim(),
-          email: member.email,
-          phone: member.phone || '',
-          role: member.role ? member.role.charAt(0).toUpperCase() + member.role.slice(1) : 'Staff',
-          department: member.department || 'General',
-          joinDate: member.hire_date || new Date().toISOString(),
-          status: member.status ? member.status.charAt(0).toUpperCase() + member.status.slice(1) : 'Active',
-          avatar: member.avatar_url || 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&h=150&fit=crop&crop=face'
-        }))
+        const mappedStaff: StaffMember[] = staffData.data.map((member: Record<string, unknown>) => {
+          const id = member.id as unknown as number
+          const role = member.role as unknown as string
+          const status = member.status as unknown as string
+          return {
+            id: id.toString(),
+            name: member.name || `${member.first_name} ${member.last_name}`.trim(),
+            email: member.email,
+            phone: member.phone || '',
+            role: role ? role.charAt(0).toUpperCase() + role.slice(1) : 'Staff',
+            department: member.department || 'General',
+            hire_date: member.hire_date || new Date().toISOString(),
+            status: status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Active',
+            avatar_url: member.avatar_url || 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&h=150&fit=crop&crop=face',
+            class_assigned: member.class_assigned,
+            subject: member.subject
+          }
+        })
         setStaff(mappedStaff)
       }
 
@@ -258,21 +274,18 @@ export default function Staff() {
     }
   }
 
-  const openStaffEdit = (member: any) => {
+  const openStaffEdit = (member: StaffMember) => {
     setEditStaffForm({
       id: member.id,
       name: member.name,
       email: member.email,
       phone: member.phone,
       role: member.role,
-      department: member.department ?? '',
-      classAssigned: member.classAssigned ?? '',
+      department: member.department,
+      classAssigned: member.class_assigned ?? '',
       subject: member.subject ?? '',
-      joinDate: member.joinDate ?? '',
-      status: member.status ?? 'Active',
-      tscNumber: member.tsc_number ?? '',
-      tpadDeadline: member.tpad_deadline ?? '',
-      tpadSubmitted: member.tpad_submitted ?? false
+      joinDate: member.hire_date ? member.hire_date.split('T')[0] : '',
+      status: member.status
     })
     setEditingStaffId(member.id)
     setIsEditStaffDialogOpen(true)
@@ -296,10 +309,7 @@ export default function Staff() {
           department: editStaffForm.department,
           class_assigned: editStaffForm.role === 'Teacher' ? editStaffForm.classAssigned : null,
           subject: editStaffForm.role === 'Teacher' ? editStaffForm.subject : null,
-          status: editStaffForm.status.toLowerCase(),
-          tsc_number: editStaffForm.tscNumber || null,
-          tpad_deadline: editStaffForm.tpadDeadline || null,
-          tpad_submitted: editStaffForm.tpadSubmitted
+          status: editStaffForm.status.toLowerCase()
         })
       })
 
@@ -313,17 +323,24 @@ export default function Staff() {
       const updatedData = await updatedStaff.json()
       
       if (updatedStaff.ok && updatedData.success) {
-        const mappedStaff = updatedData.data.map((member: any) => ({
-          id: member.id.toString(),
-          name: member.name || `${member.first_name} ${member.last_name}`.trim(),
-          email: member.email,
-          phone: member.phone || '',
-          role: member.role ? member.role.charAt(0).toUpperCase() + member.role.slice(1) : 'Staff',
-          department: member.department || 'General',
-          joinDate: member.hire_date || new Date().toISOString(),
-          status: member.status ? member.status.charAt(0).toUpperCase() + member.status.slice(1) : 'Active',
-          avatar: member.avatar_url || 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&h=150&fit=crop&crop=face'
-        }))
+        const mappedStaff: StaffMember[] = updatedData.data.map((member: Record<string, unknown>) => {
+          const id = member.id as unknown as number
+          const role = member.role as unknown as string
+          const status = member.status as unknown as string
+          return {
+            id: id.toString(),
+            name: member.name || `${member.first_name} ${member.last_name}`.trim(),
+            email: member.email,
+            phone: member.phone || '',
+            role: role ? role.charAt(0).toUpperCase() + role.slice(1) : 'Staff',
+            department: member.department || 'General',
+            hire_date: member.hire_date || new Date().toISOString(),
+            status: status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Active',
+            avatar_url: member.avatar_url || 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&h=150&fit=crop&crop=face',
+            class_assigned: member.class_assigned,
+            subject: member.subject
+          }
+        })
         setStaff(mappedStaff)
       }
 
@@ -334,7 +351,6 @@ export default function Staff() {
     }
   }
 
-  // --- ADDED THIS FUNCTION ---
   const handleDeactivateStaff = async (staffId: string) => {
     try {
       const response = await api(`/api/staff/${staffId}`, {
@@ -346,7 +362,6 @@ export default function Staff() {
         throw new Error(data.error || 'Failed to deactivate staff member');
       }
 
-      // Update the state locally to reflect the change
       setStaff(prev =>
         prev.map(member =>
           member.id === staffId ? { ...member, status: 'Inactive' } : member
@@ -354,7 +369,6 @@ export default function Staff() {
       );
 
     } catch (err) {
-      // Show error in the main page error region
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
     }
   };
@@ -610,41 +624,6 @@ export default function Staff() {
                     </SelectContent>
                   </Select>
                 </div>
-
-                <div className="border-t pt-4">
-                  <h3 className="font-semibold text-sm text-gray-700 mb-4">TSC Compliance</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="tscNumber">TSC Number</Label>
-                      <Input 
-                        id="tscNumber" 
-                        value={editStaffForm.tscNumber} 
-                        onChange={handleEditStaffInputChange}
-                        placeholder="e.g., 123456" 
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="tpadDeadline">TPAD Deadline</Label>
-                      <Input 
-                        id="tpadDeadline" 
-                        type="date"
-                        value={editStaffForm.tpadDeadline} 
-                        onChange={handleEditStaffInputChange}
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2 mt-4">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input 
-                        type="checkbox"
-                        checked={editStaffForm.tpadSubmitted}
-                        onChange={(e) => setEditStaffForm(prev => ({ ...prev, tpadSubmitted: e.target.checked }))}
-                        className="rounded"
-                      />
-                      <span className="text-sm text-gray-700">TPAD Submitted</span>
-                    </label>
-                  </div>
-                </div>
               </div>
 
               <DialogFooter>
@@ -689,7 +668,7 @@ export default function Staff() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-4">
                       <img
-                        src={member.avatar}
+                        src={member.avatar_url}
                         alt={member.name}
                         className="w-12 h-12 rounded-full"
                       />
@@ -717,12 +696,12 @@ export default function Staff() {
                       
                       <div className="flex items-center space-x-2 text-gray-600">
                         <Calendar className="w-4 h-4" />
-                        <span className="text-sm">Joined {new Date(member.joinDate).getFullYear()}</span>
+                        <span className="text-sm">Joined {new Date(member.hire_date).getFullYear()}</span>
                       </div>
 
-                      {member.classAssigned && (
+                      {member.class_assigned && (
                         <div className="text-center">
-                          <p className="text-sm font-medium text-gray-900">{member.classAssigned}</p>
+                          <p className="text-sm font-medium text-gray-900">{member.class_assigned}</p>
                           <p className="text-xs text-gray-500">Class</p>
                         </div>
                       )}
@@ -789,7 +768,7 @@ export default function Staff() {
                       </div>
                       <div>
                         <h4 className="font-medium">{request.staffName}</h4>
-                        <p className="text-sm text-gray-600">{request.type} • {request.days} days</p>
+                        <p className="text-sm text-gray-600">{request.type}</p>
                       </div>
                     </div>
 
@@ -845,11 +824,11 @@ export default function Staff() {
                   <div key={request.id} className="flex items-center justify-between p-4 border rounded-lg">
                     <div className="flex items-center space-x-4">
                       <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
-                        <Clock className="w-5 h-5 text-gray-600" />
+                        <CheckCircle className="w-5 h-5 text-gray-600" />
                       </div>
                       <div>
                         <h4 className="font-medium">{request.staffName}</h4>
-                        <p className="text-sm text-gray-600">{request.type} • {request.days} days</p>
+                        <p className="text-sm text-gray-600">{request.type}</p>
                       </div>
                     </div>
 
