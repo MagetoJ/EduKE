@@ -10,13 +10,40 @@ const {
   SUPER_ADMIN_PASSWORD
 } = require('./config');
 
+const isProductionEnv = process.env.NODE_ENV === 'production'
+  || process.env.RENDER === 'true'
+  || process.env.RENDER === '1'
+  || process.env.RAILWAY_ENVIRONMENT
+  || process.env.FLY_APP_NAME
+  || Boolean(process.env.DATABASE_URL);
+
+const prefersSQLite = (() => {
+  const type = (process.env.DB_TYPE || '').toLowerCase();
+  if (type === 'sqlite' || type === 'sqlite3') {
+    return true;
+  }
+  const flag = (process.env.USE_SQLITE || '').toLowerCase();
+  return flag === 'true' || flag === '1';
+})();
+
+const hasPostgresConfig = Boolean(
+  process.env.DATABASE_URL
+    || process.env.DB_HOST
+    || process.env.DB_NAME
+    || process.env.DB_USER
+    || process.env.DB_PASSWORD
+);
+
+const useSQLite = !isProductionEnv && (prefersSQLite || !hasPostgresConfig);
+
+if (isProductionEnv && prefersSQLite) {
+  console.warn('SQLite is disabled in production; using PostgreSQL instead.');
+}
+
 // Database configuration
 const getDbConfig = () => {
-  const useProduction = process.env.USE_PRODUCTION_DB !== 'false';
-
-  if (useProduction) {
+  if (process.env.DATABASE_URL) {
     const connectionString = process.env.DATABASE_URL;
-    // Ensure SSL mode is set for Render PostgreSQL
     const sslConnectionString = connectionString.includes('?') ?
       connectionString + '&sslmode=require' :
       connectionString + '?sslmode=require';
@@ -31,7 +58,7 @@ const getDbConfig = () => {
 
   return {
     host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT || '5432'),
+    port: parseInt(process.env.DB_PORT || '5432', 10),
     database: process.env.DB_NAME || 'eduke',
     user: process.env.DB_USER || 'postgres',
     password: process.env.DB_PASSWORD || 'postgres'
@@ -39,19 +66,21 @@ const getDbConfig = () => {
 };
 
 // Database connection
-let db;
-const useProduction = process.env.USE_PRODUCTION_DB !== 'false';
+if (!useSQLite && !hasPostgresConfig) {
+  throw new Error('PostgreSQL configuration is required. Set DATABASE_URL or DB_HOST/DB_NAME/DB_USER/DB_PASSWORD.');
+}
 
-if (useProduction) {
-  db = new Pool(getDbConfig());
-} else {
-  // Use SQLite for local development
+let db;
+if (useSQLite) {
   const dbPath = path.join(__dirname, 'eduke.db');
   db = new sqlite3.Database(dbPath);
+  console.log('Using SQLite database for local development.');
+} else {
+  db = new Pool(getDbConfig());
 }
 
 // Test connection
-if (useProduction) {
+if (!useSQLite) {
   db.on('connect', () => {
     console.log('Connected to PostgreSQL database.');
   });
@@ -60,17 +89,16 @@ if (useProduction) {
     console.error('Unexpected error on idle client', err);
     process.exit(-1);
   });
-} else {
-  console.log('Using SQLite database for local development.');
 }
 
-const schemaPath = useProduction
-  ? path.join(__dirname, '..', 'database', 'schema.sql')
-  : path.join(__dirname, '..', 'database', 'schema_sqlite.sql');
+const schemaPath = useSQLite
+  ? path.join(__dirname, '..', 'database', 'schema_sqlite.sql')
+  : path.join(__dirname, '..', 'database', 'schema.sql');
+const usingPostgres = !useSQLite;
 const initializeSchema = async () => {
   try {
     const schema = fs.readFileSync(schemaPath, 'utf-8');
-    if (useProduction) {
+    if (usingPostgres) {
       await db.query(schema);
     } else {
       // For SQLite, we need to execute statements one by one
@@ -97,7 +125,7 @@ initializeSchema();
 
 const dbRun = async (sql, params = []) => {
   return new Promise((resolve, reject) => {
-    if (useProduction) {
+    if (usingPostgres) {
       db.query(sql, params, (err, result) => {
         if (err) reject(err);
         else resolve({ lastID: result.rows.length > 0 ? result.rows[0].id : null, changes: result.rowCount });
@@ -113,7 +141,7 @@ const dbRun = async (sql, params = []) => {
 
 const dbGet = async (sql, params = []) => {
   return new Promise((resolve, reject) => {
-    if (useProduction) {
+    if (usingPostgres) {
       db.query(sql, params, (err, result) => {
         if (err) reject(err);
         else resolve(result.rows[0] || null);
@@ -129,7 +157,7 @@ const dbGet = async (sql, params = []) => {
 
 const dbAll = async (sql, params = []) => {
   return new Promise((resolve, reject) => {
-    if (useProduction) {
+    if (usingPostgres) {
       db.query(sql, params, (err, result) => {
         if (err) reject(err);
         else resolve(result.rows);
@@ -147,7 +175,7 @@ const ensureSchemaUpgrades = async () => {
   try {
     // Check users table columns
     let userColumnNames = [];
-    if (useProduction) {
+    if (usingPostgres) {
       const userColumns = await dbAll(`
         SELECT column_name
         FROM information_schema.columns
@@ -190,7 +218,7 @@ const ensureSchemaUpgrades = async () => {
 
     // Check students table columns
     let studentColumnNames = [];
-    if (useProduction) {
+    if (usingPostgres) {
       const studentColumns = await dbAll(`
         SELECT column_name
         FROM information_schema.columns
@@ -207,7 +235,7 @@ const ensureSchemaUpgrades = async () => {
 
     // Check schools table columns
     let schoolColumnNames = [];
-    if (useProduction) {
+    if (usingPostgres) {
       const schoolColumns = await dbAll(`
         SELECT column_name
         FROM information_schema.columns

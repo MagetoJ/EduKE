@@ -3,40 +3,68 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 require('dotenv').config();
 
-// Database configuration
+const isProductionEnv = process.env.NODE_ENV === 'production'
+  || process.env.RENDER === 'true'
+  || process.env.RENDER === '1'
+  || process.env.RAILWAY_ENVIRONMENT
+  || process.env.FLY_APP_NAME
+  || process.env.VERCEL === '1'
+  || Boolean(process.env.DATABASE_URL);
+
+const prefersSQLite = (() => {
+  const type = (process.env.DB_TYPE || '').toLowerCase();
+  if (type === 'sqlite' || type === 'sqlite3') {
+    return true;
+  }
+  const flag = (process.env.USE_SQLITE || '').toLowerCase();
+  return flag === 'true' || flag === '1';
+})();
+
+const hasPostgresConfig = Boolean(
+  process.env.DATABASE_URL
+    || process.env.DB_HOST
+    || process.env.DB_NAME
+    || process.env.DB_USER
+    || process.env.DB_PASSWORD
+);
+
+const useSQLite = !isProductionEnv && (prefersSQLite || !hasPostgresConfig);
+
+if (isProductionEnv && prefersSQLite) {
+  console.warn('SQLite is disabled in production; using PostgreSQL instead.');
+}
+
 const getDbConfig = () => {
-  // If DATABASE_URL is set, use it (for Render database)
   if (process.env.DATABASE_URL) {
+    const needsSsl = process.env.DATABASE_URL.includes('render.com');
     return {
       connectionString: process.env.DATABASE_URL,
-      ssl: process.env.DATABASE_URL.includes('render.com') ? { rejectUnauthorized: false } : false
+      ssl: needsSsl ? { rejectUnauthorized: false } : false
     };
   }
-
-  // Use local database configuration
   return {
     host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT || '5432'),
+    port: parseInt(process.env.DB_PORT || '5432', 10),
     database: process.env.DB_NAME || 'eduke_local',
     user: process.env.DB_USER || 'postgres',
     password: process.env.DB_PASSWORD || 'postgres'
   };
 };
 
-// Create connection
-let db;
-const useProduction = process.env.NODE_ENV === 'production' || Boolean(process.env.DATABASE_URL);
-
-if (useProduction) {
-  db = new Pool(getDbConfig());
-} else {
-  // Use SQLite for local development
-  const dbPath = path.join(__dirname, '..', 'eduke.db');
-  db = new sqlite3.Database(dbPath);
+if (!useSQLite && !hasPostgresConfig) {
+  throw new Error('PostgreSQL configuration is required. Set DATABASE_URL or DB_HOST/DB_NAME/DB_USER/DB_PASSWORD.');
 }
 
-// Test connection
-if (useProduction) {
+let db;
+if (useSQLite) {
+  const dbPath = path.join(__dirname, '..', 'eduke.db');
+  db = new sqlite3.Database(dbPath);
+  console.log('✓ Using SQLite database for local development');
+} else {
+  db = new Pool(getDbConfig());
+}
+
+if (!useSQLite) {
   db.connect().then(client => {
     console.log('✓ Connected to PostgreSQL database');
     client.release();
@@ -48,15 +76,14 @@ if (useProduction) {
     console.error('Unexpected error on idle client', err);
     process.exit(-1);
   });
-} else {
-  console.log('✓ Using SQLite database for local development');
 }
 
-// Helper function to execute queries
+const usingPostgres = !useSQLite;
+
 const query = async (text, params) => {
   const start = Date.now();
   return new Promise((resolve, reject) => {
-    if (useProduction) {
+    if (usingPostgres) {
       db.query(text, params, (err, res) => {
         if (err) {
           console.error('Query error:', err);
@@ -67,7 +94,8 @@ const query = async (text, params) => {
         }
       });
     } else {
-      if (text.trim().toUpperCase().startsWith('SELECT') || text.trim().toUpperCase().startsWith('PRAGMA')) {
+      const statement = text.trim().toUpperCase();
+      if (statement.startsWith('SELECT') || statement.startsWith('PRAGMA')) {
         db.all(text, params, (err, rows) => {
           if (err) {
             console.error('Query error:', err);
@@ -82,7 +110,7 @@ const query = async (text, params) => {
             console.error('Query error:', err);
             reject(err);
           } else {
-            resolve({ rowCount: this.changes, lastID: this.lastID, rows: [] }); 
+            resolve({ rowCount: this.changes, lastID: this.lastID, rows: [] });
           }
         });
       }
@@ -90,19 +118,16 @@ const query = async (text, params) => {
   });
 };
 
-// Helper function to get a client from the pool
 const getClient = async () => {
-  if (useProduction) {
+  if (usingPostgres) {
     const client = await db.connect();
     return client;
-  } else {
-    return db;
   }
+  return db;
 };
 
-// Transaction helper
 const transaction = async (callback) => {
-  if (useProduction) {
+  if (usingPostgres) {
     const client = await getClient();
     try {
       await client.query('BEGIN');
@@ -115,28 +140,26 @@ const transaction = async (callback) => {
     } finally {
       client.release();
     }
-  } else {
-    return new Promise((resolve, reject) => {
-      db.serialize(() => {
-        db.run('BEGIN TRANSACTION');
-        try {
-          const result = callback(db);
-          db.run('COMMIT');
-          resolve(result);
-        } catch (error) {
-          db.run('ROLLBACK');
-          reject(error);
-        }
-      });
-    });
   }
+  return new Promise((resolve, reject) => {
+    db.serialize(() => {
+      db.run('BEGIN TRANSACTION');
+      try {
+        const result = callback(db);
+        db.run('COMMIT');
+        resolve(result);
+      } catch (error) {
+        db.run('ROLLBACK');
+        reject(error);
+      }
+    });
+  });
 };
 
-// Helper function to check if table exists
 const tableExists = async (tableName) => {
-  if (!useProduction) {
-     const result = await query(`SELECT name FROM sqlite_master WHERE type='table' AND name=$1`, [tableName]);
-     return result.rows.length > 0;
+  if (useSQLite) {
+    const result = await query(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`, [tableName]);
+    return result.rows.length > 0;
   }
   const result = await query(
     `SELECT EXISTS (
@@ -149,27 +172,30 @@ const tableExists = async (tableName) => {
   return result.rows[0].exists;
 };
 
-// Helper function to get database info
 const getDatabaseInfo = async () => {
   try {
-    const config = getDbConfig();
-    const dbName = config.database || (config.connectionString ? 'production' : 'unknown');
-    
-    // Get table count
+    let dbName = 'sqlite';
+    let configLabel = 'Local SQLite';
+    if (usingPostgres) {
+      const config = getDbConfig();
+      dbName = config.database || (config.connectionString ? 'production' : 'unknown');
+      configLabel = config.connectionString ? 'PostgreSQL (URL)' : 'PostgreSQL (env)';
+    }
+
     let count = 0;
-    if (useProduction) {
+    if (usingPostgres) {
       const res = await query(`SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema = 'public'`);
       count = parseInt(res.rows[0].count);
     } else {
       const res = await query(`SELECT count(*) as count FROM sqlite_master WHERE type='table'`);
       count = res.rows[0].count;
     }
-    
+
     return {
       database: dbName,
-      isProduction: useProduction,
+      isProduction: usingPostgres,
       tableCount: count,
-      config: useProduction ? 'Production (Render)' : 'Local SQLite'
+      config: configLabel
     };
   } catch (error) {
     console.error('Error getting database info:', error);

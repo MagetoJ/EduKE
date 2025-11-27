@@ -12,7 +12,7 @@ router.get('/cbc/strands', authorizeRole(['admin', 'teacher']), async (req, res)
   try {
     const result = await query(
       `SELECT * FROM cbc_strands WHERE school_id = $1 ORDER BY name`,
-      [req.school_id]
+      [req.schoolId]
     );
     res.json({ success: true, data: result.rows });
   } catch (err) {
@@ -33,7 +33,7 @@ router.post('/cbc/strands', authorizeRole(['admin']), async (req, res) => {
       `INSERT INTO cbc_strands (school_id, name, code, description, grade_level)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [req.school_id, name, code, description, grade_level]
+      [req.schoolId, name, code, description, grade_level]
     );
 
     res.status(201).json({ success: true, data: result.rows[0] });
@@ -58,7 +58,7 @@ router.put('/cbc/strands/:id', authorizeRole(['admin']), async (req, res) => {
            grade_level = COALESCE($4, grade_level)
        WHERE id = $5 AND school_id = $6
        RETURNING *`,
-      [name, code, description, grade_level, req.params.id, req.school_id]
+      [name, code, description, grade_level, req.params.id, req.schoolId]
     );
 
     if (result.rows.length === 0) {
@@ -81,7 +81,7 @@ router.delete('/cbc/strands/:id', authorizeRole(['admin']), async (req, res) => 
       `DELETE FROM cbc_strands 
        WHERE id = $1 AND school_id = $2
        RETURNING id`,
-      [req.params.id, req.school_id]
+      [req.params.id, req.schoolId]
     );
 
     if (result.rows.length === 0) {
@@ -103,7 +103,7 @@ router.post('/cbc/assessments', authorizeRole(['teacher']), async (req, res) => 
       `INSERT INTO cbc_assessments (school_id, student_id, strand_id, assessment_type, marks, comments, created_by)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [req.school_id, student_id, strand_id, assessment_type, marks, comments, req.user.id]
+      [req.schoolId, student_id, strand_id, assessment_type, marks, comments, req.user.id]
     );
 
     res.status(201).json({ success: true, data: result.rows[0] });
@@ -118,7 +118,7 @@ router.get('/cbc/portfolio/:student_id', authorizeRole(['teacher', 'admin']), as
     const result = await query(
       `SELECT * FROM cbc_learner_portfolios 
        WHERE school_id = $1 AND student_id = $2`,
-      [req.school_id, req.params.student_id]
+      [req.schoolId, req.params.student_id]
     );
 
     res.json({ success: true, data: result.rows });
@@ -142,7 +142,7 @@ router.post('/nemis/register-student', authorizeRole(['admin']), async (req, res
        ON CONFLICT (school_id, student_id) DO UPDATE
        SET upi = $3, birth_certificate_no = $4, updated_at = NOW()
        RETURNING *`,
-      [req.school_id, student_id, upi, birth_certificate_no]
+      [req.schoolId, student_id, upi, birth_certificate_no]
     );
 
     res.json({ success: true, data: result.rows[0], message: 'Student registered with NEMIS' });
@@ -160,7 +160,7 @@ router.post('/knec/register-candidate', authorizeRole(['admin']), async (req, re
       `INSERT INTO knec_candidate_registration (school_id, student_id, exam_type, subjects, status)
        VALUES ($1, $2, $3, $4, 'pending')
        RETURNING *`,
-      [req.school_id, student_id, exam_type, JSON.stringify(subjects)]
+      [req.schoolId, student_id, exam_type, JSON.stringify(subjects)]
     );
 
     res.json({ success: true, data: result.rows[0], message: 'Candidate registered with KNEC' });
@@ -178,7 +178,7 @@ router.get('/knec/registrations', authorizeRole(['admin']), async (req, res) => 
        JOIN students st ON kr.student_id = st.id
        WHERE kr.school_id = $1
        ORDER BY st.first_name, st.last_name`,
-      [req.school_id]
+      [req.schoolId]
     );
 
     res.json({ success: true, data: result.rows });
@@ -194,7 +194,7 @@ router.delete('/knec/registrations/:id', authorizeRole(['admin']), async (req, r
       `DELETE FROM knec_candidate_registration 
        WHERE id = $1 AND school_id = $2
        RETURNING id`,
-      [req.params.id, req.school_id]
+      [req.params.id, req.schoolId]
     );
 
     if (result.rows.length === 0) {
@@ -216,7 +216,7 @@ router.get('/nemis/export', authorizeRole(['super_admin', 'admin']), async (req,
        JOIN students st ON sr.student_id = st.id
        WHERE sr.school_id = $1
        ORDER BY st.first_name, st.last_name`,
-      [req.school_id]
+      [req.schoolId]
     );
 
     if (result.rows.length === 0) {
@@ -265,7 +265,7 @@ router.post('/mpesa/transaction', authorizeRole(['admin']), async (req, res) => 
       `INSERT INTO mpesa_transactions (school_id, student_id, amount, mpesa_code, phone_number, transaction_type, status)
        VALUES ($1, $2, $3, $4, $5, $6, 'pending')
        RETURNING *`,
-      [req.school_id, student_id, amount, mpesa_code, phone_number, transaction_type]
+      [req.schoolId, student_id, amount, mpesa_code, phone_number, transaction_type]
     );
 
     res.json({ success: true, data: result.rows[0] });
@@ -330,7 +330,7 @@ router.post('/mpesa/stk-push', authorizeRole(['admin', 'staff']), async (req, re
       await query(
         `INSERT INTO mpesa_transactions (school_id, student_id, amount, phone_number, transaction_type, status)
          VALUES ($1, $2, $3, $4, 'stk_push', 'pending')`,
-        [req.school_id, student_id, amount, phone_number]
+        [req.schoolId, student_id, amount, phone_number]
       );
 
       res.json({
@@ -396,7 +396,7 @@ router.get('/mpesa/transactions', authorizeRole(['admin']), async (req, res) => 
        JOIN students st ON mt.student_id = st.id
        WHERE mt.school_id = $1
        ORDER BY mt.created_at DESC`,
-      [req.school_id]
+      [req.schoolId]
     );
 
     res.json({ success: true, data: result.rows });
@@ -420,7 +420,7 @@ router.post('/boarding/assign-dormitory', authorizeRole(['admin']), async (req, 
        ON CONFLICT (school_id, student_id) DO UPDATE
        SET dormitory_id = $3, bed_number = $4, assignment_status = 'active', updated_at = NOW()
        RETURNING *`,
-      [req.school_id, student_id, dormitory_id, bed_number]
+      [req.schoolId, student_id, dormitory_id, bed_number]
     );
 
     res.json({ success: true, data: result.rows[0] });
@@ -438,7 +438,7 @@ router.post('/boarding/exeat-request', authorizeRole(['student']), async (req, r
       `INSERT INTO boarding_exeat_requests (school_id, student_id, start_date, end_date, reason, status)
        VALUES ($1, $2, $3, $4, $5, 'pending')
        RETURNING *`,
-      [req.school_id, student_id, start_date, end_date, reason]
+      [req.schoolId, student_id, start_date, end_date, reason]
     );
 
     res.json({ success: true, data: result.rows[0] });
@@ -457,7 +457,7 @@ router.put('/boarding/exeat-request/:id', authorizeRole(['admin']), async (req, 
        SET status = $1, approval_notes = $2, approved_at = NOW()
        WHERE id = $3 AND school_id = $4
        RETURNING *`,
-      [status, approval_notes, req.params.id, req.school_id]
+      [status, approval_notes, req.params.id, req.schoolId]
     );
 
     if (result.rows.length === 0) {
@@ -483,7 +483,7 @@ router.post('/inventory/kitchen-log', authorizeRole(['admin']), async (req, res)
       `INSERT INTO kitchen_inventory_logs (school_id, item_name, quantity, unit, usage_date)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [req.school_id, item_name, quantity, unit, usage_date]
+      [req.schoolId, item_name, quantity, unit, usage_date]
     );
 
     res.json({ success: true, data: result.rows[0] });
@@ -501,7 +501,7 @@ router.post('/inventory/textbook-issuance', authorizeRole(['librarian', 'admin']
       `INSERT INTO textbook_issuance_logs (school_id, student_id, book_id, quantity, issue_date, status)
        VALUES ($1, $2, $3, $4, $5, 'issued')
        RETURNING *`,
-      [req.school_id, student_id, book_id, quantity, issue_date]
+      [req.schoolId, student_id, book_id, quantity, issue_date]
     );
 
     res.json({ success: true, data: result.rows[0] });
@@ -525,7 +525,7 @@ router.post('/transport/route-assignment', authorizeRole(['admin']), async (req,
        ON CONFLICT (school_id, student_id) DO UPDATE
        SET route_id = $3, pickup_point = $4, updated_at = NOW()
        RETURNING *`,
-      [req.school_id, student_id, route_id, pickup_point]
+      [req.schoolId, student_id, route_id, pickup_point]
     );
 
     res.json({ success: true, data: result.rows[0] });
@@ -543,7 +543,7 @@ router.post('/transport/attendance', authorizeRole(['teacher', 'admin']), async 
       `INSERT INTO transport_attendance (school_id, student_id, route_id, attendance_date, status)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [req.school_id, student_id, route_id, attendance_date, status]
+      [req.schoolId, student_id, route_id, attendance_date, status]
     );
 
     res.json({ success: true, data: result.rows[0] });
@@ -565,7 +565,7 @@ router.post('/sms/send-campaign', authorizeRole(['admin']), async (req, res) => 
       `INSERT INTO sms_campaigns (school_id, recipient_group, message, gateway, status)
        VALUES ($1, $2, $3, $4, 'pending')
        RETURNING *`,
-      [req.school_id, recipient_group, message, gateway]
+      [req.schoolId, recipient_group, message, gateway]
     );
 
     res.json({ success: true, data: result.rows[0], message: 'SMS campaign created' });
@@ -579,7 +579,7 @@ router.get('/sms/campaigns', authorizeRole(['admin']), async (req, res) => {
   try {
     const result = await query(
       `SELECT * FROM sms_campaigns WHERE school_id = $1 ORDER BY created_at DESC`,
-      [req.school_id]
+      [req.schoolId]
     );
 
     res.json({ success: true, data: result.rows });

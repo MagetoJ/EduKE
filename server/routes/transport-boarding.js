@@ -25,7 +25,7 @@ router.get('/routes', requireAuth, async (req, res) => {
   try {
     const result = await query(
       'SELECT * FROM transport_routes WHERE school_id = $1 ORDER BY route_name',
-      [req.user.school_id]
+      [req.schoolId]
     );
     res.json({ data: result.rows });
   } catch (error) {
@@ -39,7 +39,7 @@ router.get('/routes/:id', requireAuth, async (req, res) => {
   try {
     const result = await query(
       'SELECT * FROM transport_routes WHERE id = $1 AND school_id = $2',
-      [req.params.id, req.user.school_id]
+      [req.params.id, req.schoolId]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Route not found' });
@@ -64,7 +64,7 @@ router.post('/routes', requireAuth, requireRole(['admin']), async (req, res) => 
       `INSERT INTO transport_routes (school_id, route_name, route_code, start_location, end_location, pickup_time, dropoff_time, vehicle_type, capacity, fare_amount)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
-      [req.user.school_id, route_name, route_code, start_location, end_location, pickup_time, dropoff_time, vehicle_type, capacity, fare_amount]
+      [req.schoolId, route_name, route_code, start_location, end_location, pickup_time, dropoff_time, vehicle_type, capacity, fare_amount]
     );
     
     res.status(201).json({ data: result.rows[0], message: 'Route created successfully' });
@@ -96,7 +96,7 @@ router.put('/routes/:id', requireAuth, requireRole(['admin']), async (req, res) 
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $10 AND school_id = $11
        RETURNING *`,
-      [route_name, start_location, end_location, pickup_time, dropoff_time, vehicle_type, capacity, fare_amount, status, req.params.id, req.user.school_id]
+      [route_name, start_location, end_location, pickup_time, dropoff_time, vehicle_type, capacity, fare_amount, status, req.params.id, req.schoolId]
     );
     
     if (result.rows.length === 0) {
@@ -115,7 +115,7 @@ router.delete('/routes/:id', requireAuth, requireRole(['admin']), async (req, re
   try {
     const result = await query(
       'DELETE FROM transport_routes WHERE id = $1 AND school_id = $2 RETURNING id',
-      [req.params.id, req.user.school_id]
+      [req.params.id, req.schoolId]
     );
     
     if (result.rows.length === 0) {
@@ -143,7 +143,7 @@ router.get('/enrollments', requireAuth, async (req, res) => {
        LEFT JOIN students s ON e.student_id = s.id
        WHERE e.school_id = $1
        ORDER BY e.created_at DESC`,
-      [req.user.school_id]
+      [req.schoolId]
     );
     res.json({ data: result.rows });
   } catch (error) {
@@ -165,7 +165,7 @@ router.post('/enrollments', requireAuth, requireRole(['admin']), async (req, res
       `INSERT INTO transport_enrollments (school_id, student_id, route_id, amount_due, start_date, end_date)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [req.user.school_id, student_id, route_id, amount_due, start_date, end_date]
+      [req.schoolId, student_id, route_id, amount_due, start_date, end_date]
     );
     
     res.status(201).json({ data: result.rows[0], message: 'Enrollment created successfully' });
@@ -194,7 +194,7 @@ router.get('/boarding-houses', requireAuth, async (req, res) => {
        LEFT JOIN users u2 ON bh.deputy_master_id = u2.id
        WHERE bh.school_id = $1
        ORDER BY bh.house_name`,
-      [req.user.school_id]
+      [req.schoolId]
     );
     res.json({ data: result.rows });
   } catch (error) {
@@ -216,7 +216,7 @@ router.post('/boarding-houses', requireAuth, requireRole(['admin']), async (req,
       `INSERT INTO boarding_houses (school_id, house_name, house_code, capacity, gender_type, fee_amount)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [req.user.school_id, house_name, house_code, capacity, gender_type, fee_amount]
+      [req.schoolId, house_name, house_code, capacity, gender_type, fee_amount]
     );
     
     res.status(201).json({ data: result.rows[0], message: 'Boarding house created successfully' });
@@ -245,7 +245,7 @@ router.get('/boarding-enrollments', requireAuth, async (req, res) => {
        JOIN boarding_houses bh ON be.boarding_house_id = bh.id
        WHERE be.school_id = $1
        ORDER BY be.created_at DESC`,
-      [req.user.school_id]
+      [req.schoolId]
     );
     res.json({ data: result.rows });
   } catch (error) {
@@ -267,7 +267,7 @@ router.post('/boarding-enrollments', requireAuth, requireRole(['admin']), async 
       `INSERT INTO boarding_enrollments (school_id, student_id, boarding_house_id, room_id, amount_due, academic_year_id, check_in_date)
        VALUES ($1, $2, $3, $4, $5, $6, CURRENT_DATE)
        RETURNING *`,
-      [req.user.school_id, student_id, boarding_house_id, room_id, amount_due, academic_year_id]
+      [req.schoolId, student_id, boarding_house_id, room_id, amount_due, academic_year_id]
     );
     
     res.status(201).json({ data: result.rows[0], message: 'Boarding enrollment created successfully' });
