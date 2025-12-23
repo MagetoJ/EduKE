@@ -143,6 +143,154 @@ const tableDefinitions = [
     ]
   },
   {
+    label: 'grading_schemes',
+    statements: [
+      `CREATE TABLE IF NOT EXISTS grading_schemes (
+        id SERIAL PRIMARY KEY,
+        school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+        curriculum VARCHAR(50) NOT NULL,
+        grade_letter VARCHAR(5) NOT NULL,
+        min_score DECIMAL(5,2) NOT NULL,
+        max_score DECIMAL(5,2) NOT NULL,
+        points INT,
+        remarks VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_grading_scheme_school ON grading_schemes(school_id)`
+    ]
+  },
+  {
+    label: 'assessment_844_system',
+    statements: [
+      `CREATE TABLE IF NOT EXISTS assessment_844_system (
+        id SERIAL PRIMARY KEY,
+        school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+        student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+        academic_year_id INT REFERENCES academic_years(id) ON DELETE SET NULL,
+        term_id INT REFERENCES terms(id) ON DELETE SET NULL,
+        subject VARCHAR(100) NOT NULL,
+        form VARCHAR(50),
+        stream VARCHAR(50),
+        marks_obtained DECIMAL(5,2),
+        max_marks INT DEFAULT 100,
+        grade_letter VARCHAR(5),
+        points INT,
+        is_compulsory BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_assessment_844_student ON assessment_844_system(student_id)`
+    ]
+  },
+  {
+    label: 'assessment_british_curriculum',
+    statements: [
+      `CREATE TABLE IF NOT EXISTS assessment_british_curriculum (
+        id SERIAL PRIMARY KEY,
+        school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+        student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+        academic_year_id INT REFERENCES academic_years(id) ON DELETE SET NULL,
+        term_id INT REFERENCES terms(id) ON DELETE SET NULL,
+        subject VARCHAR(100) NOT NULL,
+        key_stage VARCHAR(50),
+        attainment_grade VARCHAR(10),
+        effort_grade VARCHAR(10),
+        predicted_grade VARCHAR(10),
+        mock_result VARCHAR(10),
+        checkpoint_score DECIMAL(5,2),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_british_assessment_student ON assessment_british_curriculum(student_id)`
+    ]
+  },
+  {
+    label: 'assessment_american_curriculum',
+    statements: [
+      `CREATE TABLE IF NOT EXISTS assessment_american_curriculum (
+        id SERIAL PRIMARY KEY,
+        school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+        student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+        academic_year_id INT REFERENCES academic_years(id) ON DELETE SET NULL,
+        course_id INT REFERENCES courses(id) ON DELETE SET NULL,
+        subject VARCHAR(100) NOT NULL,
+        grade_level VARCHAR(50),
+        letter_grade VARCHAR(5),
+        gpa_points DECIMAL(3,2),
+        credits_earned DECIMAL(3,1),
+        map_rit_score INT,
+        map_percentile INT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_american_assessment_student ON assessment_american_curriculum(student_id)`
+    ]
+  },
+  {
+    label: 'assessment_ib',
+    statements: [
+      `CREATE TABLE IF NOT EXISTS assessment_ib (
+        id SERIAL PRIMARY KEY,
+        school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+        student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+        academic_year_id INT REFERENCES academic_years(id) ON DELETE SET NULL,
+        subject VARCHAR(100) NOT NULL,
+        programme VARCHAR(20) DEFAULT 'DP',
+        criterion_a INT,
+        criterion_b INT,
+        criterion_c INT,
+        criterion_d INT,
+        total_criteria_score INT,
+        final_grade INT CHECK (final_grade BETWEEN 1 AND 7),
+        internal_assessment_score DECIMAL(5,2),
+        external_assessment_score DECIMAL(5,2),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_ib_assessment_student ON assessment_ib(student_id)`
+    ]
+  },
+  {
+    label: 'ib_cas_portfolio',
+    statements: [
+      `CREATE TABLE IF NOT EXISTS ib_cas_portfolio (
+        id SERIAL PRIMARY KEY,
+        school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+        student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+        activity_title VARCHAR(255) NOT NULL,
+        activity_type VARCHAR(50) CHECK (activity_type IN ('Creativity','Activity','Service')),
+        start_date DATE,
+        end_date DATE,
+        hours_logged DECIMAL(5,2),
+        description TEXT,
+        reflection TEXT,
+        evidence_url TEXT,
+        supervisor_id INT REFERENCES users(id) ON DELETE SET NULL,
+        completion_status VARCHAR(20) DEFAULT 'ongoing',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_ib_cas_school ON ib_cas_portfolio(school_id)`
+    ]
+  },
+  {
+    label: 'merit_lists',
+    statements: [
+      `CREATE TABLE IF NOT EXISTS merit_lists (
+        id SERIAL PRIMARY KEY,
+        school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+        academic_year_id INT NOT NULL REFERENCES academic_years(id) ON DELETE CASCADE,
+        term_id INT REFERENCES terms(id) ON DELETE SET NULL,
+        student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+        grade_level VARCHAR(50),
+        stream VARCHAR(50),
+        position INT,
+        mean_score DECIMAL(5,2),
+        total_marks DECIMAL(10,2),
+        total_students_in_class INT,
+        generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(academic_year_id, term_id, grade_level, stream, student_id)
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_merit_lists_school ON merit_lists(school_id)`
+    ]
+  },
+  {
     label: 'mpesa_transactions',
     statements: [
       `CREATE TABLE IF NOT EXISTS mpesa_transactions (
@@ -425,6 +573,21 @@ const tableDefinitions = [
   }
 ];
 
+const transportRouteColumnUpdates = [
+  "ALTER TABLE transport_routes ADD COLUMN IF NOT EXISTS route_code VARCHAR(50)",
+  "ALTER TABLE transport_routes ADD COLUMN IF NOT EXISTS start_location VARCHAR(255)",
+  "ALTER TABLE transport_routes ADD COLUMN IF NOT EXISTS end_location VARCHAR(255)",
+  "ALTER TABLE transport_routes ADD COLUMN IF NOT EXISTS fare_amount DECIMAL(10,2)",
+  "ALTER TABLE transport_routes ADD COLUMN IF NOT EXISTS vehicle_type VARCHAR(50)",
+  "ALTER TABLE transport_routes ADD COLUMN IF NOT EXISTS pickup_time TIME",
+  "ALTER TABLE transport_routes ADD COLUMN IF NOT EXISTS dropoff_time TIME",
+  "ALTER TABLE transport_routes ADD COLUMN IF NOT EXISTS capacity INT",
+  "ALTER TABLE transport_routes ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active'",
+  "UPDATE transport_routes SET start_location = starting_point WHERE start_location IS NULL",
+  "UPDATE transport_routes SET end_location = ending_point WHERE end_location IS NULL",
+  "UPDATE transport_routes SET fare_amount = price_per_term WHERE fare_amount IS NULL"
+];
+
 const ensurePrerequisites = async (client) => {
   const prerequisites = ['schools', 'students', 'users', 'academic_years'];
   for (const table of prerequisites) {
@@ -446,6 +609,10 @@ async function ensureTables() {
         await client.query(statement);
       }
       console.log(`\u2713 ${definition.label}`);
+    }
+    console.log('\nUpdating transport_routes columns...');
+    for (const statement of transportRouteColumnUpdates) {
+      await client.query(statement);
     }
     console.log('\n\u2713 All tables created successfully!');
   } catch (error) {

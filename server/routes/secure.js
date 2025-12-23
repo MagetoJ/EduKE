@@ -1107,7 +1107,7 @@ secureRouter.get('/reports/subscription-status', authorizeRole(['super_admin']),
       SELECT 
         sp.name as plan,
         sp.slug,
-        COALESCE(s.status, 'Active') as status,
+        COALESCE(s.status, 'active') as status,
         COUNT(DISTINCT s.school_id) as subscribers,
         COALESCE(sp.price * COUNT(DISTINCT s.school_id), 0) as revenue
       FROM subscription_plans sp

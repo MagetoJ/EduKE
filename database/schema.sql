@@ -11,7 +11,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- ============================================
 
 -- Subscription Plans
-CREATE TABLE subscription_plans (
+CREATE TABLE IF NOT EXISTS subscription_plans (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     slug VARCHAR(50) UNIQUE NOT NULL,
@@ -44,7 +44,7 @@ CREATE INDEX idx_plan_slug ON subscription_plans(slug);
 -- ============================================
 
 -- Schools (Tenants)
-CREATE TABLE schools (
+CREATE TABLE IF NOT EXISTS schools (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     slug VARCHAR(100) UNIQUE,
@@ -79,7 +79,7 @@ CREATE INDEX idx_school_status ON schools(status);
 CREATE INDEX idx_school_curriculum ON schools(curriculum);
 
 -- School Subscriptions
-CREATE TABLE subscriptions (
+CREATE TABLE IF NOT EXISTS subscriptions (
     id SERIAL PRIMARY KEY,
     school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
     plan_id INT NOT NULL REFERENCES subscription_plans(id),
@@ -107,7 +107,7 @@ CREATE INDEX idx_subscription_expiry ON subscriptions(end_date);
 -- ============================================
 
 -- Users (Staff, Teachers, Parents, Students with portal access, Admins)
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     school_id INT REFERENCES schools(id) ON DELETE CASCADE,
     
@@ -152,7 +152,7 @@ CREATE INDEX idx_user_school_role ON users(school_id, role);
 CREATE INDEX idx_user_status ON users(status);
 
 -- Password Reset Tokens
-CREATE TABLE password_reset_tokens (
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
     id SERIAL PRIMARY KEY,
     user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     token_hash VARCHAR(255) NOT NULL,
@@ -166,7 +166,7 @@ CREATE INDEX idx_token_hash ON password_reset_tokens(token_hash);
 CREATE INDEX idx_token_expiry ON password_reset_tokens(expires_at);
 
 -- Email Verification Tokens
-CREATE TABLE email_verification_tokens (
+CREATE TABLE IF NOT EXISTS email_verification_tokens (
     id SERIAL PRIMARY KEY,
     user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     token_hash VARCHAR(255) NOT NULL,
@@ -179,7 +179,7 @@ CREATE TABLE email_verification_tokens (
 CREATE INDEX idx_verification_token ON email_verification_tokens(token_hash);
 
 -- Refresh Tokens (JWT)
-CREATE TABLE refresh_tokens (
+CREATE TABLE IF NOT EXISTS refresh_tokens (
     id SERIAL PRIMARY KEY,
     user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     token_hash VARCHAR(255) NOT NULL,
@@ -199,7 +199,7 @@ CREATE INDEX idx_refresh_expiry ON refresh_tokens(expires_at);
 -- ============================================
 
 -- Students
-CREATE TABLE students (
+CREATE TABLE IF NOT EXISTS students (
     id SERIAL PRIMARY KEY,
     school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
     user_id INT REFERENCES users(id) ON DELETE SET NULL,
@@ -256,7 +256,7 @@ CREATE INDEX idx_student_status ON students(status);
 CREATE INDEX idx_student_parent ON students(parent_id);
 
 -- Parent-Student Relations
-CREATE TABLE parent_student_relations (
+CREATE TABLE IF NOT EXISTS parent_student_relations (
     id SERIAL PRIMARY KEY,
     parent_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
@@ -276,7 +276,7 @@ CREATE INDEX idx_student_relations ON parent_student_relations(student_id);
 -- ============================================
 
 -- Academic Years
-CREATE TABLE academic_years (
+CREATE TABLE IF NOT EXISTS academic_years (
     id SERIAL PRIMARY KEY,
     school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
     
@@ -296,7 +296,7 @@ CREATE INDEX idx_academic_year_school ON academic_years(school_id);
 CREATE INDEX idx_academic_year_status ON academic_years(status);
 
 -- Terms/Semesters
-CREATE TABLE terms (
+CREATE TABLE IF NOT EXISTS terms (
     id SERIAL PRIMARY KEY,
     school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
     academic_year_id INT NOT NULL REFERENCES academic_years(id) ON DELETE CASCADE,
@@ -314,7 +314,7 @@ CREATE INDEX idx_term_school ON terms(school_id);
 CREATE INDEX idx_term_year ON terms(academic_year_id);
 
 -- Courses/Subjects
-CREATE TABLE courses (
+CREATE TABLE IF NOT EXISTS courses (
     id SERIAL PRIMARY KEY,
     school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
     teacher_id INT REFERENCES users(id) ON DELETE SET NULL,
@@ -346,7 +346,7 @@ CREATE INDEX idx_course_teacher ON courses(teacher_id);
 CREATE INDEX idx_course_grade ON courses(grade);
 
 -- Course Enrollments
-CREATE TABLE course_enrollments (
+CREATE TABLE IF NOT EXISTS course_enrollments (
     id SERIAL PRIMARY KEY,
     course_id INT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
     student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
@@ -367,7 +367,7 @@ CREATE INDEX idx_enrollment_course ON course_enrollments(course_id);
 CREATE INDEX idx_enrollment_student ON course_enrollments(student_id);
 
 -- Course Resources
-CREATE TABLE course_resources (
+CREATE TABLE IF NOT EXISTS course_resources (
     id SERIAL PRIMARY KEY,
     course_id INT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
     
@@ -391,7 +391,7 @@ CREATE INDEX idx_resource_course ON course_resources(course_id);
 -- ============================================
 
 -- Assignments
-CREATE TABLE assignments (
+CREATE TABLE IF NOT EXISTS assignments (
     id SERIAL PRIMARY KEY,
     school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
     course_id INT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
@@ -428,7 +428,7 @@ CREATE INDEX idx_assignment_course ON assignments(course_id);
 CREATE INDEX idx_assignment_due_date ON assignments(due_date);
 
 -- Assignment Submissions
-CREATE TABLE assignment_submissions (
+CREATE TABLE IF NOT EXISTS assignment_submissions (
     id SERIAL PRIMARY KEY,
     assignment_id INT NOT NULL REFERENCES assignments(id) ON DELETE CASCADE,
     student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
@@ -462,7 +462,7 @@ CREATE INDEX idx_submission_status ON assignment_submissions(status);
 -- ============================================
 
 -- Exams
-CREATE TABLE exams (
+CREATE TABLE IF NOT EXISTS exams (
     id SERIAL PRIMARY KEY,
     school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
     course_id INT REFERENCES courses(id) ON DELETE CASCADE,
@@ -504,7 +504,7 @@ CREATE INDEX idx_exam_course ON exams(course_id);
 CREATE INDEX idx_exam_date ON exams(exam_date);
 
 -- Exam Results
-CREATE TABLE exam_results (
+CREATE TABLE IF NOT EXISTS exam_results (
     id SERIAL PRIMARY KEY,
     exam_id INT NOT NULL REFERENCES exams(id) ON DELETE CASCADE,
     student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
@@ -534,7 +534,7 @@ CREATE INDEX idx_result_student ON exam_results(student_id);
 -- ============================================
 
 -- Attendance Records
-CREATE TABLE attendance (
+CREATE TABLE IF NOT EXISTS attendance (
     id SERIAL PRIMARY KEY,
     school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
     student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
@@ -562,7 +562,7 @@ CREATE INDEX idx_attendance_date ON attendance(date);
 -- ============================================
 
 -- Student Performance Records
-CREATE TABLE performance (
+CREATE TABLE IF NOT EXISTS performance (
     id SERIAL PRIMARY KEY,
     school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
     student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
@@ -588,7 +588,7 @@ CREATE INDEX idx_performance_course ON performance(course_id);
 CREATE INDEX idx_performance_term ON performance(term_id);
 
 -- Report Cards
-CREATE TABLE report_cards (
+CREATE TABLE IF NOT EXISTS report_cards (
     id SERIAL PRIMARY KEY,
     school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
     student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
@@ -614,7 +614,57 @@ CREATE TABLE report_cards (
 CREATE INDEX idx_report_student ON report_cards(student_id);
 CREATE INDEX idx_report_year_term ON report_cards(academic_year_id, term_id);
 
-CREATE TABLE cbc_strands (
+CREATE TABLE IF NOT EXISTS report_comments (
+    id SERIAL PRIMARY KEY,
+    school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+    student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    term_id INT NOT NULL REFERENCES terms(id) ON DELETE CASCADE,
+    teacher_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    comment TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    UNIQUE(school_id, student_id, term_id, teacher_id)
+);
+
+CREATE INDEX idx_report_comments_student ON report_comments(student_id);
+CREATE INDEX idx_report_comments_term ON report_comments(term_id);
+
+CREATE TABLE IF NOT EXISTS report_card_admin_comments (
+    id SERIAL PRIMARY KEY,
+    school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+    student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    term_id INT NOT NULL REFERENCES terms(id) ON DELETE CASCADE,
+    headmaster_comment TEXT,
+    overall_conduct VARCHAR(50),
+    next_term_focus TEXT,
+    promoted BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    UNIQUE(school_id, student_id, term_id)
+);
+
+CREATE INDEX idx_admin_comments_student ON report_card_admin_comments(student_id);
+CREATE INDEX idx_admin_comments_term ON report_card_admin_comments(term_id);
+
+CREATE TABLE IF NOT EXISTS discipline_records (
+    id SERIAL PRIMARY KEY,
+    school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+    student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    term_id INT REFERENCES terms(id) ON DELETE SET NULL,
+    incident_type VARCHAR(100) NOT NULL,
+    severity VARCHAR(20) DEFAULT 'moderate',
+    incident_date DATE NOT NULL,
+    description TEXT,
+    action_taken TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_discipline_records_student ON discipline_records(student_id);
+CREATE INDEX idx_discipline_records_term ON discipline_records(term_id);
+
+CREATE TABLE IF NOT EXISTS cbc_strands (
     id SERIAL PRIMARY KEY,
     school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
@@ -622,12 +672,13 @@ CREATE TABLE cbc_strands (
     description TEXT,
     grade_level VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(school_id, code)
 );
 
 CREATE INDEX idx_cbc_strand_school ON cbc_strands(school_id);
 
-CREATE TABLE cbc_assessments (
+CREATE TABLE IF NOT EXISTS cbc_assessments (
     id SERIAL PRIMARY KEY,
     school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
     student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
@@ -644,7 +695,22 @@ CREATE TABLE cbc_assessments (
 
 CREATE INDEX idx_cbc_assessment_school ON cbc_assessments(school_id);
 
-CREATE TABLE nemis_student_registration (
+CREATE TABLE IF NOT EXISTS cbc_learner_portfolios (
+    id SERIAL PRIMARY KEY,
+    school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+    student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    artifact_type VARCHAR(50),
+    artifact_title VARCHAR(255),
+    artifact_url TEXT,
+    comments TEXT,
+    created_by INT REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_cbc_portfolios_school ON cbc_learner_portfolios(school_id);
+
+CREATE TABLE IF NOT EXISTS nemis_student_registration (
     id SERIAL PRIMARY KEY,
     school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
     student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
@@ -658,7 +724,7 @@ CREATE TABLE nemis_student_registration (
 
 CREATE INDEX idx_nemis_school ON nemis_student_registration(school_id);
 
-CREATE TABLE knec_candidate_registration (
+CREATE TABLE IF NOT EXISTS knec_candidate_registration (
     id SERIAL PRIMARY KEY,
     school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
     student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
@@ -673,11 +739,142 @@ CREATE TABLE knec_candidate_registration (
 CREATE INDEX idx_knec_school ON knec_candidate_registration(school_id);
 
 -- ============================================
+-- CURRICULUM & SPECIALIZED ASSESSMENTS
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS grading_schemes (
+    id SERIAL PRIMARY KEY,
+    school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+    curriculum VARCHAR(50) NOT NULL,
+    grade_letter VARCHAR(5) NOT NULL,
+    min_score DECIMAL(5,2) NOT NULL,
+    max_score DECIMAL(5,2) NOT NULL,
+    points INT,
+    remarks VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_grading_scheme_school ON grading_schemes(school_id);
+
+CREATE TABLE IF NOT EXISTS assessment_844_system (
+    id SERIAL PRIMARY KEY,
+    school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+    student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    academic_year_id INT REFERENCES academic_years(id) ON DELETE SET NULL,
+    term_id INT REFERENCES terms(id) ON DELETE SET NULL,
+    subject VARCHAR(100) NOT NULL,
+    form VARCHAR(50),
+    stream VARCHAR(50),
+    marks_obtained DECIMAL(5,2),
+    max_marks INT DEFAULT 100,
+    grade_letter VARCHAR(5),
+    points INT,
+    is_compulsory BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_assessment_844_student ON assessment_844_system(student_id);
+
+CREATE TABLE IF NOT EXISTS assessment_british_curriculum (
+    id SERIAL PRIMARY KEY,
+    school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+    student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    academic_year_id INT REFERENCES academic_years(id) ON DELETE SET NULL,
+    term_id INT REFERENCES terms(id) ON DELETE SET NULL,
+    subject VARCHAR(100) NOT NULL,
+    key_stage VARCHAR(50),
+    attainment_grade VARCHAR(10),
+    effort_grade VARCHAR(10),
+    predicted_grade VARCHAR(10),
+    mock_result VARCHAR(10),
+    checkpoint_score DECIMAL(5,2),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_british_assessment_student ON assessment_british_curriculum(student_id);
+
+CREATE TABLE IF NOT EXISTS assessment_american_curriculum (
+    id SERIAL PRIMARY KEY,
+    school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+    student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    academic_year_id INT REFERENCES academic_years(id) ON DELETE SET NULL,
+    course_id INT REFERENCES courses(id) ON DELETE SET NULL,
+    subject VARCHAR(100) NOT NULL,
+    grade_level VARCHAR(50),
+    letter_grade VARCHAR(5),
+    gpa_points DECIMAL(3,2),
+    credits_earned DECIMAL(3,1),
+    map_rit_score INT,
+    map_percentile INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_american_assessment_student ON assessment_american_curriculum(student_id);
+
+CREATE TABLE IF NOT EXISTS assessment_ib (
+    id SERIAL PRIMARY KEY,
+    school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+    student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    academic_year_id INT REFERENCES academic_years(id) ON DELETE SET NULL,
+    subject VARCHAR(100) NOT NULL,
+    programme VARCHAR(20) DEFAULT 'DP',
+    criterion_a INT,
+    criterion_b INT,
+    criterion_c INT,
+    criterion_d INT,
+    total_criteria_score INT,
+    final_grade INT CHECK (final_grade BETWEEN 1 AND 7),
+    internal_assessment_score DECIMAL(5,2),
+    external_assessment_score DECIMAL(5,2),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_ib_assessment_student ON assessment_ib(student_id);
+
+CREATE TABLE IF NOT EXISTS ib_cas_portfolio (
+    id SERIAL PRIMARY KEY,
+    school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+    student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    activity_title VARCHAR(255) NOT NULL,
+    activity_type VARCHAR(50) CHECK (activity_type IN ('Creativity', 'Activity', 'Service')),
+    start_date DATE,
+    end_date DATE,
+    hours_logged DECIMAL(5,2),
+    description TEXT,
+    reflection TEXT,
+    evidence_url TEXT,
+    supervisor_id INT REFERENCES users(id) ON DELETE SET NULL,
+    completion_status VARCHAR(20) DEFAULT 'ongoing',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_ib_cas_school ON ib_cas_portfolio(school_id);
+
+CREATE TABLE IF NOT EXISTS merit_lists (
+    id SERIAL PRIMARY KEY,
+    school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+    academic_year_id INT NOT NULL REFERENCES academic_years(id) ON DELETE CASCADE,
+    term_id INT REFERENCES terms(id) ON DELETE SET NULL,
+    student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    grade_level VARCHAR(50),
+    stream VARCHAR(50),
+    position INT,
+    mean_score DECIMAL(5,2),
+    total_marks DECIMAL(10,2),
+    total_students_in_class INT,
+    generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(academic_year_id, term_id, grade_level, stream, student_id)
+);
+
+CREATE INDEX idx_merit_lists_school ON merit_lists(school_id);
+
+-- ============================================
 -- DISCIPLINE & BEHAVIOR
 -- ============================================
 
 -- Discipline Records
-CREATE TABLE discipline (
+CREATE TABLE IF NOT EXISTS discipline (
     id SERIAL PRIMARY KEY,
     school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
     student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
@@ -715,7 +912,7 @@ CREATE INDEX idx_discipline_status ON discipline(status);
 -- ============================================
 
 -- Fee Structures
-CREATE TABLE fee_structures (
+CREATE TABLE IF NOT EXISTS fee_structures (
     id SERIAL PRIMARY KEY,
     school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
     
@@ -743,7 +940,7 @@ CREATE INDEX idx_fee_structure_school ON fee_structures(school_id);
 CREATE INDEX idx_fee_structure_active ON fee_structures(is_active);
 
 -- Student Fees
-CREATE TABLE student_fees (
+CREATE TABLE IF NOT EXISTS student_fees (
     id SERIAL PRIMARY KEY,
     school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
     student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
@@ -770,7 +967,7 @@ CREATE INDEX idx_student_fee_status ON student_fees(payment_status);
 CREATE INDEX idx_student_fee_due_date ON student_fees(due_date);
 
 -- Fee Payments
-CREATE TABLE fee_payments (
+CREATE TABLE IF NOT EXISTS fee_payments (
     id SERIAL PRIMARY KEY,
     school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
     student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
@@ -795,7 +992,7 @@ CREATE INDEX idx_payment_student ON fee_payments(student_id);
 CREATE INDEX idx_payment_date ON fee_payments(payment_date);
 CREATE INDEX idx_payment_receipt ON fee_payments(receipt_number);
 
-CREATE TABLE mpesa_transactions (
+CREATE TABLE IF NOT EXISTS mpesa_transactions (
     id SERIAL PRIMARY KEY,
     school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
     student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
@@ -811,12 +1008,145 @@ CREATE TABLE mpesa_transactions (
 
 CREATE INDEX idx_mpesa_school ON mpesa_transactions(school_id);
 
-CREATE TABLE boarding_assignments (
+CREATE TABLE IF NOT EXISTS payment_transactions (
+    id SERIAL PRIMARY KEY,
+    school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+    student_fee_id INT NOT NULL REFERENCES student_fees(id) ON DELETE CASCADE,
+    provider VARCHAR(50) NOT NULL,
+    transaction_id VARCHAR(255) NOT NULL UNIQUE,
+    status VARCHAR(50) DEFAULT 'initiated',
+    amount DECIMAL(10,2) NOT NULL,
+    error_message TEXT,
+    metadata JSONB,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_payment_transaction_school ON payment_transactions(school_id);
+CREATE INDEX idx_payment_transaction_fee ON payment_transactions(student_fee_id);
+CREATE INDEX idx_payment_transaction_status ON payment_transactions(status);
+CREATE INDEX idx_payment_transaction_provider ON payment_transactions(provider);
+
+CREATE TABLE IF NOT EXISTS staff_records (
+    id SERIAL PRIMARY KEY,
+    school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+    user_id INT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    hire_date DATE,
+    termination_date DATE,
+    salary DECIMAL(10,2),
+    salary_currency VARCHAR(10) DEFAULT 'KES',
+    employment_type VARCHAR(50),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS payroll (
+    id SERIAL PRIMARY KEY,
+    school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+    staff_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    month INT NOT NULL,
+    year INT NOT NULL,
+    gross_salary DECIMAL(10,2),
+    deductions JSONB,
+    tax DECIMAL(10,2),
+    net_salary DECIMAL(10,2),
+    payment_status VARCHAR(50) DEFAULT 'pending',
+    payment_date DATE,
+    payment_method VARCHAR(50),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    UNIQUE(school_id, staff_id, month, year)
+);
+
+CREATE TABLE IF NOT EXISTS staff_deductions (
+    id SERIAL PRIMARY KEY,
+    school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+    staff_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    amount DECIMAL(10,2) NOT NULL,
+    deduction_type VARCHAR(50) NOT NULL,
+    description TEXT,
+    effective_date DATE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_payroll_school ON payroll(school_id);
+CREATE INDEX idx_payroll_staff ON payroll(staff_id);
+CREATE INDEX idx_payroll_month_year ON payroll(month, year);
+CREATE INDEX idx_staff_deductions_school ON staff_deductions(school_id);
+CREATE INDEX idx_staff_deductions_staff ON staff_deductions(staff_id);
+
+-- ============================================
+-- BOARDING & TRANSPORT EXTENSIONS
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS boarding_houses (
+    id SERIAL PRIMARY KEY,
+    school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+    house_name VARCHAR(255) NOT NULL,
+    house_code VARCHAR(50),
+    house_master_id INT REFERENCES users(id) ON DELETE SET NULL,
+    deputy_master_id INT REFERENCES users(id) ON DELETE SET NULL,
+    capacity INT,
+    current_occupancy INT DEFAULT 0,
+    gender_type VARCHAR(20) CHECK (gender_type IN ('boys', 'girls', 'mixed')),
+    floor_count INT,
+    facilities TEXT,
+    fee_amount DECIMAL(10,2),
+    status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'full', 'maintenance')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(school_id, house_code)
+);
+
+CREATE INDEX idx_boarding_houses_school ON boarding_houses(school_id);
+
+CREATE TABLE IF NOT EXISTS boarding_rooms (
+    id SERIAL PRIMARY KEY,
+    boarding_house_id INT NOT NULL REFERENCES boarding_houses(id) ON DELETE CASCADE,
+    room_number VARCHAR(50) NOT NULL,
+    floor INT,
+    room_type VARCHAR(20) CHECK (room_type IN ('single', 'double', 'triple', 'dormitory')),
+    bed_capacity INT,
+    available_beds INT,
+    status VARCHAR(20) DEFAULT 'available' CHECK (status IN ('available', 'occupied', 'maintenance', 'reserved')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(boarding_house_id, room_number)
+);
+
+CREATE INDEX idx_boarding_rooms_house ON boarding_rooms(boarding_house_id);
+
+CREATE TABLE IF NOT EXISTS boarding_enrollments (
     id SERIAL PRIMARY KEY,
     school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
     student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
-    dormitory_id INT,
-    bed_number VARCHAR(10),
+    boarding_house_id INT NOT NULL REFERENCES boarding_houses(id) ON DELETE CASCADE,
+    room_id INT REFERENCES boarding_rooms(id) ON DELETE SET NULL,
+    enrollment_date DATE DEFAULT CURRENT_DATE,
+    check_in_date DATE,
+    check_out_date DATE,
+    academic_year_id INT REFERENCES academic_years(id) ON DELETE SET NULL,
+    payment_status VARCHAR(20) DEFAULT 'unpaid' CHECK (payment_status IN ('paid', 'unpaid', 'partial', 'pending')),
+    amount_due DECIMAL(10,2),
+    amount_paid DECIMAL(10,2) DEFAULT 0,
+    status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'suspended', 'completed')),
+    emergency_contact_phone VARCHAR(50),
+    parent_signature TEXT,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(student_id, academic_year_id)
+);
+
+CREATE INDEX idx_boarding_enrollments_school ON boarding_enrollments(school_id);
+
+CREATE TABLE IF NOT EXISTS boarding_assignments (
+    id SERIAL PRIMARY KEY,
+    school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+    student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    dormitory_id INT REFERENCES boarding_houses(id) ON DELETE SET NULL,
+    bed_number VARCHAR(50),
     assignment_status VARCHAR(20) DEFAULT 'active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -825,7 +1155,7 @@ CREATE TABLE boarding_assignments (
 
 CREATE INDEX idx_boarding_school ON boarding_assignments(school_id);
 
-CREATE TABLE boarding_exeat_requests (
+CREATE TABLE IF NOT EXISTS boarding_exeat_requests (
     id SERIAL PRIMARY KEY,
     school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
     student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
@@ -841,7 +1171,7 @@ CREATE TABLE boarding_exeat_requests (
 
 CREATE INDEX idx_exeat_school ON boarding_exeat_requests(school_id);
 
-CREATE TABLE kitchen_inventory_logs (
+CREATE TABLE IF NOT EXISTS kitchen_inventory_logs (
     id SERIAL PRIMARY KEY,
     school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
     item_name VARCHAR(255) NOT NULL,
@@ -853,7 +1183,7 @@ CREATE TABLE kitchen_inventory_logs (
 
 CREATE INDEX idx_kitchen_school ON kitchen_inventory_logs(school_id);
 
-CREATE TABLE textbook_issuance_logs (
+CREATE TABLE IF NOT EXISTS textbook_issuance_logs (
     id SERIAL PRIMARY KEY,
     school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
     student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
@@ -869,21 +1199,49 @@ CREATE TABLE textbook_issuance_logs (
 
 CREATE INDEX idx_textbook_school ON textbook_issuance_logs(school_id);
 
-CREATE TABLE transport_routes (
+CREATE TABLE IF NOT EXISTS transport_routes (
     id SERIAL PRIMARY KEY,
     school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
-    route_name VARCHAR(100) NOT NULL,
-    starting_point VARCHAR(255),
-    ending_point VARCHAR(255),
-    distance_km DECIMAL(5,2),
-    price_per_term DECIMAL(10,2),
+    route_name VARCHAR(255) NOT NULL,
+    route_code VARCHAR(50),
+    description TEXT,
+    start_location VARCHAR(255),
+    end_location VARCHAR(255),
+    pickup_time TIME,
+    dropoff_time TIME,
+    vehicle_type VARCHAR(50),
+    capacity INT,
+    driver_id INT REFERENCES users(id) ON DELETE SET NULL,
+    fare_amount DECIMAL(10,2),
+    status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'suspended')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(school_id, route_name)
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(school_id, route_code)
 );
 
 CREATE INDEX idx_route_school ON transport_routes(school_id);
 
-CREATE TABLE transport_assignments (
+CREATE TABLE IF NOT EXISTS transport_enrollments (
+    id SERIAL PRIMARY KEY,
+    school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+    student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    route_id INT NOT NULL REFERENCES transport_routes(id) ON DELETE CASCADE,
+    enrollment_date DATE DEFAULT CURRENT_DATE,
+    payment_status VARCHAR(20) DEFAULT 'unpaid' CHECK (payment_status IN ('paid', 'unpaid', 'partial', 'pending')),
+    amount_due DECIMAL(10,2),
+    amount_paid DECIMAL(10,2) DEFAULT 0,
+    start_date DATE,
+    end_date DATE,
+    status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'suspended', 'completed')),
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(student_id, route_id)
+);
+
+CREATE INDEX idx_transport_enrollments_school ON transport_enrollments(school_id);
+
+CREATE TABLE IF NOT EXISTS transport_assignments (
     id SERIAL PRIMARY KEY,
     school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
     student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
@@ -897,7 +1255,7 @@ CREATE TABLE transport_assignments (
 
 CREATE INDEX idx_transport_school ON transport_assignments(school_id);
 
-CREATE TABLE transport_attendance (
+CREATE TABLE IF NOT EXISTS transport_attendance (
     id SERIAL PRIMARY KEY,
     school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
     student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
@@ -915,7 +1273,7 @@ CREATE INDEX idx_transport_attendance_school ON transport_attendance(school_id);
 -- COMMUNICATIONS & MESSAGING
 -- ============================================
 
-CREATE TABLE sms_campaigns (
+CREATE TABLE IF NOT EXISTS sms_campaigns (
     id SERIAL PRIMARY KEY,
     school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
     recipient_group VARCHAR(50),
@@ -930,7 +1288,7 @@ CREATE TABLE sms_campaigns (
 CREATE INDEX idx_campaign_school ON sms_campaigns(school_id);
 
 -- Messages/Announcements
-CREATE TABLE messages (
+CREATE TABLE IF NOT EXISTS messages (
     id SERIAL PRIMARY KEY,
     school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
     
@@ -956,7 +1314,7 @@ CREATE INDEX idx_message_recipient ON messages(recipient_type, recipient_id);
 CREATE INDEX idx_message_sent_at ON messages(sent_at);
 
 -- Message Recipients
-CREATE TABLE message_recipients (
+CREATE TABLE IF NOT EXISTS message_recipients (
     id SERIAL PRIMARY KEY,
     message_id INT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
     user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -973,7 +1331,7 @@ CREATE INDEX idx_recipient_user ON message_recipients(user_id);
 CREATE INDEX idx_recipient_read ON message_recipients(is_read);
 
 -- Notifications
-CREATE TABLE notifications (
+CREATE TABLE IF NOT EXISTS notifications (
     id SERIAL PRIMARY KEY,
     school_id INT REFERENCES schools(id) ON DELETE CASCADE,
     user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -999,7 +1357,7 @@ CREATE INDEX idx_notification_created ON notifications(created_at);
 -- ============================================
 
 -- Timetable Periods
-CREATE TABLE timetable_periods (
+CREATE TABLE IF NOT EXISTS timetable_periods (
     id SERIAL PRIMARY KEY,
     school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
     
@@ -1016,7 +1374,7 @@ CREATE TABLE timetable_periods (
 CREATE INDEX idx_period_school ON timetable_periods(school_id);
 
 -- Timetable Entries
-CREATE TABLE timetable_entries (
+CREATE TABLE IF NOT EXISTS timetable_entries (
     id SERIAL PRIMARY KEY,
     school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
     academic_year_id INT REFERENCES academic_years(id) ON DELETE SET NULL,
@@ -1046,7 +1404,7 @@ CREATE INDEX idx_timetable_grade_section ON timetable_entries(grade, class_secti
 -- ============================================
 
 -- Leave Types
-CREATE TABLE leave_types (
+CREATE TABLE IF NOT EXISTS leave_types (
     id SERIAL PRIMARY KEY,
     school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
     
@@ -1064,7 +1422,7 @@ CREATE TABLE leave_types (
 CREATE INDEX idx_leave_type_school ON leave_types(school_id);
 
 -- Leave Requests
-CREATE TABLE leave_requests (
+CREATE TABLE IF NOT EXISTS leave_requests (
     id SERIAL PRIMARY KEY,
     school_id INT NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
     user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -1095,7 +1453,7 @@ CREATE INDEX idx_leave_request_dates ON leave_requests(start_date, end_date);
 -- ============================================
 
 -- Activity Logs
-CREATE TABLE activity_logs (
+CREATE TABLE IF NOT EXISTS activity_logs (
     id SERIAL PRIMARY KEY,
     school_id INT REFERENCES schools(id) ON DELETE CASCADE,
     user_id INT REFERENCES users(id) ON DELETE SET NULL,
@@ -1122,9 +1480,10 @@ CREATE INDEX idx_activity_created ON activity_logs(created_at);
 -- SEED DATA
 -- ============================================
 
--- Insert default subscription plans
+-- Insert default subscription plans (with conflict handling)
 INSERT INTO subscription_plans (name, slug, description, price_monthly, price_annual, student_limit, staff_limit, trial_duration_days, include_parent_portal, include_student_portal, include_messaging, include_finance, include_advanced_reports, include_leave_management, include_ai_analytics, is_trial, is_active) VALUES
 ('Trial Plan', 'trial', 'Free 14-day trial with limited features', 0.00, 0.00, 50, 10, 14, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, TRUE),
 ('Basic Plan', 'basic', 'Perfect for small schools', 49.99, 499.99, 100, 20, 0, TRUE, TRUE, TRUE, TRUE, FALSE, FALSE, FALSE, FALSE, TRUE),
 ('Professional Plan', 'pro', 'Advanced features for growing schools', 99.99, 999.99, 500, 50, 0, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE, FALSE, TRUE),
-('Enterprise Plan', 'enterprise', 'Unlimited features for large institutions', 199.99, 1999.99, NULL, NULL, 0, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE, TRUE);
+('Enterprise Plan', 'enterprise', 'Unlimited features for large institutions', 199.99, 1999.99, NULL, NULL, 0, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE, TRUE)
+ON CONFLICT (slug) DO NOTHING;

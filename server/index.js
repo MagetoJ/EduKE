@@ -28,6 +28,11 @@ const notificationsRoutes = require('./routes/notifications');
 const kenyaFeaturesRoutes = require('./routes/kenya-features');
 const transportBoardingRoutes = require('./routes/transport-boarding');
 const curriculumAssessmentRoutes = require('./routes/curriculum-assessment');
+const paymentRoutes = require('./routes/payments');
+const gradebookRoutes = require('./routes/gradebook');
+const reportCardRoutes = require('./routes/reportCards');
+const attendanceRoutes = require('./routes/attendance');
+const payrollRoutes = require('./routes/payroll');
 
 // Import middleware
 const { authenticateToken } = require('./middleware/auth');
@@ -95,6 +100,11 @@ app.use('/api', authenticateToken, tenantContext, completeRoutes);
 app.use('/api/kenya-features', authenticateToken, tenantContext, kenyaFeaturesRoutes);
 app.use('/api/transport', authenticateToken, tenantContext, transportBoardingRoutes);
 app.use('/api/curriculum', authenticateToken, tenantContext, curriculumAssessmentRoutes);
+app.use('/api/payments', authenticateToken, tenantContext, paymentRoutes);
+app.use('/api/gradebook', authenticateToken, tenantContext, gradebookRoutes);
+app.use('/api/report-cards', authenticateToken, tenantContext, reportCardRoutes);
+app.use('/api/attendance', authenticateToken, tenantContext, attendanceRoutes);
+app.use('/api/payroll', authenticateToken, tenantContext, payrollRoutes);
 
 // Client-side routing fallback (for React Router)
 // Any route not matched by API or static files serves index.html

@@ -7,7 +7,7 @@ async function createTestData() {
     // Create a test parent user
     const parentResult = await dbRun(`
       INSERT OR IGNORE INTO users (email, password_hash, first_name, last_name, name, role, status, is_verified)
-      VALUES ('parent@test.com', '$2b$10$dummy.hash.for.testing', 'John', 'Doe', 'John Doe', 'parent', 'Active', 1)
+      VALUES ('parent@test.com', '$2b$10$dummy.hash.for.testing', 'John', 'Doe', 'John Doe', 'parent', 'active', 1)
     `);
     console.log('Parent user created with ID:', parentResult.lastID);
 

@@ -35,9 +35,56 @@ const authorizeRole = (roles) => {
 };
 
 const requireFeature = (feature) => {
-  return (req, res, next) => {
-    // TODO: Implement feature checking logic
-    next();
+  return async (req, res, next) => {
+    try {
+      if (!req.schoolId) {
+        return res.status(400).json({ error: 'School context required' });
+      }
+
+      const { dbGet } = require('../database');
+
+      const subscription = await dbGet(
+        `SELECT sp.* FROM subscriptions s
+         JOIN subscription_plans sp ON s.plan_id = sp.id
+         WHERE s.school_id = ? AND s.status = 'active'`,
+        [req.schoolId]
+      );
+
+      if (!subscription) {
+        return res.status(403).json({
+          error: 'No active subscription',
+          feature_required: feature
+        });
+      }
+
+      const featureMap = {
+        'parent_portal': 'include_parent_portal',
+        'student_portal': 'include_student_portal',
+        'messaging': 'include_messaging',
+        'finance': 'include_finance',
+        'advanced_reports': 'include_advanced_reports',
+        'leave_management': 'include_leave_management',
+        'ai_analytics': 'include_ai_analytics'
+      };
+
+      const dbFeature = featureMap[feature];
+      if (!dbFeature) {
+        return res.status(400).json({ error: 'Unknown feature' });
+      }
+
+      if (!subscription[dbFeature]) {
+        return res.status(403).json({
+          error: 'Feature not available in current plan',
+          feature: feature,
+          required_plan: 'Pro'
+        });
+      }
+
+      next();
+    } catch (error) {
+      console.error('Feature check error:', error);
+      res.status(500).json({ error: 'Feature verification failed' });
+    }
   };
 };
 

@@ -95,13 +95,31 @@ const schemaPath = useSQLite
   ? path.join(__dirname, '..', 'database', 'schema_sqlite.sql')
   : path.join(__dirname, '..', 'database', 'schema.sql');
 const usingPostgres = !useSQLite;
+let schemaInitialized = false;
+
 const initializeSchema = async () => {
+  if (schemaInitialized) return;
+  schemaInitialized = true;
+  
   try {
-    const schema = fs.readFileSync(schemaPath, 'utf-8');
+    const schema = fs.readFileSync(schemaPath, 'utf-8').trim();
     if (usingPostgres) {
-      await db.query(schema);
+      const statements = schema.split(';')
+        .map(stmt => stmt.trim())
+        .filter(stmt => stmt.length > 0);
+      
+      for (const statement of statements) {
+        try {
+          await db.query(statement);
+        } catch (err) {
+          if (err.code && (err.code === '42P07' || err.code === '23505')) {
+            continue;
+          }
+          console.error('Schema execution error:', err.message, 'Statement:', statement.substring(0, 100));
+          throw err;
+        }
+      }
     } else {
-      // For SQLite, we need to execute statements one by one
       const statements = schema.split(';').filter(stmt => stmt.trim());
       for (const statement of statements) {
         if (statement.trim()) {
@@ -116,17 +134,24 @@ const initializeSchema = async () => {
     }
     console.log('Database schema ensured.');
   } catch (schemaError) {
-    console.error('Failed to execute schema:', schemaError);
+    console.error('Failed to execute schema:', schemaError.message);
   }
 };
 
 // Initialize schema on startup
 initializeSchema();
 
+const convertPlaceholders = (sql, isPostgres) => {
+  if (!isPostgres) return sql;
+  let paramIndex = 1;
+  return sql.replace(/\?/g, () => `$${paramIndex++}`);
+};
+
 const dbRun = async (sql, params = []) => {
   return new Promise((resolve, reject) => {
     if (usingPostgres) {
-      db.query(sql, params, (err, result) => {
+      const convertedSql = convertPlaceholders(sql, true);
+      db.query(convertedSql, params, (err, result) => {
         if (err) reject(err);
         else resolve({ lastID: result.rows.length > 0 ? result.rows[0].id : null, changes: result.rowCount });
       });
@@ -142,7 +167,8 @@ const dbRun = async (sql, params = []) => {
 const dbGet = async (sql, params = []) => {
   return new Promise((resolve, reject) => {
     if (usingPostgres) {
-      db.query(sql, params, (err, result) => {
+      const convertedSql = convertPlaceholders(sql, true);
+      db.query(convertedSql, params, (err, result) => {
         if (err) reject(err);
         else resolve(result.rows[0] || null);
       });
@@ -158,7 +184,8 @@ const dbGet = async (sql, params = []) => {
 const dbAll = async (sql, params = []) => {
   return new Promise((resolve, reject) => {
     if (usingPostgres) {
-      db.query(sql, params, (err, result) => {
+      const convertedSql = convertPlaceholders(sql, true);
+      db.query(convertedSql, params, (err, result) => {
         if (err) reject(err);
         else resolve(result.rows);
       });
@@ -198,7 +225,7 @@ const ensureSchemaUpgrades = async () => {
       await dbRun('ALTER TABLE users ADD COLUMN subject TEXT');
     }
     if (!userColumnNames.includes('status')) {
-      await dbRun("ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'Active'");
+      await dbRun("ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'");
     }
     if (!userColumnNames.includes('is_verified')) {
       await dbRun('ALTER TABLE users ADD COLUMN is_verified INTEGER NOT NULL DEFAULT 0');
@@ -207,14 +234,25 @@ const ensureSchemaUpgrades = async () => {
       await dbRun('ALTER TABLE users ADD COLUMN email_verified_at TIMESTAMP');
     }
 
-    await dbRun(
-      `UPDATE users
-       SET is_verified = 1,
-           email_verified_at = COALESCE(email_verified_at, CURRENT_TIMESTAMP),
-           status = COALESCE(status, 'Active')
-       WHERE (is_verified IS NULL OR is_verified = 0)
-         AND id NOT IN (SELECT user_id FROM email_verification_tokens)`
-    );
+    if (usingPostgres) {
+      await dbRun(
+        `UPDATE users
+         SET is_verified = TRUE,
+             email_verified_at = COALESCE(email_verified_at, CURRENT_TIMESTAMP),
+             status = COALESCE(status, 'active')
+         WHERE (is_verified IS NULL OR is_verified = FALSE)
+           AND id NOT IN (SELECT user_id FROM email_verification_tokens)`
+      );
+    } else {
+      await dbRun(
+        `UPDATE users
+         SET is_verified = 1,
+             email_verified_at = COALESCE(email_verified_at, CURRENT_TIMESTAMP),
+             status = COALESCE(status, 'active')
+         WHERE (is_verified IS NULL OR is_verified = 0)
+           AND id NOT IN (SELECT user_id FROM email_verification_tokens)`
+      );
+    }
 
     // Check students table columns
     let studentColumnNames = [];
@@ -256,26 +294,40 @@ const ensureSchemaUpgrades = async () => {
       await dbRun('ALTER TABLE schools ADD COLUMN grade_levels TEXT');
     }
 
-    // Check if subscriptions table exists and create trigger
-    const subscriptionsTable = await dbAll(`
-      SELECT table_name
-      FROM information_schema.tables
-      WHERE table_name = 'subscriptions' AND table_schema = 'public'
-    `);
-    if (subscriptionsTable.length > 0) {
-      await dbRun(`
-        CREATE OR REPLACE FUNCTION update_subscriptions_updated_at()
-        RETURNS TRIGGER AS $$
-        BEGIN
-          NEW.updated_at = CURRENT_TIMESTAMP;
-          RETURN NEW;
-        END;
-        $$ LANGUAGE plpgsql;
-
-        CREATE TRIGGER IF NOT EXISTS subscriptions_updated_at
-          BEFORE UPDATE ON subscriptions
-          FOR EACH ROW EXECUTE FUNCTION update_subscriptions_updated_at();
-      `);
+    // Check if subscriptions table exists and create trigger (PostgreSQL only)
+    if (usingPostgres) {
+      try {
+        const subscriptionsTable = await dbAll(`
+          SELECT table_name
+          FROM information_schema.tables
+          WHERE table_name = 'subscriptions' AND table_schema = 'public'
+        `);
+        if (subscriptionsTable.length > 0) {
+          // Create function
+          await dbRun(`
+            CREATE OR REPLACE FUNCTION update_subscriptions_updated_at()
+            RETURNS TRIGGER AS $$
+            BEGIN
+              NEW.updated_at = CURRENT_TIMESTAMP;
+              RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql
+          `);
+          
+          // Create trigger
+          await dbRun(`
+            DROP TRIGGER IF EXISTS subscriptions_updated_at ON subscriptions
+          `);
+          
+          await dbRun(`
+            CREATE TRIGGER subscriptions_updated_at
+              BEFORE UPDATE ON subscriptions
+              FOR EACH ROW EXECUTE FUNCTION update_subscriptions_updated_at()
+          `);
+        }
+      } catch (triggerError) {
+        console.warn('Warning: Could not create subscriptions trigger:', triggerError.message);
+      }
     }
   } catch (schemaUpgradeError) {
     console.error('Failed to ensure schema upgrades', schemaUpgradeError);
@@ -464,7 +516,7 @@ const ensureSuperAdmin = async () => {
                role = ?,
                is_verified = 1,
                email_verified_at = COALESCE(email_verified_at, CURRENT_TIMESTAMP),
-               status = COALESCE(status, 'Active')
+               status = COALESCE(status, 'active')
          WHERE id = ?`,
         ['Super Admin', passwordHash, 'super_admin', existingAdmin.id]
       );
@@ -474,7 +526,7 @@ const ensureSuperAdmin = async () => {
     await dbRun(
       `INSERT INTO users (name, email, password_hash, role, is_verified, email_verified_at, status)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      ['Super Admin', normalizedEmail, passwordHash, 'super_admin', 1, nowIso(), 'Active']
+      ['Super Admin', normalizedEmail, passwordHash, 'super_admin', 1, nowIso(), 'active']
     );
   } catch (error) {
     console.error('Failed to ensure super admin account', error);
