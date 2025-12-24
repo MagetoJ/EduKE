@@ -136,6 +136,7 @@ CREATE TABLE IF NOT EXISTS users (
     status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'suspended', 'archived')),
     is_verified BOOLEAN DEFAULT FALSE,
     email_verified_at TIMESTAMP,
+    must_change_password BOOLEAN DEFAULT FALSE,
     last_login_at TIMESTAMP,
     
     -- Employment info (for staff/teachers)

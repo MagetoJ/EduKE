@@ -95,7 +95,7 @@ async function initDatabase() {
 
     const parentResult = await dbRun(`
       INSERT OR IGNORE INTO users (email, password_hash, first_name, last_name, name, role, status, is_verified)
-      VALUES ('parent@test.com', '$2b$10$dummy.hash.for.testing', 'John', 'Doe', 'John Doe', 'parent', 'active', 1)
+      VALUES ('parent@test.com', '$2b$10$dummy.hash.for.testing', 'John', 'Doe', 'John Doe', 'parent', 'active', true)
     `);
     console.log('Parent inserted');
 
@@ -107,7 +107,7 @@ async function initDatabase() {
 
     await dbRun(`
       INSERT OR IGNORE INTO parent_student_relations (parent_id, student_id, relation_type, is_primary_contact)
-      VALUES (3, 1, 'father', 1)
+      VALUES (3, 1, 'father', true)
     `);
     console.log('Parent-student relation created');
 

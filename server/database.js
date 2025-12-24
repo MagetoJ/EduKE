@@ -17,14 +17,8 @@ const isProductionEnv = process.env.NODE_ENV === 'production'
   || process.env.FLY_APP_NAME
   || Boolean(process.env.DATABASE_URL);
 
-const prefersSQLite = (() => {
-  const type = (process.env.DB_TYPE || '').toLowerCase();
-  if (type === 'sqlite' || type === 'sqlite3') {
-    return true;
-  }
-  const flag = (process.env.USE_SQLITE || '').toLowerCase();
-  return flag === 'true' || flag === '1';
-})();
+const dbType = (process.env.DB_TYPE || '').toLowerCase();
+const prefersSQLite = dbType === 'sqlite' || dbType === 'sqlite3';
 
 const hasPostgresConfig = Boolean(
   process.env.DATABASE_URL
@@ -34,7 +28,7 @@ const hasPostgresConfig = Boolean(
     || process.env.DB_PASSWORD
 );
 
-const useSQLite = !isProductionEnv && (prefersSQLite || !hasPostgresConfig);
+const useSQLite = !isProductionEnv && prefersSQLite && !hasPostgresConfig;
 
 if (isProductionEnv && prefersSQLite) {
   console.warn('SQLite is disabled in production; using PostgreSQL instead.');
@@ -96,50 +90,65 @@ const schemaPath = useSQLite
   : path.join(__dirname, '..', 'database', 'schema.sql');
 const usingPostgres = !useSQLite;
 let schemaInitialized = false;
+let schemaInitializationPromise = null;
 
 const initializeSchema = async () => {
-  if (schemaInitialized) return;
-  schemaInitialized = true;
+  if (schemaInitialized) return Promise.resolve();
+  if (schemaInitializationPromise) return schemaInitializationPromise;
   
-  try {
-    const schema = fs.readFileSync(schemaPath, 'utf-8').trim();
-    if (usingPostgres) {
-      const statements = schema.split(';')
-        .map(stmt => stmt.trim())
-        .filter(stmt => stmt.length > 0);
-      
-      for (const statement of statements) {
-        try {
-          await db.query(statement);
-        } catch (err) {
-          if (err.code && (err.code === '42P07' || err.code === '23505')) {
-            continue;
+  schemaInitializationPromise = (async () => {
+    try {
+      const schema = fs.readFileSync(schemaPath, 'utf-8').trim();
+      if (usingPostgres) {
+        const statements = schema.split(';')
+          .map(stmt => stmt.trim())
+          .filter(stmt => stmt.length > 0 && !stmt.match(/^\s*--/));
+        
+        console.log(`Executing ${statements.length} schema statements...`);
+        
+        for (let i = 0; i < statements.length; i++) {
+          const statement = statements[i];
+          try {
+            await db.query(statement);
+          } catch (err) {
+            // Ignore table/index already exists errors (42P07, 42P16)
+            // Ignore duplicate key value errors (23505)
+            // Ignore constraint errors (23514)
+            if (err.code && (err.code === '42P07' || err.code === '42P16' || err.code === '23505' || err.code === '23514')) {
+              continue;
+            }
+            console.error(`Schema error on statement ${i + 1}:`, err.message);
+            console.error('Statement:', statement.substring(0, 150));
+            throw err;
           }
-          console.error('Schema execution error:', err.message, 'Statement:', statement.substring(0, 100));
-          throw err;
         }
-      }
-    } else {
-      const statements = schema.split(';').filter(stmt => stmt.trim());
-      for (const statement of statements) {
-        if (statement.trim()) {
-          await new Promise((resolve, reject) => {
-            db.run(statement.trim(), (err) => {
-              if (err) reject(err);
-              else resolve();
+      } else {
+        const statements = schema.split(';').filter(stmt => stmt.trim());
+        for (const statement of statements) {
+          if (statement.trim()) {
+            await new Promise((resolve, reject) => {
+              db.run(statement.trim(), (err) => {
+                if (err) reject(err);
+                else resolve();
+              });
             });
-          });
+          }
         }
       }
+      console.log('✓ Database schema successfully initialized.');
+      schemaInitialized = true;
+    } catch (schemaError) {
+      console.error('✗ Failed to execute schema:', schemaError.message);
+      schemaInitialized = false;
+      throw schemaError;
     }
-    console.log('Database schema ensured.');
-  } catch (schemaError) {
-    console.error('Failed to execute schema:', schemaError.message);
-  }
+  })();
+  
+  return schemaInitializationPromise;
 };
 
-// Initialize schema on startup
-initializeSchema();
+// Store the promise for waiting
+const schemaInitPromise = initializeSchema();
 
 const convertPlaceholders = (sql, isPostgres) => {
   if (!isPostgres) return sql;
@@ -200,6 +209,27 @@ const dbAll = async (sql, params = []) => {
 
 const ensureSchemaUpgrades = async () => {
   try {
+    // Check if users table exists first
+    let usersTableExists = false;
+    if (usingPostgres) {
+      const result = await dbAll(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name = 'users'
+        )
+      `);
+      usersTableExists = result && result[0] && result[0].exists === true;
+    } else {
+      const result = await dbAll(`SELECT name FROM sqlite_master WHERE type='table' AND name='users'`);
+      usersTableExists = result && result.length > 0;
+    }
+    
+    if (!usersTableExists) {
+      console.warn('⚠ Users table does not exist yet. Schema initialization may still be in progress. Skipping upgrades.');
+      return;
+    }
+    
     // Check users table columns
     let userColumnNames = [];
     if (usingPostgres) {
@@ -233,6 +263,13 @@ const ensureSchemaUpgrades = async () => {
     if (!userColumnNames.includes('email_verified_at')) {
       await dbRun('ALTER TABLE users ADD COLUMN email_verified_at TIMESTAMP');
     }
+    if (!userColumnNames.includes('must_change_password')) {
+      if (usingPostgres) {
+        await dbRun('ALTER TABLE users ADD COLUMN must_change_password BOOLEAN DEFAULT false');
+      } else {
+        await dbRun('ALTER TABLE users ADD COLUMN must_change_password INTEGER DEFAULT 0');
+      }
+    }
 
     if (usingPostgres) {
       await dbRun(
@@ -254,44 +291,81 @@ const ensureSchemaUpgrades = async () => {
       );
     }
 
-    // Check students table columns
-    let studentColumnNames = [];
+    // Check if students table exists
+    let studentsTableExists = false;
     if (usingPostgres) {
-      const studentColumns = await dbAll(`
-        SELECT column_name
-        FROM information_schema.columns
-        WHERE table_name = 'students' AND table_schema = 'public'
+      const result = await dbAll(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name = 'students'
+        )
       `);
-      studentColumnNames = studentColumns.map((column) => column.column_name);
+      studentsTableExists = result && result[0] && result[0].exists === true;
     } else {
-      const studentColumns = await dbAll(`PRAGMA table_info(students)`);
-      studentColumnNames = studentColumns.map((column) => column.name);
+      const result = await dbAll(`SELECT name FROM sqlite_master WHERE type='table' AND name='students'`);
+      studentsTableExists = result && result.length > 0;
     }
-    if (!studentColumnNames.includes('class_section')) {
-      await dbRun('ALTER TABLE students ADD COLUMN class_section TEXT');
+    
+    if (!studentsTableExists) {
+      console.warn('⚠ Students table does not exist yet. Skipping student column upgrades.');
+    } else {
+      // Check students table columns
+      let studentColumnNames = [];
+      if (usingPostgres) {
+        const studentColumns = await dbAll(`
+          SELECT column_name
+          FROM information_schema.columns
+          WHERE table_name = 'students' AND table_schema = 'public'
+        `);
+        studentColumnNames = studentColumns.map((column) => column.column_name);
+      } else {
+        const studentColumns = await dbAll(`PRAGMA table_info(students)`);
+        studentColumnNames = studentColumns.map((column) => column.name);
+      }
+      if (!studentColumnNames.includes('class_section')) {
+        await dbRun('ALTER TABLE students ADD COLUMN class_section TEXT');
+      }
     }
 
     // Check schools table columns
-    let schoolColumnNames = [];
+    let schoolsTableExists = false;
     if (usingPostgres) {
-      const schoolColumns = await dbAll(`
-        SELECT column_name
-        FROM information_schema.columns
-        WHERE table_name = 'schools' AND table_schema = 'public'
+      const result = await dbAll(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name = 'schools'
+        )
       `);
-      schoolColumnNames = schoolColumns.map((column) => column.column_name);
+      schoolsTableExists = result && result[0] && result[0].exists === true;
     } else {
-      const schoolColumns = await dbAll(`PRAGMA table_info(schools)`);
-      schoolColumnNames = schoolColumns.map((column) => column.name);
+      const result = await dbAll(`SELECT name FROM sqlite_master WHERE type='table' AND name='schools'`);
+      schoolsTableExists = result && result.length > 0;
     }
-    if (!schoolColumnNames.includes('primary_color')) {
-      await dbRun('ALTER TABLE schools ADD COLUMN primary_color TEXT');
-    }
-    if (!schoolColumnNames.includes('accent_color')) {
-      await dbRun('ALTER TABLE schools ADD COLUMN accent_color TEXT');
-    }
-    if (!schoolColumnNames.includes('grade_levels')) {
-      await dbRun('ALTER TABLE schools ADD COLUMN grade_levels TEXT');
+    
+    if (schoolsTableExists) {
+      let schoolColumnNames = [];
+      if (usingPostgres) {
+        const schoolColumns = await dbAll(`
+          SELECT column_name
+          FROM information_schema.columns
+          WHERE table_name = 'schools' AND table_schema = 'public'
+        `);
+        schoolColumnNames = schoolColumns.map((column) => column.column_name);
+      } else {
+        const schoolColumns = await dbAll(`PRAGMA table_info(schools)`);
+        schoolColumnNames = schoolColumns.map((column) => column.name);
+      }
+      if (!schoolColumnNames.includes('primary_color')) {
+        await dbRun('ALTER TABLE schools ADD COLUMN primary_color TEXT');
+      }
+      if (!schoolColumnNames.includes('accent_color')) {
+        await dbRun('ALTER TABLE schools ADD COLUMN accent_color TEXT');
+      }
+      if (!schoolColumnNames.includes('grade_levels')) {
+        await dbRun('ALTER TABLE schools ADD COLUMN grade_levels TEXT');
+      }
     }
 
     // Check if subscriptions table exists and create trigger (PostgreSQL only)
@@ -343,14 +417,14 @@ const ensureSubscriptionPlans = async () => {
       student_limit: 25,
       staff_limit: 5,
       trial_duration_days: 14,
-      include_parent_portal: 1,
-      include_student_portal: 1,
-      include_messaging: 1,
-      include_finance: 1,
-      include_advanced_reports: 1,
-      include_leave_management: 1,
-      include_ai_analytics: 1,
-      is_trial: 1
+      include_parent_portal: true,
+      include_student_portal: true,
+      include_messaging: true,
+      include_finance: true,
+      include_advanced_reports: true,
+      include_leave_management: true,
+      include_ai_analytics: true,
+      is_trial: true
     },
     {
       name: 'Basic',
@@ -359,14 +433,14 @@ const ensureSubscriptionPlans = async () => {
       student_limit: 100,
       staff_limit: 10,
       trial_duration_days: null,
-      include_parent_portal: 0,
-      include_student_portal: 0,
-      include_messaging: 0,
-      include_finance: 0,
-      include_advanced_reports: 0,
-      include_leave_management: 0,
-      include_ai_analytics: 0,
-      is_trial: 0
+      include_parent_portal: false,
+      include_student_portal: false,
+      include_messaging: false,
+      include_finance: false,
+      include_advanced_reports: false,
+      include_leave_management: false,
+      include_ai_analytics: false,
+      is_trial: false
     },
     {
       name: 'Pro',
@@ -375,14 +449,14 @@ const ensureSubscriptionPlans = async () => {
       student_limit: null,
       staff_limit: null,
       trial_duration_days: null,
-      include_parent_portal: 1,
-      include_student_portal: 1,
-      include_messaging: 1,
-      include_finance: 1,
-      include_advanced_reports: 1,
-      include_leave_management: 1,
-      include_ai_analytics: 1,
-      is_trial: 0
+      include_parent_portal: true,
+      include_student_portal: true,
+      include_messaging: true,
+      include_finance: true,
+      include_advanced_reports: true,
+      include_leave_management: true,
+      include_ai_analytics: true,
+      is_trial: false
     }
   ];
 
@@ -514,11 +588,11 @@ const ensureSuperAdmin = async () => {
            SET name = ?,
                password_hash = ?,
                role = ?,
-               is_verified = 1,
+               is_verified = ?,
                email_verified_at = COALESCE(email_verified_at, CURRENT_TIMESTAMP),
                status = COALESCE(status, 'active')
          WHERE id = ?`,
-        ['Super Admin', passwordHash, 'super_admin', existingAdmin.id]
+        ['Super Admin', passwordHash, 'super_admin', true, existingAdmin.id]
       );
       return;
     }
@@ -526,7 +600,7 @@ const ensureSuperAdmin = async () => {
     await dbRun(
       `INSERT INTO users (name, email, password_hash, role, is_verified, email_verified_at, status)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      ['Super Admin', normalizedEmail, passwordHash, 'super_admin', 1, nowIso(), 'active']
+      ['Super Admin', normalizedEmail, passwordHash, 'super_admin', true, nowIso(), 'active']
     );
   } catch (error) {
     console.error('Failed to ensure super admin account', error);
@@ -535,16 +609,32 @@ const ensureSuperAdmin = async () => {
 
 // Run schema upgrades and ensure baseline data
 const initializeDatabase = async () => {
-  // Schema is already initialized at module level
-  await ensureSchemaUpgrades();
-  await ensureSubscriptionPlans();
-  await ensureSuperAdmin();
-  await ensureSchoolSubscriptions();
+  try {
+    // CRITICAL: Wait for base schema to be fully created first
+    console.log('Waiting for schema initialization...');
+    await schemaInitPromise;
+    console.log('Schema initialization complete. Starting data setup...');
+    
+    // Only run upgrades after schema is guaranteed to exist
+    await ensureSchemaUpgrades();
+    console.log('✓ Schema upgrades complete');
+    
+    await ensureSubscriptionPlans();
+    console.log('✓ Subscription plans configured');
+    
+    await ensureSuperAdmin();
+    console.log('✓ Super admin account created');
+    
+    await ensureSchoolSubscriptions();
+    console.log('✓ Database initialization complete!');
+  } catch (error) {
+    console.error('✗ Database initialization error:', error);
+    // Don't exit - allow server to start so we can debug
+  }
 };
 
-initializeDatabase().catch((error) => {
-  console.error('Database initialization error', error);
-});
+// Initialize database asynchronously
+initializeDatabase();
 
 module.exports = {
   pool: db,

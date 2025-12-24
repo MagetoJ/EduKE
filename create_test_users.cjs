@@ -12,7 +12,7 @@ async function createTestUsers() {
 
     const teacherResult = await dbRun(
       'INSERT INTO users (name, email, password_hash, role, school_id, is_verified, email_verified_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      ['John Teacher', 'teacher@homabay.ac.ke', teacherHash, 'teacher', 1, 1, new Date().toISOString(), 'active']
+      ['John Teacher', 'teacher@homabay.ac.ke', teacherHash, 'teacher', 1, true, new Date().toISOString(), 'active']
     );
     console.log(`Created teacher with ID: ${teacherResult.lastID}`);
 
@@ -22,7 +22,7 @@ async function createTestUsers() {
 
     const parentResult = await dbRun(
       'INSERT INTO users (name, email, password_hash, role, school_id, is_verified, email_verified_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      ['Jane Parent', 'parent@homabay.ac.ke', parentHash, 'parent', 1, 1, new Date().toISOString(), 'active']
+      ['Jane Parent', 'parent@homabay.ac.ke', parentHash, 'parent', 1, true, new Date().toISOString(), 'active']
     );
     console.log(`Created parent with ID: ${parentResult.lastID}`);
 

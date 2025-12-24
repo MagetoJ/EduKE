@@ -7,7 +7,7 @@ async function createTestData() {
     // Create a test parent user
     const parentResult = await dbRun(`
       INSERT OR IGNORE INTO users (email, password_hash, first_name, last_name, name, role, status, is_verified)
-      VALUES ('parent@test.com', '$2b$10$dummy.hash.for.testing', 'John', 'Doe', 'John Doe', 'parent', 'active', 1)
+      VALUES ('parent@test.com', '$2b$10$dummy.hash.for.testing', 'John', 'Doe', 'John Doe', 'parent', 'active', true)
     `);
     console.log('Parent user created with ID:', parentResult.lastID);
 
@@ -22,8 +22,8 @@ async function createTestData() {
     if (parentResult.lastID && studentResult.lastID) {
       await dbRun(`
         INSERT OR IGNORE INTO parent_student_relations (parent_id, student_id, relation_type, is_primary_contact)
-        VALUES (?, ?, 'father', 1)
-      `, [parentResult.lastID, studentResult.lastID]);
+        VALUES (?, ?, 'father', ?)
+      `, [parentResult.lastID, studentResult.lastID, true]);
       console.log('Parent-student relationship created');
     }
 
