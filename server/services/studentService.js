@@ -11,98 +11,210 @@ const generateAdmissionNumber = (grade) => {
   return `G${gradeCode}-${year}-${random}`;
 };
 
-// --- MODIFIED createStudent ---
-// This function will now ALSO create a 'user' account for the student.
-const createStudent = async (client, studentData, school_id, admissionNumber, passwordHash) => {
+const execQuery = async (client, sql, params, isPostgres) => {
+  if (isPostgres) {
+    return await client.query(sql, params);
+  }
+  return new Promise((resolve, reject) => {
+    const statement = sql.trim().toUpperCase();
+    if (statement.startsWith('INSERT')) {
+      client.run(sql, params, function(err) {
+        if (err) reject(err);
+        else {
+          const lastID = this.lastID;
+          resolve({ rows: [{ id: lastID }], rowCount: this.changes, lastID });
+        }
+      });
+    } else if (statement.startsWith('UPDATE') || statement.startsWith('DELETE')) {
+      client.run(sql, params, function(err) {
+        if (err) reject(err);
+        else resolve({ rows: [], rowCount: this.changes });
+      });
+    } else {
+      client.all(sql, params, (err, rows) => {
+        if (err) reject(err);
+        else resolve({ rows: rows || [], rowCount: rows ? rows.length : 0 });
+      });
+    }
+  });
+};
+
+const createStudent = async (client, studentData, school_id, admissionNumber, passwordHash, isPostgres) => {
   const { first_name, last_name, email, phone, date_of_birth, gender, address, grade, enrollment_date } = studentData;
 
-  // 1. Create the User account for the student
-  const userResult = await client.query(
-    `INSERT INTO users (school_id, email, password_hash, name, role, status, must_change_password)
-     VALUES ($1, $2, $3, $4, 'student', 'active', true)
-     RETURNING id`,
-    [school_id, email, passwordHash, `${first_name} ${last_name}`]
-  );
-  const studentUserId = userResult.rows[0].id;
+  try {
+    const userResult = await execQuery(
+      client,
+      isPostgres
+        ? `INSERT INTO users (school_id, email, password_hash, name, role, status, must_change_password)
+           VALUES ($1, $2, $3, $4, 'student', 'active', true)
+           RETURNING id`
+        : `INSERT INTO users (school_id, email, password_hash, name, role, status, must_change_password)
+           VALUES (?, ?, ?, ?, 'student', 'active', 1)`,
+      [school_id, email, passwordHash, `${first_name} ${last_name}`],
+      isPostgres
+    );
+    
+    if (!userResult.rows || userResult.rows.length === 0) {
+      throw new Error('Failed to create user account');
+    }
+    
+    const studentUserId = userResult.rows[0].id;
 
-  // 2. Create the Student record and link it to the new user_id
-  const studentResult = await client.query(
-    `INSERT INTO students (school_id, user_id, first_name, last_name, email, phone, date_of_birth, gender, address, admission_number, grade, enrollment_date, status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'active')
-     RETURNING *`,
-    [school_id, studentUserId, first_name, last_name, email, phone, date_of_birth, gender, address, admissionNumber, grade, enrollment_date]
-  );
+    const insertResult = await execQuery(
+      client,
+      isPostgres
+        ? `INSERT INTO students (school_id, user_id, first_name, last_name, email, phone, date_of_birth, gender, address, admission_number, grade, enrollment_date, status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'active')
+           RETURNING *`
+        : `INSERT INTO students (school_id, user_id, first_name, last_name, email, phone, date_of_birth, gender, address, admission_number, grade, enrollment_date, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
+      [school_id, studentUserId, first_name, last_name, email, phone, date_of_birth, gender, address, admissionNumber, grade, enrollment_date],
+      isPostgres
+    );
 
-  return studentResult.rows[0];
+    if (isPostgres && (!insertResult.rows || insertResult.rows.length === 0)) {
+      throw new Error('Failed to create student record');
+    }
+
+    if (!isPostgres && insertResult.rowCount === 0) {
+      throw new Error('Failed to create student record');
+    }
+
+    if (isPostgres) {
+      return insertResult.rows[0];
+    }
+
+    const studentId = insertResult.lastID;
+    const studentData = await execQuery(
+      client,
+      `SELECT * FROM students WHERE id = ?`,
+      [studentId],
+      isPostgres
+    );
+
+    if (!studentData.rows || studentData.rows.length === 0) {
+      throw new Error('Failed to retrieve created student record');
+    }
+
+    return studentData.rows[0];
+  } catch (error) {
+    if (error.code === '23505' || error.message.includes('UNIQUE constraint failed')) {
+      throw new Error(`Email address already exists: ${email}`);
+    }
+    throw error;
+  }
 };
 
-// --- MODIFIED createParent ---
-// This function now accepts the password hash and handles both new AND existing parents.
-const createOrLinkParent = async (client, parentData, studentId, school_id, passwordHash) => {
+const createOrLinkParent = async (client, parentData, studentId, school_id, passwordHash, isPostgres) => {
   const { parent_email, parent_name, parent_phone, relationship } = parentData;
 
-  // 1. Check if parent user already exists
-  const existingParent = await client.query('SELECT * FROM users WHERE email = $1', [parent_email]);
+  const validRelationTypes = ['father', 'mother', 'guardian', 'other'];
+  const relationType = relationship && validRelationTypes.includes(relationship.toLowerCase()) 
+    ? relationship.toLowerCase() 
+    : 'guardian';
 
-  let parentUserId;
-
-  if (existingParent.rows.length > 0) {
-    // 2a. Parent EXISTS: Use their ID and RESET their password to the student's admission number.
-    parentUserId = existingParent.rows[0].id;
-
-    await client.query(
-      'UPDATE users SET password_hash = $1, must_change_password = true WHERE id = $2',
-      [passwordHash, parentUserId]
+  try {
+    const existingParent = await execQuery(
+      client,
+      isPostgres 
+        ? 'SELECT * FROM users WHERE email = $1'
+        : 'SELECT * FROM users WHERE email = ?',
+      [parent_email],
+      isPostgres
     );
 
-  } else {
-    // 2b. Parent is NEW: Create a new user account for them with the student's admission number as password.
-    const parentUserResult = await client.query(
-      `INSERT INTO users (school_id, email, password_hash, name, phone, role, status, must_change_password)
-       VALUES ($1, $2, $3, $4, $5, 'parent', 'active', true)
-       RETURNING id`,
-      [school_id, parent_email, passwordHash, parent_name, parent_phone]
+    let parentUserId;
+
+    if (existingParent.rows && existingParent.rows.length > 0) {
+      parentUserId = existingParent.rows[0].id;
+
+      await execQuery(
+        client,
+        isPostgres
+          ? 'UPDATE users SET password_hash = $1, must_change_password = true WHERE id = $2'
+          : 'UPDATE users SET password_hash = ?, must_change_password = 1 WHERE id = ?',
+        [passwordHash, parentUserId],
+        isPostgres
+      );
+    } else {
+      const parentUserResult = await execQuery(
+        client,
+        isPostgres
+          ? `INSERT INTO users (school_id, email, password_hash, name, phone, role, status, must_change_password)
+             VALUES ($1, $2, $3, $4, $5, 'parent', 'active', true)
+             RETURNING id`
+          : `INSERT INTO users (school_id, email, password_hash, name, phone, role, status, must_change_password)
+             VALUES (?, ?, ?, ?, ?, 'parent', 'active', 1)`,
+        [school_id, parent_email, passwordHash, parent_name, parent_phone],
+        isPostgres
+      );
+      
+      if (!parentUserResult.rows || parentUserResult.rows.length === 0) {
+        throw new Error('Failed to create parent user account');
+      }
+      
+      parentUserId = parentUserResult.rows[0].id;
+    }
+
+    await execQuery(
+      client,
+      isPostgres
+        ? 'UPDATE students SET parent_id = $1 WHERE id = $2'
+        : 'UPDATE students SET parent_id = ? WHERE id = ?',
+      [parentUserId, studentId],
+      isPostgres
     );
-    parentUserId = parentUserResult.rows[0].id;
+
+    await execQuery(
+      client,
+      isPostgres
+        ? `INSERT INTO parent_student_relations (parent_id, student_id, relation_type, is_primary_contact, is_financial_responsible)
+           VALUES ($1, $2, $3, true, true)
+           ON CONFLICT (parent_id, student_id) DO NOTHING`
+        : `INSERT OR IGNORE INTO parent_student_relations (parent_id, student_id, relation_type, is_primary_contact, is_financial_responsible)
+           VALUES (?, ?, ?, 1, 1)`,
+      [parentUserId, studentId, relationType],
+      isPostgres
+    );
+
+    return parentUserId;
+  } catch (error) {
+    if (error.code === '23505' || error.message.includes('UNIQUE constraint failed')) {
+      throw new Error(`Parent email already exists: ${parent_email}`);
+    }
+    if (error.message.includes('CHECK constraint')) {
+      throw new Error(`Invalid parent relationship type. Must be one of: father, mother, guardian, other`);
+    }
+    throw error;
   }
-
-  // 3. Link student to this parent using both tables for consistency
-  // Update parent_id on student table
-  await client.query(
-    'UPDATE students SET parent_id = $1 WHERE id = $2',
-    [parentUserId, studentId]
-  );
-
-  // Create entry in parent_student_relations table
-  const relationType = relationship || 'guardian';
-  await client.query(
-    `INSERT INTO parent_student_relations (parent_id, student_id, relation_type, is_primary_contact, is_financial_responsible)
-     VALUES ($1, $2, $3, true, true)
-     ON CONFLICT (parent_id, student_id) DO NOTHING`,
-    [parentUserId, studentId, relationType]
-  );
-
-  return parentUserId;
 };
 
 
-// --- MODIFIED Main Service Function ---
 const createStudentAndParent = async (studentData, school_id) => {
-  return transaction(async (client) => {
-    // 1. Generate the single admission number
-    const admissionNumber = generateAdmissionNumber(studentData.grade);
+  if (!studentData.first_name || !studentData.last_name || !studentData.email || !studentData.grade) {
+    throw new Error('Missing required fields: first_name, last_name, email, grade');
+  }
 
-    // 2. Hash it ONCE to use as the password for both student and parent
+  if (!studentData.parent_email || !studentData.parent_name) {
+    throw new Error('Missing required parent fields: parent_email, parent_name');
+  }
+
+  return transaction(async (client) => {
+    const isPostgres = client.query !== undefined;
+    
+    const admissionNumber = generateAdmissionNumber(studentData.grade);
     const passwordHash = await bcrypt.hash(admissionNumber, 10);
 
-    // 3. Create the student (and their user account)
-    const student = await createStudent(client, studentData, school_id, admissionNumber, passwordHash);
+    const student = await createStudent(client, studentData, school_id, admissionNumber, passwordHash, isPostgres);
 
-    // 4. Create or link the parent (and set/reset their password)
-    const parentUserId = await createOrLinkParent(client, studentData, student.id, school_id, passwordHash);
+    const parentUserId = await createOrLinkParent(client, studentData, student.id, school_id, passwordHash, isPostgres);
 
-    // Return the new student data, now including their admission number
-    return student;
+    return {
+      ...student,
+      admission_number: admissionNumber,
+      parent_id: parentUserId
+    };
   });
 };
 

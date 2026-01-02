@@ -56,20 +56,19 @@ router.get('/', authorizeRole(['super_admin', 'admin', 'teacher', 'student', 'pa
         }
       }
     } else if (user.role === 'parent') {
-      // For parents, fetch their children's grades and class_sections
       const childrenResult = await query(
         'SELECT DISTINCT grade, class_section FROM students WHERE parent_id = $1 AND school_id = $2',
         [user.id, schoolId]
       );
       
       if (childrenResult.rows.length > 0) {
-        // Create a list of (grade, class_section) pairs
-        const conditions = childrenResult.rows.map(() => `(te.grade = $${paramIndex} AND te.class_section IS NOT DISTINCT FROM $${paramIndex + 1})`);
-        childrenResult.rows.forEach((child) => {
+        const conditions = [];
+        for (const child of childrenResult.rows) {
+          conditions.push(`(te.grade = $${paramIndex} AND COALESCE(te.class_section, '') = COALESCE($${paramIndex + 1}, ''))`);
           params.push(child.grade);
           params.push(child.class_section);
           paramIndex += 2;
-        });
+        }
         sql += ` AND (${conditions.join(' OR ')})`;
       }
     } else if (user.role === 'teacher') {
@@ -149,7 +148,7 @@ router.get('/periods', authorizeRole(['super_admin', 'admin', 'teacher', 'studen
       for (const period of defaultPeriods) {
         // Check if period already exists
         const existing = await query(
-          `SELECT id FROM timetable_periods WHERE school_id IS NOT DISTINCT FROM $1 AND name = $2`,
+          `SELECT id FROM timetable_periods WHERE COALESCE(school_id, 0) = COALESCE($1, 0) AND name = $2`,
           [schoolId, period.name]
         );
 
@@ -173,7 +172,6 @@ router.get('/periods', authorizeRole(['super_admin', 'admin', 'teacher', 'studen
   }
 });
 
-// Create timetable entry
 router.post('/', authorizeRole(['admin']), async (req, res) => {
   try {
     const {
@@ -188,22 +186,39 @@ router.post('/', authorizeRole(['admin']), async (req, res) => {
       term_id
     } = req.body;
 
+    if (!course_id || !teacher_id || !day_of_week || !period_id || !grade) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Missing required fields: course_id, teacher_id, day_of_week, period_id, grade' 
+      });
+    }
+
+    const validDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+    if (!validDays.includes(day_of_week.toLowerCase())) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid day_of_week. Must be one of: ' + validDays.join(', ')
+      });
+    }
+
     const result = await query(
       `INSERT INTO timetable_entries
        (school_id, course_id, teacher_id, day_of_week, period_id, grade, class_section, classroom, academic_year_id, term_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
-      [req.schoolId, course_id, teacher_id, day_of_week, period_id, grade, class_section, classroom, academic_year_id, term_id]
+      [req.schoolId, course_id, teacher_id, day_of_week.toLowerCase(), period_id, grade, class_section, classroom, academic_year_id, term_id]
     );
 
     res.status(201).json({ success: true, data: result.rows[0] });
   } catch (err) {
     console.error('Error creating timetable entry:', err);
+    if (err.code === '23503') {
+      return res.status(400).json({ success: false, error: 'Invalid course_id, teacher_id, or period_id' });
+    }
     res.status(500).json({ success: false, error: 'Failed to create timetable entry' });
   }
 });
 
-// Update timetable entry
 router.put('/:id', authorizeRole(['admin']), async (req, res) => {
   try {
     const { id } = req.params;
@@ -219,6 +234,14 @@ router.put('/:id', authorizeRole(['admin']), async (req, res) => {
       term_id
     } = req.body;
 
+    const validDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+    if (day_of_week && !validDays.includes(day_of_week.toLowerCase())) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid day_of_week. Must be one of: ' + validDays.join(', ')
+      });
+    }
+
     const result = await query(
       `UPDATE timetable_entries
        SET course_id = $1, teacher_id = $2, day_of_week = $3, period_id = $4,
@@ -226,7 +249,7 @@ router.put('/:id', authorizeRole(['admin']), async (req, res) => {
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $10 AND school_id = $11
        RETURNING *`,
-      [course_id, teacher_id, day_of_week, period_id, grade, class_section, classroom, academic_year_id, term_id, id, req.schoolId]
+      [course_id, teacher_id, day_of_week ? day_of_week.toLowerCase() : day_of_week, period_id, grade, class_section, classroom, academic_year_id, term_id, id, req.schoolId]
     );
 
     if (result.rows.length === 0) {
@@ -236,6 +259,9 @@ router.put('/:id', authorizeRole(['admin']), async (req, res) => {
     res.json({ success: true, data: result.rows[0] });
   } catch (err) {
     console.error('Error updating timetable entry:', err);
+    if (err.code === '23503') {
+      return res.status(400).json({ success: false, error: 'Invalid course_id, teacher_id, or period_id' });
+    }
     res.status(500).json({ success: false, error: 'Failed to update timetable entry' });
   }
 });
@@ -261,10 +287,16 @@ router.delete('/:id', authorizeRole(['admin']), async (req, res) => {
   }
 });
 
-// Create timetable period
 router.post('/periods', authorizeRole(['super_admin', 'admin', 'teacher']), async (req, res) => {
   try {
     const { period_name, start_time, end_time, is_break } = req.body;
+
+    if (!period_name || !start_time || !end_time) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Missing required fields: period_name, start_time, end_time' 
+      });
+    }
 
     const result = await query(
       `INSERT INTO timetable_periods (school_id, name, start_time, end_time, is_break)
@@ -276,11 +308,13 @@ router.post('/periods', authorizeRole(['super_admin', 'admin', 'teacher']), asyn
     res.status(201).json({ success: true, data: result.rows[0] });
   } catch (err) {
     console.error('Error creating timetable period:', err);
+    if (err.code === '23505') {
+      return res.status(409).json({ success: false, error: 'Period name already exists for this school' });
+    }
     res.status(500).json({ success: false, error: 'Failed to create timetable period' });
   }
 });
 
-// Update timetable period
 router.put('/periods/:id', authorizeRole(['admin']), async (req, res) => {
   try {
     const { id } = req.params;
@@ -288,7 +322,7 @@ router.put('/periods/:id', authorizeRole(['admin']), async (req, res) => {
 
     const result = await query(
       `UPDATE timetable_periods
-       SET period_name = $1, start_time = $2, end_time = $3, is_break = $4
+       SET name = $1, start_time = $2, end_time = $3, is_break = $4
        WHERE id = $5 AND school_id = $6
        RETURNING *`,
       [period_name, start_time, end_time, is_break, id, req.schoolId]

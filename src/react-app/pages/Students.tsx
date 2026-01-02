@@ -73,7 +73,7 @@ const EMPTY_FORM: StudentFormData = {
   parent_name: '',
   parent_phone: '',
   parent_email: '',
-  relationship: 'parent'
+  relationship: 'guardian'
 }
 
 export default function Students() {
@@ -305,7 +305,15 @@ export default function Students() {
                           </div>
                           <div className="space-y-2">
                             <Label htmlFor="relationship">Relationship</Label>
-                            <Input id="relationship" value={enrollForm.relationship} onChange={(e) => setEnrollForm({...enrollForm, relationship: e.target.value})} />
+                            <Select value={enrollForm.relationship} onValueChange={(value) => setEnrollForm({...enrollForm, relationship: value})}>
+                              <SelectTrigger><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="father">Father</SelectItem>
+                                <SelectItem value="mother">Mother</SelectItem>
+                                <SelectItem value="guardian">Guardian</SelectItem>
+                                <SelectItem value="other">Other</SelectItem>
+                              </SelectContent>
+                            </Select>
                           </div>
                         </div>
                         <div className="grid grid-cols-2 gap-4">

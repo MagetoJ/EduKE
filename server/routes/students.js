@@ -59,15 +59,63 @@ router.get('/:id', authorizeRole(['admin', 'teacher', 'parent']), async (req, re
   }
 });
 
-// Create student
 router.post('/', authorizeRole(['admin']), async (req, res) => {
   try {
     const { schoolId } = req;
+
+    if (!req.body || Object.keys(req.body).length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Request body cannot be empty',
+        example: {
+          first_name: 'John',
+          last_name: 'Doe',
+          email: 'student@example.com',
+          phone: '0712345678',
+          date_of_birth: '2010-01-15',
+          gender: 'male',
+          address: '123 School Lane',
+          grade: 'Grade 5',
+          enrollment_date: '2025-01-02',
+          parent_email: 'parent@example.com',
+          parent_name: 'Jane Doe',
+          parent_phone: '0787654321',
+          relationship: 'mother'
+        }
+      });
+    }
+
+    const validRelationships = ['father', 'mother', 'guardian', 'other'];
+    if (req.body.relationship && !validRelationships.includes(req.body.relationship.toLowerCase())) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid relationship. Must be one of: ' + validRelationships.join(', '),
+        allowed: validRelationships
+      });
+    }
+
     const student = await studentService.createStudentAndParent(req.body, schoolId);
 
     res.status(201).json({ success: true, data: student, message: 'Student created successfully' });
   } catch (err) {
     console.error('Error creating student:', err);
+    
+    if (err.message.includes('Missing required')) {
+      return res.status(400).json({ success: false, error: err.message });
+    }
+    
+    if (err.message.includes('already exists')) {
+      return res.status(409).json({ success: false, error: err.message });
+    }
+    
+    if (err.message.includes('relationship type')) {
+      return res.status(400).json({ 
+        success: false, 
+        error: err.message,
+        allowed: ['father', 'mother', 'guardian', 'other']
+      });
+    }
+    
     res.status(500).json({ success: false, error: err.message || 'Failed to create student' });
   }
 });

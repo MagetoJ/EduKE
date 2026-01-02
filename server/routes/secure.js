@@ -1,4 +1,5 @@
 const express = require('express');
+const bcrypt = require('bcrypt');
 const { query, transaction } = require('../db/connection');
 const multer = require('multer');
 const path = require('path');

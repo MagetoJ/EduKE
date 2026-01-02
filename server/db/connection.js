@@ -80,8 +80,38 @@ if (!useSQLite) {
 
 const usingPostgres = !useSQLite;
 
+const convertPostgresToSQLite = (sql) => {
+  let converted = sql;
+  converted = converted.replace(/IS NOT DISTINCT FROM/gi, '=');
+  converted = converted.replace(/IS DISTINCT FROM/gi, '!=');
+  converted = converted.replace(/\s+RETURNING\s+\*/gi, '');
+  let index = 1;
+  while (converted.includes(`$${index}`)) {
+    converted = converted.replace(`$${index}`, '?');
+    index++;
+  }
+  return converted;
+};
+
+const extractTableAndId = (sql, params) => {
+  const insertMatch = sql.match(/INSERT\s+INTO\s+(\w+)/i);
+  const updateMatch = sql.match(/UPDATE\s+(\w+)/i);
+  const whereMatch = sql.match(/WHERE\s+id\s*=\s*\$?(\d+)?/i);
+  
+  if (insertMatch) {
+    const table = insertMatch[1];
+    return { table, id: null, isInsert: true };
+  }
+  if (updateMatch && whereMatch) {
+    const table = updateMatch[1];
+    const paramIndex = whereMatch[1] ? parseInt(whereMatch[1]) - 1 : params.length - 1;
+    const id = params[paramIndex];
+    return { table, id, isInsert: false };
+  }
+  return null;
+};
+
 const query = async (text, params) => {
-  const start = Date.now();
   return new Promise((resolve, reject) => {
     if (usingPostgres) {
       db.query(text, params, (err, res) => {
@@ -89,14 +119,16 @@ const query = async (text, params) => {
           console.error('Query error:', err);
           reject(err);
         } else {
-          const duration = Date.now() - start;
           resolve(res);
         }
       });
     } else {
-      const statement = text.trim().toUpperCase();
+      const hasReturning = /\s+RETURNING\s+\*/i.test(text);
+      const sqliteText = convertPostgresToSQLite(text);
+      const statement = sqliteText.trim().toUpperCase();
+      
       if (statement.startsWith('SELECT') || statement.startsWith('PRAGMA')) {
-        db.all(text, params, (err, rows) => {
+        db.all(sqliteText, params, (err, rows) => {
           if (err) {
             console.error('Query error:', err);
             reject(err);
@@ -104,8 +136,41 @@ const query = async (text, params) => {
             resolve({ rows, rowCount: rows.length });
           }
         });
+      } else if (statement.startsWith('INSERT') || statement.startsWith('UPDATE')) {
+        db.run(sqliteText, params, function(err) {
+          if (err) {
+            console.error('Query error:', err);
+            reject(err);
+          } else {
+            if (hasReturning) {
+              const tableInfo = extractTableAndId(text, params);
+              if (tableInfo && tableInfo.isInsert) {
+                const lastId = this.lastID;
+                db.get(`SELECT * FROM ${tableInfo.table} WHERE id = ?`, [lastId], (err, row) => {
+                  if (err) {
+                    resolve({ rowCount: this.changes, lastID: lastId, rows: [] });
+                  } else {
+                    resolve({ rowCount: this.changes, lastID: lastId, rows: row ? [row] : [] });
+                  }
+                });
+              } else if (tableInfo && !tableInfo.isInsert) {
+                db.get(`SELECT * FROM ${tableInfo.table} WHERE id = ?`, [tableInfo.id], (err, row) => {
+                  if (err) {
+                    resolve({ rowCount: this.changes, lastID: this.lastID, rows: [] });
+                  } else {
+                    resolve({ rowCount: this.changes, lastID: this.lastID, rows: row ? [row] : [] });
+                  }
+                });
+              } else {
+                resolve({ rowCount: this.changes, lastID: this.lastID, rows: [] });
+              }
+            } else {
+              resolve({ rowCount: this.changes, lastID: this.lastID, rows: [] });
+            }
+          }
+        });
       } else {
-        db.run(text, params, function(err) {
+        db.run(sqliteText, params, function(err) {
           if (err) {
             console.error('Query error:', err);
             reject(err);
@@ -142,16 +207,25 @@ const transaction = async (callback) => {
     }
   }
   return new Promise((resolve, reject) => {
-    db.serialize(() => {
-      db.run('BEGIN TRANSACTION');
-      try {
-        const result = callback(db);
-        db.run('COMMIT');
-        resolve(result);
-      } catch (error) {
-        db.run('ROLLBACK');
-        reject(error);
-      }
+    db.serialize(async () => {
+      db.run('BEGIN TRANSACTION', async (err) => {
+        if (err) {
+          return reject(err);
+        }
+        try {
+          const result = await callback(db);
+          db.run('COMMIT', (commitErr) => {
+            if (commitErr) {
+              db.run('ROLLBACK');
+              return reject(commitErr);
+            }
+            resolve(result);
+          });
+        } catch (error) {
+          db.run('ROLLBACK');
+          reject(error);
+        }
+      });
     });
   });
 };
