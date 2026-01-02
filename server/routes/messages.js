@@ -54,7 +54,9 @@ router.get('/', authorizeRole(['admin', 'teacher', 'student', 'parent']), async 
 // Get messages for current user
 router.get('/my', authorizeRole(['admin', 'teacher', 'student', 'parent']), async (req, res) => {
   try {
-    const { schoolId, userId, userRole } = req;
+    const { schoolId } = req;
+    const userId = req.user.id;
+    const userRole = req.user.role;
     const { limit = 50, offset = 0 } = req.query;
 
     // Get messages where user is a recipient or where message is sent to their role/group

@@ -24,12 +24,12 @@ router.put('/courses/:id', authorizeRole(['super_admin', 'admin']), updateCourse
 
 router.delete('/courses/:id', authorizeRole(['super_admin', 'admin']), deleteCourse);
 
-router.get('/courses/:id/students', authorizeRole(['admin', 'teacher']), getCourseStudents);
+router.get('/courses/:id/students', authorizeRole(['admin', 'teacher', 'super_admin']), getCourseStudents);
 
-router.get('/courses/:id/resources', authorizeRole(['admin', 'teacher', 'student']), getCourseResources);
+router.get('/courses/:id/resources', authorizeRole(['admin', 'teacher', 'student', 'super_admin']), getCourseResources);
 
-router.post('/courses/:id/resources', authorizeRole(['admin', 'teacher']), addCourseResource);
+router.post('/courses/:id/resources', authorizeRole(['admin', 'teacher', 'super_admin']), addCourseResource);
 
-router.delete('/courses/:id/resources/:resourceId', authorizeRole(['admin', 'teacher']), deleteCourseResource);
+router.delete('/courses/:id/resources/:resourceId', authorizeRole(['admin', 'teacher', 'super_admin']), deleteCourseResource);
 
 module.exports = router;

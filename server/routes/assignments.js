@@ -4,7 +4,7 @@ const { query } = require('../db/connection');
 const { authorizeRole } = require('../middleware/auth');
 
 // Get all assignments
-router.get('/', authorizeRole(['admin', 'teacher', 'student', 'parent']), async (req, res) => {
+router.get('/', authorizeRole(['admin', 'teacher', 'student', 'parent', 'super_admin']), async (req, res) => {
   try {
     const { user } = req;
     let sql = 'SELECT a.*, c.name as course_name, c.grade FROM assignments a JOIN courses c ON a.course_id = c.id WHERE c.school_id = $1';

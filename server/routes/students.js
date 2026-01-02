@@ -5,7 +5,7 @@ const { authorizeRole } = require('../middleware/auth');
 const studentService = require('../services/studentService');
 
 // Get all students
-router.get('/', authorizeRole(['admin', 'teacher']), async (req, res) => {
+router.get('/', authorizeRole(['admin', 'teacher', 'super_admin']), async (req, res) => {
   try {
     const { schoolId } = req;
     const { grade, status, search } = req.query;

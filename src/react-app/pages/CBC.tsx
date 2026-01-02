@@ -58,11 +58,13 @@ export default function CBC() {
     student_id: '',
     strand_id: '',
     assessment_type: 'formative' as 'formative' | 'summative',
-    marks: '',
+    grade: '',
     comments: ''
   })
   const [students, setStudents] = useState<any[]>([])
   const [searchTerm, setSearchTerm] = useState('')
+  const [assessments, setAssessments] = useState<any[]>([])
+  const [selectedStudent, setSelectedStudent] = useState<string | null>(null)
 
   useEffect(() => {
     loadData()
@@ -157,13 +159,45 @@ export default function CBC() {
     setIsStrandDialogOpen(true)
   }
 
+  const loadStudentAssessments = async (studentId: string) => {
+    try {
+      const response = await api(`/api/kenya-features/cbc/assessments/${studentId}`)
+      if (response.ok) {
+        const data = await response.json()
+        setAssessments(data.data || [])
+      }
+    } catch (err) {
+      console.error('Error loading assessments:', err)
+    }
+  }
+
+  const getRatingLabel = (grade: number) => {
+    const ratings: { [key: number]: string } = {
+      4: 'EE - Exceeding Expectations',
+      3: 'ME - Meeting Expectations',
+      2: 'AE - Approaching Expectations',
+      1: 'BE - Below Expectations'
+    }
+    return ratings[grade] || 'Unknown'
+  }
+
+  const getRatingColor = (grade: number) => {
+    const colors: { [key: number]: string } = {
+      4: 'bg-green-50 border-green-200 text-green-700',
+      3: 'bg-blue-50 border-blue-200 text-blue-700',
+      2: 'bg-yellow-50 border-yellow-200 text-yellow-700',
+      1: 'bg-red-50 border-red-200 text-red-700'
+    }
+    return colors[grade] || 'bg-gray-50 border-gray-200 text-gray-700'
+  }
+
   const handleAssessmentSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
     setFormError(null)
 
     try {
-      if (!assessmentForm.student_id || !assessmentForm.strand_id || !assessmentForm.marks) {
+      if (!assessmentForm.student_id || !assessmentForm.strand_id || !assessmentForm.grade) {
         throw new Error('All fields are required')
       }
 
@@ -173,7 +207,7 @@ export default function CBC() {
           student_id: assessmentForm.student_id,
           strand_id: assessmentForm.strand_id,
           assessment_type: assessmentForm.assessment_type,
-          marks: parseFloat(assessmentForm.marks),
+          grade: parseInt(assessmentForm.grade),
           comments: assessmentForm.comments
         })
       })
@@ -186,7 +220,7 @@ export default function CBC() {
         student_id: '',
         strand_id: '',
         assessment_type: 'formative',
-        marks: '',
+        grade: '',
         comments: ''
       })
     } catch (err) {
@@ -462,16 +496,18 @@ export default function CBC() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="marks">Marks (out of 100) *</Label>
-                    <Input
-                      id="marks"
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={assessmentForm.marks}
-                      onChange={(e) => setAssessmentForm(prev => ({ ...prev, marks: e.target.value }))}
-                      placeholder="0"
-                    />
+                    <Label htmlFor="grade-select">Competency Level *</Label>
+                    <Select value={assessmentForm.grade} onValueChange={(value) => setAssessmentForm(prev => ({ ...prev, grade: value }))}>
+                      <SelectTrigger id="grade-select">
+                        <SelectValue placeholder="Select competency level" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="4">EE - Exceeding Expectations</SelectItem>
+                        <SelectItem value="3">ME - Meeting Expectations</SelectItem>
+                        <SelectItem value="2">AE - Approaching Expectations</SelectItem>
+                        <SelectItem value="1">BE - Below Expectations</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="comments">Comments/Feedback</Label>
@@ -499,11 +535,67 @@ export default function CBC() {
         </TabsContent>
 
         <TabsContent value="portfolio" className="space-y-4">
-          <Card>
-            <CardContent className="pt-6">
-              <p className="text-gray-600">Learner portfolios will display student assessment records and progress over time.</p>
-            </CardContent>
-          </Card>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Select Student</Label>
+              <Select value={selectedStudent || ''} onValueChange={(value) => {
+                setSelectedStudent(value)
+                loadStudentAssessments(value)
+              }}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a student to view portfolio" />
+                </SelectTrigger>
+                <SelectContent>
+                  {students.map(student => (
+                    <SelectItem key={student.id} value={student.id.toString()}>
+                      {student.first_name} {student.last_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {selectedStudent && assessments.length > 0 ? (
+              <div className="grid gap-4">
+                {assessments.map(assessment => (
+                  <Card key={assessment.id}>
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <CardTitle className="text-base">{assessment.strand_name}</CardTitle>
+                          <div className="flex gap-2 mt-2 text-sm">
+                            <span className="font-mono bg-gray-100 px-2 py-0.5 rounded">{assessment.strand_code}</span>
+                            <span className="text-gray-600 capitalize">{assessment.assessment_type}</span>
+                          </div>
+                        </div>
+                        <div className={`px-3 py-1 rounded border text-sm font-medium ${getRatingColor(assessment.grade)}`}>
+                          {getRatingLabel(assessment.grade)}
+                        </div>
+                      </div>
+                    </CardHeader>
+                    {assessment.comments && (
+                      <CardContent className="pt-0">
+                        <p className="text-gray-600 text-sm">{assessment.comments}</p>
+                        <p className="text-xs text-gray-500 mt-2">{new Date(assessment.created_at).toLocaleDateString()}</p>
+                      </CardContent>
+                    )}
+                  </Card>
+                ))}
+              </div>
+            ) : selectedStudent ? (
+              <Card>
+                <CardContent className="pt-6 text-center text-gray-500">
+                  No assessments recorded yet
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardContent className="pt-6 text-center text-gray-500">
+                  Select a student to view their assessment portfolio
+                </CardContent>
+              </Card>
+            )}
+          </div>
         </TabsContent>
       </Tabs>
     </div>

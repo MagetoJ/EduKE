@@ -6,7 +6,7 @@ const { dbGet, dbAll, dbRun } = require('../database');
 
 attendanceRouter.post(
   '/record',
-  authorizeRole(['admin', 'teacher']),
+  authorizeRole(['admin', 'teacher', 'super_admin']),
   async (req, res) => {
     try {
       const { schoolId, user } = req;
@@ -67,7 +67,7 @@ attendanceRouter.post(
 
 attendanceRouter.get(
   '/course/:courseId',
-  authorizeRole(['admin', 'teacher']),
+  authorizeRole(['admin', 'teacher', 'super_admin']),
   async (req, res) => {
     try {
       const { courseId } = req.params;
@@ -98,7 +98,7 @@ attendanceRouter.get(
 
 attendanceRouter.get(
   '/student/:studentId',
-  authorizeRole(['admin', 'teacher', 'parent', 'student']),
+  authorizeRole(['admin', 'teacher', 'parent', 'student', 'super_admin']),
   async (req, res) => {
     try {
       const { studentId } = req.params;
@@ -129,7 +129,7 @@ attendanceRouter.get(
 
 attendanceRouter.get(
   '/student/:studentId/term/:termId',
-  authorizeRole(['admin', 'teacher', 'parent', 'student']),
+  authorizeRole(['admin', 'teacher', 'parent', 'student', 'super_admin']),
   async (req, res) => {
     try {
       const { studentId, termId } = req.params;
@@ -164,7 +164,7 @@ attendanceRouter.get(
 
 attendanceRouter.get(
   '/course/:courseId/summary',
-  authorizeRole(['admin', 'teacher']),
+  authorizeRole(['admin', 'teacher', 'super_admin']),
   async (req, res) => {
     try {
       const { courseId } = req.params;

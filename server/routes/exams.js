@@ -15,21 +15,21 @@ const {
 // ===================
 
 // Get all exams
-router.get('/exams', authorizeRole(['admin', 'teacher', 'student']), getAllExams);
+router.get('/exams', authorizeRole(['admin', 'teacher', 'student', 'super_admin']), getAllExams);
 
 // Get single exam
-router.get('/exams/:id', authorizeRole(['admin', 'teacher', 'student']), getExamById);
+router.get('/exams/:id', authorizeRole(['admin', 'teacher', 'student', 'super_admin']), getExamById);
 
 // Create exam
-router.post('/exams', authorizeRole(['admin', 'teacher']), createExam);
+router.post('/exams', authorizeRole(['admin', 'teacher', 'super_admin']), createExam);
 
 // Update exam
-router.put('/exams/:id', authorizeRole(['admin', 'teacher']), updateExam);
+router.put('/exams/:id', authorizeRole(['admin', 'teacher', 'super_admin']), updateExam);
 
 // Delete exam
-router.delete('/exams/:id', authorizeRole(['admin']), deleteExam);
+router.delete('/exams/:id', authorizeRole(['admin', 'super_admin']), deleteExam);
 
 // Post exam results
-router.post('/exams/:id/results', authorizeRole(['admin', 'teacher']), postExamResults);
+router.post('/exams/:id/results', authorizeRole(['admin', 'teacher', 'super_admin']), postExamResults);
 
 module.exports = router;

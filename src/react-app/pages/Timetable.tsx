@@ -497,7 +497,7 @@ export default function Timetable() {
                               <SelectTrigger><SelectValue placeholder={teachers.length === 0 ? "No teachers available" : "Select teacher"} /></SelectTrigger>
                               <SelectContent>
                                 {teachers.length === 0 ? (
-                                  <SelectItem disabled value="">No teachers available</SelectItem>
+                                  <SelectItem disabled value="no-teachers">No teachers available</SelectItem>
                                 ) : (
                                   teachers.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)
                                 )}
@@ -774,7 +774,7 @@ export default function Timetable() {
                     <SelectTrigger><SelectValue placeholder={teachers.length === 0 ? "No teachers available" : "Select teacher"} /></SelectTrigger>
                     <SelectContent>
                       {teachers.length === 0 ? (
-                        <SelectItem disabled value="">No teachers available</SelectItem>
+                        <SelectItem disabled value="no-teachers">No teachers available</SelectItem>
                       ) : (
                         teachers.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)
                       )}

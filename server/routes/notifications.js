@@ -6,7 +6,8 @@ const { authorizeRole } = require('../middleware/auth');
 
 notificationsRouter.get('/notifications', authorizeRole(['admin', 'teacher', 'student', 'parent', 'super_admin']), async (req, res) => {
   try {
-    const { userId, schoolId } = req;
+    const { schoolId } = req;
+    const userId = req.user.id;
     const { unread_only } = req.query;
 
     let sql = 'SELECT * FROM notifications WHERE user_id = $1 AND school_id = $2';
@@ -38,7 +39,8 @@ notificationsRouter.get('/notifications', authorizeRole(['admin', 'teacher', 'st
 
 notificationsRouter.post('/notifications/:id/read', authorizeRole(['admin', 'teacher', 'student', 'parent', 'super_admin']), async (req, res) => {
   try {
-    const { userId, schoolId } = req;
+    const { schoolId } = req;
+    const userId = req.user.id;
     const { id } = req.params;
 
     const result = await query(
@@ -59,7 +61,8 @@ notificationsRouter.post('/notifications/:id/read', authorizeRole(['admin', 'tea
 
 notificationsRouter.post('/notifications/read-all', authorizeRole(['admin', 'teacher', 'student', 'parent', 'super_admin']), async (req, res) => {
   try {
-    const { userId, schoolId } = req;
+    const { schoolId } = req;
+    const userId = req.user.id;
 
     await query(
       'UPDATE notifications SET is_read = true, read_at = NOW() WHERE user_id = $1 AND school_id = $2 AND is_read = false',
@@ -75,7 +78,8 @@ notificationsRouter.post('/notifications/read-all', authorizeRole(['admin', 'tea
 
 notificationsRouter.delete('/notifications/:id', authorizeRole(['admin', 'teacher', 'student', 'parent', 'super_admin']), async (req, res) => {
   try {
-    const { userId, schoolId } = req;
+    const { schoolId } = req;
+    const userId = req.user.id;
     const { id } = req.params;
 
     const result = await query(
@@ -96,7 +100,8 @@ notificationsRouter.delete('/notifications/:id', authorizeRole(['admin', 'teache
 
 notificationsRouter.delete('/notifications', authorizeRole(['admin', 'teacher', 'student', 'parent', 'super_admin']), async (req, res) => {
   try {
-    const { userId, schoolId } = req;
+    const { schoolId } = req;
+    const userId = req.user.id;
 
     await query(
       'DELETE FROM notifications WHERE user_id = $1 AND school_id = $2',

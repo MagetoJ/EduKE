@@ -97,19 +97,42 @@ router.delete('/cbc/strands/:id', authorizeRole(['admin']), async (req, res) => 
 
 router.post('/cbc/assessments', authorizeRole(['teacher']), async (req, res) => {
   try {
-    const { student_id, strand_id, assessment_type, marks, comments } = req.body;
+    const { student_id, strand_id, assessment_type, grade, comments } = req.body;
+
+    if (!grade || grade < 1 || grade > 4) {
+      return res.status(400).json({ success: false, error: 'Grade must be 1-4 (BE, AE, ME, EE)' });
+    }
 
     const result = await query(
-      `INSERT INTO cbc_assessments (school_id, student_id, strand_id, assessment_type, marks, comments, created_by)
+      `INSERT INTO cbc_assessments (school_id, student_id, strand_id, assessment_type, grade, comments, created_by)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [req.schoolId, student_id, strand_id, assessment_type, marks, comments, req.user.id]
+      [req.schoolId, student_id, strand_id, assessment_type, grade, comments, req.user.id]
     );
 
     res.status(201).json({ success: true, data: result.rows[0] });
   } catch (err) {
     console.error('Error creating assessment:', err);
     res.status(500).json({ success: false, error: 'Failed to create assessment' });
+  }
+});
+
+router.get('/cbc/assessments/:student_id', authorizeRole(['teacher', 'admin', 'parent']), async (req, res) => {
+  try {
+    const result = await query(
+      `SELECT ca.*, cs.name as strand_name, cs.code as strand_code, st.first_name, st.last_name
+       FROM cbc_assessments ca
+       JOIN cbc_strands cs ON ca.strand_id = cs.id
+       JOIN students st ON ca.student_id = st.id
+       WHERE ca.school_id = $1 AND ca.student_id = $2
+       ORDER BY ca.created_at DESC`,
+      [req.schoolId, req.params.student_id]
+    );
+
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error('Error fetching assessments:', err);
+    res.status(500).json({ success: false, error: 'Failed to fetch assessments' });
   }
 });
 
@@ -125,6 +148,48 @@ router.get('/cbc/portfolio/:student_id', authorizeRole(['teacher', 'admin']), as
   } catch (err) {
     console.error('Error fetching portfolio:', err);
     res.status(500).json({ success: false, error: 'Failed to fetch portfolio' });
+  }
+});
+
+router.post('/cbc/portfolio', authorizeRole(['teacher', 'admin']), async (req, res) => {
+  try {
+    const { student_id, artifact_type, artifact_title, artifact_url, comments } = req.body;
+
+    if (!student_id || !artifact_type || !artifact_title) {
+      return res.status(400).json({ success: false, error: 'Student ID, artifact type, and title are required' });
+    }
+
+    const result = await query(
+      `INSERT INTO cbc_learner_portfolios (school_id, student_id, artifact_type, artifact_title, artifact_url, comments, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [req.schoolId, student_id, artifact_type, artifact_title, artifact_url, comments, req.user.id]
+    );
+
+    res.status(201).json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    console.error('Error creating portfolio artifact:', err);
+    res.status(500).json({ success: false, error: 'Failed to create portfolio artifact' });
+  }
+});
+
+router.delete('/cbc/portfolio/:id', authorizeRole(['teacher', 'admin']), async (req, res) => {
+  try {
+    const result = await query(
+      `DELETE FROM cbc_learner_portfolios 
+       WHERE id = $1 AND school_id = $2
+       RETURNING id`,
+      [req.params.id, req.schoolId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Portfolio artifact not found' });
+    }
+
+    res.json({ success: true, message: 'Portfolio artifact deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting portfolio artifact:', err);
+    res.status(500).json({ success: false, error: 'Failed to delete portfolio artifact' });
   }
 });
 
@@ -205,6 +270,24 @@ router.delete('/knec/registrations/:id', authorizeRole(['admin']), async (req, r
   } catch (err) {
     console.error('Error deleting registration:', err);
     res.status(500).json({ success: false, error: 'Failed to delete registration' });
+  }
+});
+
+router.get('/nemis/registrations', authorizeRole(['super_admin', 'admin']), async (req, res) => {
+  try {
+    const result = await query(
+      `SELECT sr.*, st.first_name, st.last_name, st.gender, st.date_of_birth, st.student_id_number
+       FROM nemis_student_registration sr
+       JOIN students st ON sr.student_id = st.id
+       WHERE sr.school_id = $1
+       ORDER BY st.first_name, st.last_name`,
+      [req.schoolId]
+    );
+
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error('Error fetching NEMIS registrations:', err);
+    res.status(500).json({ success: false, error: 'Failed to fetch NEMIS registrations' });
   }
 });
 

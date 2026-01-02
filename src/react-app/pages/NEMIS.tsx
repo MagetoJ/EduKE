@@ -52,7 +52,7 @@ export default function NEMIS() {
     setError(null)
     try {
       const [registrationsRes, studentsRes] = await Promise.all([
-        api('/api/kenya-features/nemis/export'),
+        api('/api/kenya-features/nemis/registrations'),
         api('/api/students')
       ])
 

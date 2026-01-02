@@ -285,16 +285,15 @@ secureRouter.put('/staff/:id', authorizeRole(['admin']), async (req, res) => {
   try {
     const { schoolId } = req;
     const { id } = req.params;
-    const { first_name, last_name, email, phone, department, class_assigned, subject, status, tsc_number, tpad_deadline, tpad_submitted } = req.body;
+    const { first_name, last_name, email, phone, department, class_assigned, subject, status } = req.body;
     
     const name = `${first_name} ${last_name}`.trim();
     
     const result = await query(
       `UPDATE users SET first_name = $1, last_name = $2, name = $3, email = $4, phone = $5, 
-              department = $6, class_assigned = $7, subject = $8, status = $9, tsc_number = $10,
-              tpad_deadline = $11, tpad_submitted = $12, updated_at = NOW()
-       WHERE id = $13 AND school_id = $14 RETURNING id, email, first_name, last_name, name, phone, role, status, tsc_number, tpad_deadline, tpad_submitted`,
-      [first_name, last_name, name, email, phone, department, class_assigned, subject, status, tsc_number, tpad_deadline, tpad_submitted, id, schoolId]
+              department = $6, class_assigned = $7, subject = $8, status = $9, updated_at = NOW()
+       WHERE id = $10 AND school_id = $11 RETURNING id, email, first_name, last_name, name, phone, role, status`,
+      [first_name, last_name, name, email, phone, department, class_assigned, subject, status, id, schoolId]
     );
     
     if (result.rows.length === 0) {
