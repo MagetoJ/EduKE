@@ -23,14 +23,14 @@ router.get('/', authorizeRole(['super_admin', 'admin', 'teacher', 'student', 'pa
       LEFT JOIN courses c ON te.course_id = c.id
       LEFT JOIN users u ON te.teacher_id = u.id
       LEFT JOIN timetable_periods tp ON te.period_id = tp.id
+      WHERE 1=1
     `;
-
     const params = [];
     let paramIndex = 1;
 
     // Filter by school if schoolId is provided
     if (schoolId) {
-      sql += ` WHERE te.school_id = $${paramIndex}`;
+      sql += ` AND te.school_id = $${paramIndex}`;
       params.push(schoolId);
       paramIndex++;
     }

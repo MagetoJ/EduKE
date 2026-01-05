@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { authorizeRole } = require('../middleware/auth');
 const {
+  getAllTeachers,
   getAttendanceRoster,
   markAttendance,
   submitGrade
@@ -10,6 +11,9 @@ const {
 // ===================
 // TEACHER ROUTES
 // ===================
+
+// Get all teachers for the school
+router.get('/', authorizeRole(['super_admin', 'admin', 'teacher', 'student', 'parent']), getAllTeachers);
 
 // Get attendance roster for a teacher's class
 router.get('/attendance/roster', authorizeRole(['teacher']), getAttendanceRoster);

@@ -79,6 +79,14 @@ const EMPTY_FORM: FormData = {
 
 const DAYS_OF_WEEK = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
+const CURRICULUM_LEVELS: Record<string, string[]> = {
+  cbc: [ 'PP1', 'PP2', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12' ],
+  '844': [ 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Form 1', 'Form 2', 'Form 3', 'Form 4' ],
+  british: [ 'Year 1', 'Year 2', 'Year 3', 'Year 4', 'Year 5', 'Year 6', 'Year 7', 'Year 8', 'Year 9', 'Year 10', 'Year 11', 'Year 12', 'Year 13' ],
+  american: [ 'Kindergarten', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12' ],
+  ib: [ 'PYP 1', 'PYP 2', 'PYP 3', 'PYP 4', 'PYP 5', 'MYP 1', 'MYP 2', 'MYP 3', 'MYP 4', 'MYP 5', 'DP 1', 'DP 2' ]
+}
+
 const colorStyles = {
   sky: 'bg-sky-200 border-l-sky-500 text-sky-900',
   orange: 'bg-orange-200 border-l-orange-500 text-orange-900',
@@ -121,6 +129,19 @@ export default function Timetable() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [selectedDay, setSelectedDay] = useState('monday')
+  
+  const [selectedGrade, setSelectedGrade] = useState('')
+  const [selectedSection, setSelectedSection] = useState('')
+  const [gradeLevels, setGradeLevels] = useState<string[]>([])
+
+  useEffect(() => {
+    if (user?.schoolCurriculum) {
+      const levels = CURRICULUM_LEVELS[user.schoolCurriculum] ?? CURRICULUM_LEVELS.cbc
+      setGradeLevels(levels)
+    } else {
+      setGradeLevels(CURRICULUM_LEVELS.cbc)
+    }
+  }, [user?.schoolCurriculum])
 
   useEffect(() => {
     const loadData = async () => {
@@ -133,8 +154,17 @@ export default function Timetable() {
       setIsLoading(true)
       setError(null)
       try {
+        let timetableUrl = '/api/timetable'
+        const queryParams = []
+        if (selectedGrade && selectedGrade !== 'all-grades') queryParams.push(`grade=${encodeURIComponent(selectedGrade)}`)
+        if (selectedSection) queryParams.push(`class_section=${encodeURIComponent(selectedSection)}`)
+        
+        if (queryParams.length > 0) {
+          timetableUrl += `?${queryParams.join('&')}`
+        }
+
         const [tableRes, courseRes, periodRes] = await Promise.all([
-          api('/api/timetable'),
+          api(timetableUrl),
           api('/api/courses'),
           api('/api/timetable/periods')
         ])
@@ -159,10 +189,24 @@ export default function Timetable() {
           console.warn('Failed to fetch teachers:', err)
         }
 
-        setTimetableData(tableData.data || [])
-        setCourses(courseData.data || [])
-        setTeachers(teacherData.data || [])
-        setPeriods(periodData.data || [])
+        const normalizedTimetable = (tableData.data || []).map((entry: TimetableEntry) => ({
+          ...entry,
+          id: String(entry.id),
+          course_id: String(entry.course_id),
+          teacher_id: String(entry.teacher_id),
+          period_id: String(entry.period_id)
+        }))
+
+        console.log('Timetable Data Loaded:', normalizedTimetable.length, 'entries');
+        if (normalizedTimetable.length > 0) {
+          console.log('Sample Entry:', normalizedTimetable[0]);
+        }
+        console.log('Periods Loaded:', periodData.data?.length || 0);
+
+        setTimetableData(normalizedTimetable)
+        setCourses((courseData.data || []).map((c: Course) => ({ ...c, id: String(c.id) })))
+        setTeachers((teacherData.data || []).map((t: Teacher) => ({ ...t, id: String(t.id) })))
+        setPeriods((periodData.data || []).map((p: TimePeriod) => ({ ...p, id: String(p.id) })))
 
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An unknown error occurred')
@@ -171,7 +215,7 @@ export default function Timetable() {
       }
     }
     loadData()
-  }, [api, user])
+  }, [api, user, selectedGrade, selectedSection])
 
   const handleFormChange = (field: keyof FormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }))
@@ -221,12 +265,16 @@ export default function Timetable() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to create entry')
 
-      const course = courses.find(c => c.id === data.data.course_id)
-      const period = periods.find(p => p.id === data.data.period_id)
-      const teacher = teachers.find(t => t.id === data.data.teacher_id)
+      const course = courses.find(c => String(c.id) === String(data.data.course_id))
+      const period = periods.find(p => String(p.id) === String(data.data.period_id))
+      const teacher = teachers.find(t => String(t.id) === String(data.data.teacher_id))
 
       const newEntry: TimetableEntry = {
         ...data.data,
+        id: String(data.data.id),
+        course_id: String(data.data.course_id),
+        teacher_id: String(data.data.teacher_id),
+        period_id: String(data.data.period_id),
         course_name: course?.name || 'Unknown',
         teacher_name: teacher?.name || 'N/A',
         period_name: period?.name || 'Unknown',
@@ -324,12 +372,16 @@ export default function Timetable() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to update entry')
 
-      const course = courses.find(c => c.id === data.data.course_id)
-      const period = periods.find(p => p.id === data.data.period_id)
-      const teacher = teachers.find(t => t.id === data.data.teacher_id)
+      const course = courses.find(c => String(c.id) === String(data.data.course_id))
+      const period = periods.find(p => String(p.id) === String(data.data.period_id))
+      const teacher = teachers.find(t => String(t.id) === String(data.data.teacher_id))
 
       const updatedEntry: TimetableEntry = {
         ...data.data,
+        id: String(data.data.id),
+        course_id: String(data.data.course_id),
+        teacher_id: String(data.data.teacher_id),
+        period_id: String(data.data.period_id),
         course_name: course?.name || 'Unknown',
         teacher_name: teacher?.name || 'N/A',
         period_name: period?.name || 'Unknown',
@@ -444,6 +496,31 @@ export default function Timetable() {
 
           <div className="bg-white p-3 sm:p-4 rounded-lg shadow-sm border border-slate-200 mb-6 flex flex-wrap items-center justify-between gap-2 sm:gap-4">
             <div className="flex items-center gap-2 sm:gap-4 flex-wrap w-full sm:w-auto">
+              {(user?.role === 'admin' || user?.role === 'super_admin') && (
+                <div className="flex items-center gap-2 mr-2">
+                  <div className="w-40">
+                    <Select value={selectedGrade} onValueChange={setSelectedGrade}>
+                      <SelectTrigger className="bg-slate-50 border-slate-200">
+                        <SelectValue placeholder="All Grades" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all-grades">All Grades</SelectItem>
+                        {gradeLevels.map(grade => (
+                          <SelectItem key={grade} value={grade}>{grade}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="w-32">
+                    <Input 
+                      placeholder="Section" 
+                      value={selectedSection} 
+                      onChange={(e) => setSelectedSection(e.target.value)}
+                      className="bg-slate-50 border-slate-200 h-10"
+                    />
+                  </div>
+                </div>
+              )}
               {canManage && (
                 <>
                   <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); setFormData(EMPTY_FORM); setFormError(null); }}>
@@ -478,7 +555,7 @@ export default function Timetable() {
                             <Select value={formData.period_id} onValueChange={(val) => handleFormChange('period_id', val)}>
                               <SelectTrigger><SelectValue placeholder="Select period" /></SelectTrigger>
                               <SelectContent>
-                                {periods.map(p => <SelectItem key={p.id} value={p.id}>{p.name} ({p.start_time} - {p.end_time})</SelectItem>)}
+                                {periods.map(p => <SelectItem key={p.id} value={String(p.id)}>{p.name} ({p.start_time} - {p.end_time})</SelectItem>)}
                               </SelectContent>
                             </Select>
                           </div>
@@ -487,7 +564,7 @@ export default function Timetable() {
                             <Select value={formData.course_id} onValueChange={(val) => handleFormChange('course_id', val)}>
                               <SelectTrigger><SelectValue placeholder="Select course" /></SelectTrigger>
                               <SelectContent>
-                                {courses.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                                {courses.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
                               </SelectContent>
                             </Select>
                           </div>
@@ -499,19 +576,21 @@ export default function Timetable() {
                                 {teachers.length === 0 ? (
                                   <SelectItem disabled value="no-teachers">No teachers available</SelectItem>
                                 ) : (
-                                  teachers.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)
+                                  teachers.map(t => <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>)
                                 )}
                               </SelectContent>
                             </Select>
                           </div>
                           <div className="space-y-2">
                             <Label htmlFor="grade">Grade</Label>
-                            <Input
-                              id="grade"
-                              value={formData.grade}
-                              onChange={(e) => handleFormChange('grade', e.target.value)}
-                              placeholder="e.g., Grade 10"
-                            />
+                            <Select value={formData.grade} onValueChange={(val) => handleFormChange('grade', val)}>
+                              <SelectTrigger><SelectValue placeholder="Select grade" /></SelectTrigger>
+                              <SelectContent>
+                                {gradeLevels.map(grade => (
+                                  <SelectItem key={grade} value={grade}>{grade}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </div>
                           <div className="space-y-2">
                             <Label htmlFor="classroom">Room</Label>
@@ -635,21 +714,34 @@ export default function Timetable() {
                 </div>
 
                 <div className="flex-1 relative overflow-y-auto">
-                  <div className="absolute inset-0 grid grid-cols-[60px_1fr_1fr_1fr_1fr_1fr] lg:grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] grid-rows-[repeat(auto-fit,100px_lg:120px)]">
-                    <div className="border-r border-slate-200 bg-slate-50 flex flex-col text-xs text-slate-400 font-medium text-right pr-2 lg:pr-3 pt-2 gap-[85px] lg:gap-[105px]">
+                  <div 
+                    className="absolute inset-0 grid grid-cols-[60px_1fr_1fr_1fr_1fr_1fr] lg:grid-cols-[80px_1fr_1fr_1fr_1fr_1fr]"
+                    style={{ 
+                      gridTemplateRows: `repeat(${Math.max(periods.length, 1)}, minmax(100px, 120px))` 
+                    }}
+                  >
+                    <div className="border-r border-slate-200 bg-slate-50 flex flex-col text-xs text-slate-400 font-medium text-right pr-2 lg:pr-3 pt-2">
                       {periods.map((p) => (
-                        <span key={p.id} className="text-xs">{p.start_time}</span>
+                        <div key={p.id} className="h-[100px] lg:h-[120px] flex flex-col justify-start">
+                          <span className="text-xs">{p.start_time.substring(0, 5)}</span>
+                        </div>
                       ))}
                     </div>
-                    {[...Array(25)].map((_, idx) => (
+                    {[...Array(periods.length * 5)].map((_, idx) => (
                       <div key={idx} className="border-r border-b border-slate-100 opacity-50" />
                     ))}
                   </div>
 
-                  <div className="absolute inset-0 grid grid-cols-[60px_1fr_1fr_1fr_1fr_1fr] lg:grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] grid-rows-[repeat(auto-fit,100px_lg:120px)] pointer-events-none">
+                  <div 
+                    className="absolute inset-0 grid grid-cols-[60px_1fr_1fr_1fr_1fr_1fr] lg:grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] pointer-events-none"
+                    style={{ 
+                      gridTemplateRows: `repeat(${Math.max(periods.length, 1)}, minmax(100px, 120px))` 
+                    }}
+                  >
                     {timetableData.map((entry, idx) => {
-                      const dayIndex = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].indexOf(entry.day_of_week);
-                      const periodIndex = periods.findIndex(p => p.id === entry.period_id);
+                      const dayLower = (entry.day_of_week || '').trim().toLowerCase();
+                      const dayIndex = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].indexOf(dayLower);
+                      const periodIndex = periods.findIndex(p => String(p.id) === String(entry.period_id));
                       const color = getColorForCourse(idx) as keyof typeof colorStyles
                       
                       if (dayIndex < 0 || periodIndex < 0) return null
@@ -680,7 +772,10 @@ export default function Timetable() {
 
               <div className="md:hidden space-y-3">
                 {periods.map((period) => {
-                  const dayEntries = timetableData.filter(e => e.day_of_week === selectedDay && e.period_id === period.id);
+                  const dayEntries = timetableData.filter(e => {
+                    const dayLower = (e.day_of_week || '').trim().toLowerCase();
+                    return dayLower === selectedDay.toLowerCase() && String(e.period_id) === String(period.id);
+                  });
                   return (
                     <div key={period.id} className="bg-white rounded-lg border border-slate-200 p-3 sm:p-4">
                       <div className="font-semibold text-sm text-slate-700 mb-2">
@@ -755,7 +850,7 @@ export default function Timetable() {
                   <Select value={formData.period_id} onValueChange={(val) => handleFormChange('period_id', val)}>
                     <SelectTrigger><SelectValue placeholder="Select period" /></SelectTrigger>
                     <SelectContent>
-                      {periods.map(p => <SelectItem key={p.id} value={p.id}>{p.name} ({p.start_time} - {p.end_time})</SelectItem>)}
+                      {periods.map(p => <SelectItem key={p.id} value={String(p.id)}>{p.name} ({p.start_time} - {p.end_time})</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -764,7 +859,7 @@ export default function Timetable() {
                   <Select value={formData.course_id} onValueChange={(val) => handleFormChange('course_id', val)}>
                     <SelectTrigger><SelectValue placeholder="Select course" /></SelectTrigger>
                     <SelectContent>
-                      {courses.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                      {courses.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -776,19 +871,21 @@ export default function Timetable() {
                       {teachers.length === 0 ? (
                         <SelectItem disabled value="no-teachers">No teachers available</SelectItem>
                       ) : (
-                        teachers.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)
+                        teachers.map(t => <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>)
                       )}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="edit_grade">Grade</Label>
-                  <Input
-                    id="edit_grade"
-                    value={formData.grade}
-                    onChange={(e) => handleFormChange('grade', e.target.value)}
-                    placeholder="e.g., Grade 10"
-                  />
+                  <Select value={formData.grade} onValueChange={(val) => handleFormChange('grade', val)}>
+                    <SelectTrigger><SelectValue placeholder="Select grade" /></SelectTrigger>
+                    <SelectContent>
+                      {gradeLevels.map(grade => (
+                        <SelectItem key={grade} value={grade}>{grade}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="edit_room">Room</Label>
