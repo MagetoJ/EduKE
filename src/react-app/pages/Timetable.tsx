@@ -22,6 +22,7 @@ type TimetableEntry = {
   id: string;
   day_of_week: string;
   grade: string;
+  class_section?: string;
   classroom: string;
   course_name: string;
   teacher_name: string;
@@ -58,6 +59,7 @@ type FormData = {
   period_id: string;
   day_of_week: string;
   grade: string;
+  class_section: string;
   classroom: string;
 };
 
@@ -74,6 +76,7 @@ const EMPTY_FORM: FormData = {
   period_id: '',
   day_of_week: 'monday',
   grade: '',
+  class_section: '',
   classroom: ''
 };
 
@@ -169,9 +172,18 @@ export default function Timetable() {
           api('/api/timetable/periods')
         ])
 
-        if (!tableRes.ok) throw new Error('Failed to fetch timetable')
-        if (!courseRes.ok) throw new Error('Failed to fetch courses')
-        if (!periodRes.ok) throw new Error('Failed to fetch time periods')
+        if (!tableRes.ok) {
+          const errorData = await tableRes.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Failed to fetch timetable');
+        }
+        if (!courseRes.ok) {
+          const errorData = await courseRes.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Failed to fetch courses');
+        }
+        if (!periodRes.ok) {
+          const errorData = await periodRes.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Failed to fetch time periods');
+        }
 
         const tableData = await tableRes.json()
         const courseData = await courseRes.json()
@@ -194,18 +206,15 @@ export default function Timetable() {
           id: String(entry.id),
           course_id: String(entry.course_id),
           teacher_id: String(entry.teacher_id),
-          period_id: String(entry.period_id)
+          period_id: String(entry.period_id),
+          day_of_week: (entry.day_of_week || '').trim().toLowerCase()
         }))
 
-        console.log('Timetable Data Loaded:', normalizedTimetable.length, 'entries');
-        if (normalizedTimetable.length > 0) {
-          console.log('Sample Entry:', normalizedTimetable[0]);
-        }
-        console.log('Periods Loaded:', periodData.data?.length || 0);
-
+        console.log('Normalized Timetable Data:', normalizedTimetable)
         setTimetableData(normalizedTimetable)
         setCourses((courseData.data || []).map((c: Course) => ({ ...c, id: String(c.id) })))
         setTeachers((teacherData.data || []).map((t: Teacher) => ({ ...t, id: String(t.id) })))
+        console.log('Periods Data:', periodData.data)
         setPeriods((periodData.data || []).map((p: TimePeriod) => ({ ...p, id: String(p.id) })))
 
       } catch (err) {
@@ -348,6 +357,7 @@ export default function Timetable() {
       period_id: entry.period_id,
       day_of_week: entry.day_of_week,
       grade: entry.grade,
+      class_section: entry.class_section || '',
       classroom: entry.classroom,
     })
     setIsEditDialogOpen(true)
@@ -434,7 +444,7 @@ export default function Timetable() {
     </div>
   )
 
-  const canManage = user?.role === 'admin'
+  const canManage = user?.role === 'admin' || user?.role === 'super_admin'
   
   const getHeaderTitle = () => {
     if (user?.role === 'student') return 'MY CLASS SCHEDULE'
@@ -593,6 +603,15 @@ export default function Timetable() {
                             </Select>
                           </div>
                           <div className="space-y-2">
+                            <Label htmlFor="class_section">Section (Stream)</Label>
+                            <Input
+                              id="class_section"
+                              value={formData.class_section}
+                              onChange={(e) => handleFormChange('class_section', e.target.value)}
+                              placeholder="e.g., North, West, A, B"
+                            />
+                          </div>
+                          <div className="space-y-2">
                             <Label htmlFor="classroom">Room</Label>
                             <Input
                               id="classroom"
@@ -749,7 +768,7 @@ export default function Timetable() {
                       return (
                         <div
                           key={entry.id}
-                          className={`col-start-${dayIndex + 2} row-start-${periodIndex + 1} p-1 lg:p-2 pointer-events-auto`}
+                          className="p-1 lg:p-2 pointer-events-auto"
                           style={{
                             gridColumn: dayIndex + 2,
                             gridRow: periodIndex + 1
@@ -789,7 +808,10 @@ export default function Timetable() {
                             const color = getColorForCourse(idx) as keyof typeof colorStyles
                             return (
                               <div key={entry.id} className={`rounded-md p-3 text-sm ${colorStyles[color]}`}>
-                                <div className="font-semibold mb-1">{entry.course_name}</div>
+                                <div className="font-semibold mb-1">
+                                  {entry.course_name}
+                                  {entry.class_section && <span className="ml-2 text-[10px] opacity-70">({entry.class_section})</span>}
+                                </div>
                                 <div className={`text-xs space-y-1 ${labelColorStyles[color]}`}>
                                   <div className="flex items-center gap-1">
                                     <User size={12} /> {entry.teacher_name || 'N/A'}
@@ -888,6 +910,15 @@ export default function Timetable() {
                   </Select>
                 </div>
                 <div className="space-y-2">
+                  <Label htmlFor="edit_class_section">Section (Stream)</Label>
+                  <Input
+                    id="edit_class_section"
+                    value={formData.class_section}
+                    onChange={(e) => handleFormChange('class_section', e.target.value)}
+                    placeholder="e.g., North, West, A, B"
+                  />
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="edit_room">Room</Label>
                   <Input
                     id="edit_room"
@@ -941,6 +972,9 @@ function ClassCardWithActions({ entry, colorStyle, labelColorStyle, canManage, o
       </div>
 
       <div className={`text-xs space-y-0.5 lg:space-y-1 ${labelColorStyle} font-medium opacity-90`}>
+        {entry.class_section && (
+          <div className="font-bold text-[10px] uppercase mb-1">Section: {entry.class_section}</div>
+        )}
         <div className="flex items-center gap-0.5 lg:gap-1 truncate">
           <User size={10} className="flex-shrink-0 lg:w-3 lg:h-3" /> <span className="truncate text-xs">{entry.teacher_name || 'N/A'}</span>
         </div>

@@ -310,8 +310,8 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-3">
-            {pendingLeaves.slice(0, 5).map((leave) => (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {pendingLeaves.slice(0, 6).map((leave) => (
               <Card key={leave.id} className="hover:shadow-md transition-shadow">
                 <CardContent className="pt-6">
                   <div className="flex items-center justify-between">

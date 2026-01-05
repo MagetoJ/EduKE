@@ -131,8 +131,8 @@ router.get('/periods', authorizeRole(['super_admin', 'admin', 'teacher', 'studen
 
     let result = await query(sql, params);
 
-    // If user is admin/super_admin, ensure default periods exist
-    if (user.role === 'admin' || user.role === 'super_admin') {
+    // If user is admin/super_admin and we have a school context, ensure default periods exist
+    if ((user.role === 'admin' || user.role === 'super_admin') && schoolId) {
       const defaultPeriods = [
         { name: 'Period 1', start_time: '08:00', end_time: '09:00', is_break: false },
         { name: 'Period 2', start_time: '09:00', end_time: '10:00', is_break: false },
@@ -172,7 +172,7 @@ router.get('/periods', authorizeRole(['super_admin', 'admin', 'teacher', 'studen
   }
 });
 
-router.post('/', authorizeRole(['admin']), async (req, res) => {
+router.post('/', authorizeRole(['admin', 'super_admin']), async (req, res) => {
   try {
     const {
       course_id,
@@ -219,7 +219,7 @@ router.post('/', authorizeRole(['admin']), async (req, res) => {
   }
 });
 
-router.put('/:id', authorizeRole(['admin']), async (req, res) => {
+router.put('/:id', authorizeRole(['admin', 'super_admin']), async (req, res) => {
   try {
     const { id } = req.params;
     const {
@@ -267,7 +267,7 @@ router.put('/:id', authorizeRole(['admin']), async (req, res) => {
 });
 
 // Delete timetable entry
-router.delete('/:id', authorizeRole(['admin']), async (req, res) => {
+router.delete('/:id', authorizeRole(['admin', 'super_admin']), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -315,7 +315,7 @@ router.post('/periods', authorizeRole(['super_admin', 'admin', 'teacher']), asyn
   }
 });
 
-router.put('/periods/:id', authorizeRole(['admin']), async (req, res) => {
+router.put('/periods/:id', authorizeRole(['admin', 'super_admin']), async (req, res) => {
   try {
     const { id } = req.params;
     const { period_name, start_time, end_time, is_break } = req.body;
@@ -340,7 +340,7 @@ router.put('/periods/:id', authorizeRole(['admin']), async (req, res) => {
 });
 
 // Delete timetable period
-router.delete('/periods/:id', authorizeRole(['admin']), async (req, res) => {
+router.delete('/periods/:id', authorizeRole(['admin', 'super_admin']), async (req, res) => {
   try {
     const { id } = req.params;
 

@@ -994,16 +994,23 @@ secureRouter.get('/dashboard/stats', authorizeRole(['admin', 'teacher', 'student
     const { schoolId, user } = req;
     
     if (user.role === 'admin') {
-      const students = await query('SELECT COUNT(*) FROM students WHERE school_id = $1 AND status = $2', [schoolId, 'active']);
-      const teachers = await query('SELECT COUNT(*) FROM users WHERE school_id = $1 AND role = $2', [schoolId, 'teacher']);
-      const courses = await query('SELECT COUNT(*) FROM courses WHERE school_id = $1 AND is_active = $2', [schoolId, true]);
-      const fees = await query('SELECT SUM(amount_due) as total_due, SUM(amount_paid) as total_paid FROM student_fees WHERE school_id = $1', [schoolId]);
-      
+      if (!schoolId) {
+        return res.status(400).json({ success: false, error: 'School ID is required' });
+      }
+
+      const [studentsResult, staffResult, feesResult, gradesResult] = await Promise.all([
+        query('SELECT COUNT(*) as count, SUM(CASE WHEN LOWER(status) = \'active\' THEN 1 ELSE 0 END) as active_count FROM students WHERE school_id = $1', [schoolId]),
+        query('SELECT COUNT(*) as count FROM users WHERE school_id = $1 AND role IN (\'admin\', \'teacher\')', [schoolId]),
+        query('SELECT COALESCE(SUM(amount_due), 0) as total_outstanding FROM student_fees WHERE school_id = $1 AND LOWER(payment_status) != \'paid\'', [schoolId]),
+        query('SELECT COUNT(DISTINCT NULLIF(grade, \'\')) as count FROM students WHERE school_id = $1 AND grade IS NOT NULL AND grade != \'\'', [schoolId])
+      ]);
+
       res.json({ success: true, data: {
-        students: parseInt(students.rows[0].count),
-        teachers: parseInt(teachers.rows[0].count),
-        courses: parseInt(courses.rows[0].count),
-        fees: fees.rows[0]
+        totalStudents: parseInt(studentsResult.rows[0].count) || 0,
+        activeStudents: parseInt(studentsResult.rows[0].active_count) || 0,
+        totalStaff: parseInt(staffResult.rows[0].count) || 0,
+        outstandingFees: parseFloat(feesResult.rows[0].total_outstanding) || 0,
+        uniqueCourses: parseInt(gradesResult.rows[0].count) || 0
       }});
     } else if (user.role === 'teacher') {
       const courses = await query('SELECT COUNT(*) FROM courses WHERE school_id = $1 AND teacher_id = $2', [schoolId, user.id]);
@@ -1018,7 +1025,7 @@ secureRouter.get('/dashboard/stats', authorizeRole(['admin', 'teacher', 'student
     }
   } catch (err) {
     console.error('Error fetching dashboard stats:', err);
-    res.status(500).json({ success: false, error: 'Failed to fetch stats' });
+    res.status(500).json({ success: false, error: 'Failed to fetch dashboard stats' });
   }
 });
 
@@ -1205,43 +1212,6 @@ secureRouter.get('/parent/children', authorizeRole(['parent']), async (req, res)
   } catch (err) {
     console.error('Error fetching parent children:', err);
     res.status(500).json({ success: false, error: 'Failed to fetch children' });
-  }
-});
-
-secureRouter.get('/dashboard/stats', authorizeRole(['admin']), async (req, res) => {
-  try {
-    const { schoolId } = req;
-
-    if (!schoolId) {
-      return res.status(400).json({ success: false, error: 'School ID is required' });
-    }
-
-    const [studentsResult, staffResult, feesResult, gradesResult] = await Promise.all([
-      query('SELECT COUNT(*) as count, SUM(CASE WHEN LOWER(status) = \'active\' THEN 1 ELSE 0 END) as active_count FROM students WHERE school_id = $1', [schoolId]),
-      query('SELECT COUNT(*) as count FROM staff WHERE school_id = $1', [schoolId]),
-      query('SELECT COALESCE(SUM(amount_due), 0) as total_outstanding FROM student_fees WHERE school_id = $1 AND LOWER(payment_status) != \'paid\'', [schoolId]),
-      query('SELECT COUNT(DISTINCT NULLIF(grade, \'\')) as count FROM students WHERE school_id = $1 AND grade IS NOT NULL AND grade != \'\'', [schoolId])
-    ]);
-
-    const totalStudents = parseInt(studentsResult.rows[0].count) || 0;
-    const activeStudents = parseInt(studentsResult.rows[0].active_count) || 0;
-    const totalStaff = parseInt(staffResult.rows[0].count) || 0;
-    const outstandingFees = parseFloat(feesResult.rows[0].total_outstanding) || 0;
-    const uniqueCourses = parseInt(gradesResult.rows[0].count) || 0;
-
-    res.json({
-      success: true,
-      data: {
-        totalStudents,
-        activeStudents,
-        totalStaff,
-        outstandingFees,
-        uniqueCourses
-      }
-    });
-  } catch (err) {
-    console.error('Error fetching dashboard stats:', err);
-    res.status(500).json({ success: false, error: 'Failed to fetch dashboard stats' });
   }
 });
 
