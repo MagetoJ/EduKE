@@ -3,12 +3,25 @@ import { useAuth, useApi } from '../contexts/AuthContext'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Loader2, Calendar, Target, BarChart3, Award } from 'lucide-react'
 
+type Assignment = {
+  id: string;
+  title: string;
+  course_name: string;
+  due_date: string;
+}
+
+type Fee = {
+  id: string;
+  amount_due: string | number;
+  amount_paid: string | number;
+}
+
 export default function Progress() {
   const { user } = useAuth()
   const api = useApi()
   
-  const [assignments, setAssignments] = useState<any[]>([])
-  const [fees, setFees] = useState<any[]>([])
+  const [assignments, setAssignments] = useState<Assignment[]>([])
+  const [fees, setFees] = useState<Fee[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -67,8 +80,8 @@ export default function Progress() {
     )
   }
   
-  const totalFeesDue = fees.reduce((sum: number, fee: any) => sum + (Number(fee.amount_due) || 0), 0)
-  const totalPaid = fees.reduce((sum: number, fee: any) => sum + (Number(fee.amount_paid) || 0), 0)
+  const totalFeesDue = fees.reduce((sum: number, fee: Fee) => sum + (Number(fee.amount_due) || 0), 0)
+  const totalPaid = fees.reduce((sum: number, fee: Fee) => sum + (Number(fee.amount_paid) || 0), 0)
   const upcomingAssignments = assignments.filter(a => new Date(a.due_date) > new Date()).slice(0, 3)
 
   const renderParentView = () => (

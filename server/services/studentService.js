@@ -1,5 +1,7 @@
 const bcrypt = require('bcrypt');
 const { transaction, query } = require('../db/connection');
+const { encrypt, decrypt } = require('../utils/security');
+const { logActivity } = require('./auditService');
 
 // --- NEW HELPER FUNCTION ---
 // Generates an admission number based on grade.
@@ -9,6 +11,29 @@ const generateAdmissionNumber = (grade) => {
   const year = new Date().getFullYear().toString().slice(-2); // 2025 -> "25"
   const random = Math.floor(1000 + Math.random() * 9000); // 4-digit random number
   return `G${gradeCode}-${year}-${random}`;
+};
+
+const SENSITIVE_FIELDS = ['phone', 'address', 'medical_conditions', 'allergies', 'emergency_contact_phone', 'national_id', 'student_id_number', 'parent_phone'];
+
+const encryptStudentPii = (student) => {
+  const encrypted = { ...student };
+  SENSITIVE_FIELDS.forEach(field => {
+    if (encrypted[field]) {
+      encrypted[field] = encrypt(encrypted[field]);
+    }
+  });
+  return encrypted;
+};
+
+const decryptStudentPii = (student) => {
+  if (!student) return student;
+  const decrypted = { ...student };
+  SENSITIVE_FIELDS.forEach(field => {
+    if (decrypted[field]) {
+      decrypted[field] = decrypt(decrypted[field]);
+    }
+  });
+  return decrypted;
 };
 
 const execQuery = async (client, sql, params, isPostgres) => {
@@ -40,7 +65,12 @@ const execQuery = async (client, sql, params, isPostgres) => {
 };
 
 const createStudent = async (client, studentData, school_id, admissionNumber, passwordHash, isPostgres) => {
-  const { first_name, last_name, email, phone, date_of_birth, gender, address, grade, enrollment_date } = studentData;
+  const { 
+    first_name, last_name, email, phone, date_of_birth, gender, 
+    address, grade, enrollment_date, national_id, student_id_number,
+    emergency_contact_phone, medical_conditions, allergies
+  } = studentData;
+  const encryptedStudent = encryptStudentPii(studentData);
 
   try {
     const userResult = await execQuery(
@@ -64,12 +94,27 @@ const createStudent = async (client, studentData, school_id, admissionNumber, pa
     const insertResult = await execQuery(
       client,
       isPostgres
-        ? `INSERT INTO students (school_id, user_id, first_name, last_name, email, phone, date_of_birth, gender, address, admission_number, grade, enrollment_date, status)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'active')
+        ? `INSERT INTO students (
+             school_id, user_id, first_name, last_name, email, phone, 
+             date_of_birth, gender, address, admission_number, grade, 
+             enrollment_date, status, national_id, student_id_number,
+             emergency_contact_phone, medical_conditions, allergies
+           )
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'active', $13, $14, $15, $16, $17)
            RETURNING *`
-        : `INSERT INTO students (school_id, user_id, first_name, last_name, email, phone, date_of_birth, gender, address, admission_number, grade, enrollment_date, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
-      [school_id, studentUserId, first_name, last_name, email, phone, date_of_birth, gender, address, admissionNumber, grade, enrollment_date],
+        : `INSERT INTO students (
+             school_id, user_id, first_name, last_name, email, phone, 
+             date_of_birth, gender, address, admission_number, grade, 
+             enrollment_date, status, national_id, student_id_number,
+             emergency_contact_phone, medical_conditions, allergies
+           )
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)`,
+      [
+        school_id, studentUserId, first_name, last_name, email, encryptedStudent.phone, 
+        date_of_birth, gender, encryptedStudent.address, admissionNumber, grade, 
+        enrollment_date, encryptedStudent.national_id, encryptedStudent.student_id_number,
+        encryptedStudent.emergency_contact_phone, encryptedStudent.medical_conditions, encryptedStudent.allergies
+      ],
       isPostgres
     );
 
@@ -82,22 +127,22 @@ const createStudent = async (client, studentData, school_id, admissionNumber, pa
     }
 
     if (isPostgres) {
-      return insertResult.rows[0];
+      return decryptStudentPii(insertResult.rows[0]);
     }
 
     const studentId = insertResult.lastID;
-    const studentData = await execQuery(
+    const studentDataResult = await execQuery(
       client,
       `SELECT * FROM students WHERE id = ?`,
       [studentId],
       isPostgres
     );
 
-    if (!studentData.rows || studentData.rows.length === 0) {
+    if (!studentDataResult.rows || studentDataResult.rows.length === 0) {
       throw new Error('Failed to retrieve created student record');
     }
 
-    return studentData.rows[0];
+    return decryptStudentPii(studentDataResult.rows[0]);
   } catch (error) {
     if (error.code === '23505' || error.message.includes('UNIQUE constraint failed')) {
       throw new Error(`Email address already exists: ${email}`);
@@ -146,7 +191,7 @@ const createOrLinkParent = async (client, parentData, studentId, school_id, pass
              RETURNING id`
           : `INSERT INTO users (school_id, email, password_hash, name, phone, role, status, must_change_password)
              VALUES (?, ?, ?, ?, ?, 'parent', 'active', 1)`,
-        [school_id, parent_email, passwordHash, parent_name, parent_phone],
+        [school_id, parent_email, passwordHash, parent_name, encrypt(parent_phone)],
         isPostgres
       );
       
@@ -191,7 +236,7 @@ const createOrLinkParent = async (client, parentData, studentId, school_id, pass
 };
 
 
-const createStudentAndParent = async (studentData, school_id) => {
+const createStudentAndParent = async (studentData, school_id, userContext = {}) => {
   if (!studentData.first_name || !studentData.last_name || !studentData.email || !studentData.grade) {
     throw new Error('Missing required fields: first_name, last_name, email, grade');
   }
@@ -200,7 +245,7 @@ const createStudentAndParent = async (studentData, school_id) => {
     throw new Error('Missing required parent fields: parent_email, parent_name');
   }
 
-  return transaction(async (client) => {
+  const result = await transaction(async (client) => {
     const isPostgres = client.query !== undefined;
     
     const admissionNumber = generateAdmissionNumber(studentData.grade);
@@ -216,6 +261,20 @@ const createStudentAndParent = async (studentData, school_id) => {
       parent_id: parentUserId
     };
   });
+
+  // Log the activity
+  await logActivity({
+    schoolId: school_id,
+    userId: userContext.userId,
+    action: 'create_student',
+    entityType: 'student',
+    entityId: result.id,
+    description: `Created student ${result.first_name} ${result.last_name} with admission number ${result.admission_number}`,
+    ipAddress: userContext.ip,
+    userAgent: userContext.userAgent
+  });
+
+  return result;
 };
 
 // Get all students for a school
@@ -255,7 +314,7 @@ const getStudents = async (schoolId, filters = {}) => {
   sql += ` ORDER BY s.first_name, s.last_name`;
 
   const result = await query(sql, params);
-  return result.rows;
+  return result.rows.map(decryptStudentPii);
 };
 
 // Add this new function
@@ -274,7 +333,7 @@ const getStudentsBySchool = async (school_id) => {
   `,
     [school_id]
   );
-  return result.rows;
+  return result.rows.map(decryptStudentPii);
 };
 
 // Get student by ID
@@ -292,19 +351,21 @@ const getStudentById = async (id, schoolId) => {
   `,
     [id, schoolId]
   );
-  return result.rows[0];
+  return decryptStudentPii(result.rows[0]);
 };
 
 // Update student
-const updateStudent = async (id, schoolId, updateData) => {
+const updateStudent = async (id, schoolId, updateData, userContext = {}) => {
   const fields = [];
   const values = [];
   let paramIndex = 1;
 
-  Object.keys(updateData).forEach(key => {
-    if (updateData[key] !== undefined) {
+  const encryptedData = encryptStudentPii(updateData);
+
+  Object.keys(encryptedData).forEach(key => {
+    if (encryptedData[key] !== undefined) {
       fields.push(`${key} = $${paramIndex}`);
-      values.push(updateData[key]);
+      values.push(encryptedData[key]);
       paramIndex++;
     }
   });
@@ -320,16 +381,50 @@ const updateStudent = async (id, schoolId, updateData) => {
     values
   );
 
-  return result.rows[0];
+  if (result.rows.length === 0) return null;
+
+  const student = decryptStudentPii(result.rows[0]);
+
+  // Log the activity
+  await logActivity({
+    schoolId,
+    userId: userContext.userId,
+    action: 'update_student',
+    entityType: 'student',
+    entityId: id,
+    description: `Updated student ${student.first_name} ${student.last_name}`,
+    metadata: { fields_updated: Object.keys(updateData) },
+    ipAddress: userContext.ip,
+    userAgent: userContext.userAgent
+  });
+
+  return student;
 };
 
 // Delete student (soft delete)
-const deleteStudent = async (id, schoolId) => {
+const deleteStudent = async (id, schoolId, userContext = {}) => {
   const result = await query(
     'UPDATE students SET status = $1 WHERE id = $2 AND school_id = $3 RETURNING *',
     ['inactive', id, schoolId]
   );
-  return result.rows[0];
+
+  if (result.rows.length === 0) return null;
+
+  const student = decryptStudentPii(result.rows[0]);
+
+  // Log the activity
+  await logActivity({
+    schoolId,
+    userId: userContext.userId,
+    action: 'delete_student',
+    entityType: 'student',
+    entityId: id,
+    description: `Soft-deleted student ${student.first_name} ${student.last_name}`,
+    ipAddress: userContext.ip,
+    userAgent: userContext.userAgent
+  });
+
+  return student;
 };
 
 // Get student performance

@@ -28,6 +28,16 @@ type UserOption = {
   email: string;
 }
 
+type StudentData = {
+  user_id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  parent_id?: string;
+  parent_email?: string;
+  parent_name?: string;
+}
+
 // Mock data removed
 
 export default function Communications() {
@@ -72,14 +82,14 @@ export default function Communications() {
 
         if (staffRes.ok) {
           const staffData = await staffRes.json()
-          staffData.data?.forEach((s: any) => {
+          staffData.data?.forEach((s: UserOption) => {
             userOptions.push({ id: s.id, name: s.name, role: s.role, email: s.email })
           })
         }
 
         if (studentRes.ok) {
           const studentData = await studentRes.json()
-          studentData.data?.forEach((s: any) => {
+          studentData.data?.forEach((s: StudentData) => {
             // Add student
             userOptions.push({ id: s.user_id, name: `${s.first_name} ${s.last_name}`, role: 'student', email: s.email })
             // Add parent (if they exist)

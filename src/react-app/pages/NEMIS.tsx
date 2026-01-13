@@ -1,4 +1,4 @@
-import { useEffect, useState, FormEvent } from 'react'
+import { useEffect, useState, FormEvent, useCallback } from 'react'
 import { Plus, Search, Download, AlertCircle, Loader2, CheckCircle, Clock } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -20,6 +20,13 @@ type NEMISRegistration = {
   created_at: string;
 }
 
+interface Student {
+  id: number | string;
+  first_name: string;
+  last_name: string;
+  student_id_number?: string;
+}
+
 const initialForm = {
   student_id: '',
   upi: '',
@@ -32,7 +39,7 @@ export default function NEMIS() {
 
   const [activeTab, setActiveTab] = useState('registrations')
   const [registrations, setRegistrations] = useState<NEMISRegistration[]>([])
-  const [students, setStudents] = useState<any[]>([])
+  const [students, setStudents] = useState<Student[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -43,11 +50,7 @@ export default function NEMIS() {
   const [searchTerm, setSearchTerm] = useState('')
   const [isExporting, setIsExporting] = useState(false)
 
-  useEffect(() => {
-    loadData()
-  }, [])
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setIsLoading(true)
     setError(null)
     try {
@@ -72,7 +75,11 @@ export default function NEMIS() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [api])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()

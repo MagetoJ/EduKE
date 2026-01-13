@@ -139,6 +139,13 @@ CREATE TABLE IF NOT EXISTS users (
     must_change_password BOOLEAN DEFAULT FALSE,
     last_login_at TIMESTAMP,
     
+    -- MFA and Security
+    mfa_enabled BOOLEAN DEFAULT FALSE,
+    mfa_secret VARCHAR(255),
+    failed_login_attempts INT DEFAULT 0,
+    last_failed_login_at TIMESTAMP,
+    account_locked_until TIMESTAMP,
+    
     -- Employment info (for staff/teachers)
     hire_date DATE,
     termination_date DATE,

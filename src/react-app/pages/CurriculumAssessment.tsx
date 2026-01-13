@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
@@ -31,11 +31,7 @@ export default function CurriculumAssessment() {
   const [searchTerm] = useState('')
   const [selectedAcademicYear, setSelectedAcademicYear] = useState('')
 
-  useEffect(() => {
-    loadData()
-  }, [curriculum, selectedAcademicYear, searchTerm])
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setIsLoading(true)
     setError(null)
     try {
@@ -56,7 +52,11 @@ export default function CurriculumAssessment() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [apiFetch, selectedAcademicYear])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData, curriculum, searchTerm])
 
   const handleGenerateMeritList = async () => {
     if (!selectedAcademicYear) {

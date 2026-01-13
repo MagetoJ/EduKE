@@ -8,8 +8,8 @@ const { query } = require('../db/connection');
 require('dotenv').config();
 
 const SUPER_ADMIN = {
-  email: 'superadmin@eduke.com',
-  password: 'SuperAdmin2024!',
+  email: process.env.SUPER_ADMIN_USERNAME || 'superadmin@eduke.com',
+  password: process.env.SUPER_ADMIN_PASSWORD || 'SuperAdmin2024!',
   firstName: 'Super',
   lastName: 'Admin',
   name: 'Super Admin'
@@ -30,7 +30,7 @@ async function createSuperAdmin() {
     if (existing.rows.length > 0) {
       console.log('⚠️  Super admin already exists!');
       console.log('\n📧 Email:', SUPER_ADMIN.email);
-      console.log('🔑 Password: SuperAdmin2024!');
+      console.log('🔑 Password: ' + '*'.repeat(SUPER_ADMIN.password.length));
       console.log('\nℹ️  You can use these credentials to login.');
       console.log('='.repeat(60) + '\n');
       process.exit(0);
@@ -43,8 +43,8 @@ async function createSuperAdmin() {
     const result = await query(
       `INSERT INTO users (
         email, password_hash, first_name, last_name, name,
-        role, status, is_verified, email_verified_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+        role, status, is_verified, email_verified_at, school_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP, $9)`,
       [
         SUPER_ADMIN.email,
         passwordHash,
@@ -53,13 +53,14 @@ async function createSuperAdmin() {
         SUPER_ADMIN.name,
         'super_admin',
         'active',
-        1
+        true,
+        null
       ]
     );
 
     // Get the created user
     const userResult = await query(
-      'SELECT id, email, first_name, last_name, role FROM users WHERE email = ?',
+      'SELECT id, email, first_name, last_name, role FROM users WHERE email = $1',
       [SUPER_ADMIN.email]
     );
 

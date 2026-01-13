@@ -37,6 +37,8 @@ const payrollRoutes = require('./routes/payroll');
 // Import middleware
 const { authenticateToken } = require('./middleware/auth');
 const { tenantContext } = require('./middleware/tenant');
+const { apiLimiter, authLimiter } = require('./middleware/rateLimiter');
+const { auditLogger } = require('./middleware/auditLogger');
 
 const app = express();
 
@@ -82,29 +84,29 @@ app.get('/health', async (req, res) => {
 });
 
 // API Routes
-app.use('/api/auth', authRoutes);
-app.use('/api', tenantContext, publicRouter);
-app.use('/api/students', authenticateToken, tenantContext, studentsRoutes);
-app.use('/api/assignments', authenticateToken, tenantContext, assignmentsRoutes);
-app.use('/api', authenticateToken, tenantContext, schoolsRoutes);
-app.use('/api', authenticateToken, tenantContext, subscriptionRoutes);
-app.use('/api', authenticateToken, tenantContext, examsRoutes);
-app.use('/api', authenticateToken, tenantContext, coursesRoutes);
-app.use('/api/teachers', authenticateToken, tenantContext, teacherRoutes);
+app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api', apiLimiter, tenantContext, auditLogger, publicRouter);
+app.use('/api/students', apiLimiter, authenticateToken, tenantContext, auditLogger, studentsRoutes);
+app.use('/api/assignments', apiLimiter, authenticateToken, tenantContext, auditLogger, assignmentsRoutes);
+app.use('/api', apiLimiter, authenticateToken, tenantContext, auditLogger, schoolsRoutes);
+app.use('/api', apiLimiter, authenticateToken, tenantContext, auditLogger, subscriptionRoutes);
+app.use('/api', apiLimiter, authenticateToken, tenantContext, auditLogger, examsRoutes);
+app.use('/api', apiLimiter, authenticateToken, tenantContext, auditLogger, coursesRoutes);
+app.use('/api/teachers', apiLimiter, authenticateToken, tenantContext, auditLogger, teacherRoutes);
 
-app.use('/api/timetable', authenticateToken, tenantContext, timetableRoutes);
-app.use('/api/messages', authenticateToken, tenantContext, messagesRoutes);
-app.use('/api', authenticateToken, tenantContext, notificationsRoutes);
-app.use('/api', authenticateToken, tenantContext, secureRouter);
-app.use('/api', authenticateToken, tenantContext, completeRoutes);
-app.use('/api/kenya-features', authenticateToken, tenantContext, kenyaFeaturesRoutes);
-app.use('/api/transport', authenticateToken, tenantContext, transportBoardingRoutes);
-app.use('/api/curriculum', authenticateToken, tenantContext, curriculumAssessmentRoutes);
-app.use('/api/payments', authenticateToken, tenantContext, paymentRoutes);
-app.use('/api/gradebook', authenticateToken, tenantContext, gradebookRoutes);
-app.use('/api/report-cards', authenticateToken, tenantContext, reportCardRoutes);
-app.use('/api/attendance', authenticateToken, tenantContext, attendanceRoutes);
-app.use('/api/payroll', authenticateToken, tenantContext, payrollRoutes);
+app.use('/api/timetable', apiLimiter, authenticateToken, tenantContext, auditLogger, timetableRoutes);
+app.use('/api/messages', apiLimiter, authenticateToken, tenantContext, auditLogger, messagesRoutes);
+app.use('/api', apiLimiter, authenticateToken, tenantContext, auditLogger, notificationsRoutes);
+app.use('/api', apiLimiter, authenticateToken, tenantContext, auditLogger, secureRouter);
+app.use('/api', apiLimiter, authenticateToken, tenantContext, auditLogger, completeRoutes);
+app.use('/api/kenya-features', apiLimiter, authenticateToken, tenantContext, auditLogger, kenyaFeaturesRoutes);
+app.use('/api/transport', apiLimiter, authenticateToken, tenantContext, auditLogger, transportBoardingRoutes);
+app.use('/api/curriculum', apiLimiter, authenticateToken, tenantContext, auditLogger, curriculumAssessmentRoutes);
+app.use('/api/payments', apiLimiter, authenticateToken, tenantContext, auditLogger, paymentRoutes);
+app.use('/api/gradebook', apiLimiter, authenticateToken, tenantContext, auditLogger, gradebookRoutes);
+app.use('/api/report-cards', apiLimiter, authenticateToken, tenantContext, auditLogger, reportCardRoutes);
+app.use('/api/attendance', apiLimiter, authenticateToken, tenantContext, auditLogger, attendanceRoutes);
+app.use('/api/payroll', apiLimiter, authenticateToken, tenantContext, auditLogger, payrollRoutes);
 
 // Client-side routing fallback (for React Router)
 // Any route not matched by API or static files serves index.html

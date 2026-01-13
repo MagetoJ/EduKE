@@ -8,6 +8,8 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { query, transaction } = require('../db/connection');
+const { validatePassword } = require('../utils/passwordPolicy');
+const { encrypt, decrypt } = require('../utils/security');
 require('dotenv').config();
 
 const {
@@ -20,12 +22,35 @@ const {
 const JWT_EXPIRES_IN = JWT_ACCESS_EXPIRES_IN;
 const JWT_REFRESH_EXPIRES_IN = '7d';
 
+const MAX_FAILED_ATTEMPTS = 5;
+const LOCK_TIME_MINUTES = 15;
+
+const encryptUserPii = (user) => {
+  if (!user) return user;
+  const encrypted = { ...user };
+  if (encrypted.phone) encrypted.phone = encrypt(encrypted.phone);
+  return encrypted;
+};
+
+const decryptUserPii = (user) => {
+  if (!user) return user;
+  const decrypted = { ...user };
+  if (decrypted.phone) decrypted.phone = decrypt(decrypted.phone);
+  return decrypted;
+};
+
 
 /**
  * Register a new school with admin user
  * Creates school, subscription, and admin user in a transaction
  */
 const registerSchool = async (schoolData, adminData) => {
+  // 0. Validate password
+  const passwordCheck = validatePassword(adminData.password);
+  if (!passwordCheck.isValid) {
+    throw new Error(passwordCheck.errors.join('. '));
+  }
+
   return await transaction(async (client) => {
     // 1. Check if email already exists
     const existingUser = await client.query(
@@ -103,7 +128,7 @@ const registerSchool = async (schoolData, adminData) => {
         school_id, email, password_hash, first_name, last_name, name,
         phone, role, status, is_verified
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-      RETURNING id, school_id, email, first_name, last_name, name, role, status`,
+      RETURNING id, school_id, email, first_name, last_name, name, role, status, phone`,
       [
         school.id,
         adminData.email,
@@ -111,14 +136,14 @@ const registerSchool = async (schoolData, adminData) => {
         adminData.firstName,
         adminData.lastName,
         adminData.name || `${adminData.firstName} ${adminData.lastName}`,
-        adminData.phone,
+        encrypt(adminData.phone),
         'admin',
         'active',
         false // Email verification required
       ]
     );
     
-    const user = userResult.rows[0];
+    const user = decryptUserPii(userResult.rows[0]);
     
     // 7. Generate email verification token (optional for later)
     const verificationToken = crypto.randomBytes(32).toString('hex');
@@ -156,7 +181,13 @@ const login = async (email, password) => {
     throw new Error('Invalid credentials');
   }
   
-  const user = result.rows[0];
+  const user = decryptUserPii(result.rows[0]);
+
+  // 1.5 Check if account is locked
+  if (user.account_locked_until && new Date(user.account_locked_until) > new Date()) {
+    const remainingTime = Math.ceil((new Date(user.account_locked_until) - new Date()) / (60 * 1000));
+    throw new Error(`Account is locked. Please try again in ${remainingTime} minutes.`);
+  }
   
   // 2. Check if user is active
   if (user.status !== 'active') {
@@ -172,10 +203,70 @@ const login = async (email, password) => {
   const isValidPassword = await bcrypt.compare(password, user.password_hash);
   
   if (!isValidPassword) {
+    const attempts = (user.failed_login_attempts || 0) + 1;
+    let lockedUntil = null;
+
+    if (attempts >= MAX_FAILED_ATTEMPTS) {
+      lockedUntil = new Date(Date.now() + LOCK_TIME_MINUTES * 60 * 1000);
+    }
+
+    await query(
+      `UPDATE users 
+       SET failed_login_attempts = $1, 
+           last_failed_login_at = NOW(),
+           account_locked_until = $2 
+       WHERE id = $3`,
+      [attempts, lockedUntil, user.id]
+    );
+
+    if (lockedUntil) {
+      throw new Error(`Invalid credentials. Account has been locked for ${LOCK_TIME_MINUTES} minutes due to too many failed attempts.`);
+    }
+
     throw new Error('Invalid credentials');
+  }
+
+  // 4.1 Reset failed attempts on success
+  if (user.failed_login_attempts > 0) {
+    await query(
+      'UPDATE users SET failed_login_attempts = 0, account_locked_until = NULL WHERE id = $1',
+      [user.id]
+    );
+  }
+
+  // 4.5 Check if MFA is enabled
+  if (user.mfa_enabled) {
+    return {
+      mfaRequired: true,
+      email: user.email
+    };
   }
   
   // 5. Generate access token
+  const tokens = await generateAuthTokens(user);
+  
+  // 8. Update last login
+  await query(
+    'UPDATE users SET last_login_at = NOW() WHERE id = $1',
+    [user.id]
+  );
+  
+  // 9. Return user data (without password) and tokens
+  delete user.password_hash;
+  delete user.school_status;
+  delete user.mfa_secret;
+  
+  return {
+    user,
+    ...tokens
+  };
+};
+
+/**
+ * Generate Access and Refresh tokens for a user
+ */
+const generateAuthTokens = async (user) => {
+  // 1. Generate access token
   const accessToken = jwt.sign(
     {
       id: user.id,
@@ -188,14 +279,14 @@ const login = async (email, password) => {
     { expiresIn: JWT_EXPIRES_IN }
   );
   
-  // 6. Generate refresh token
+  // 2. Generate refresh token
   const refreshToken = jwt.sign(
     { id: user.id, email: user.email },
     JWT_REFRESH_SECRET,
     { expiresIn: JWT_REFRESH_EXPIRES_IN }
   );
   
-  // 7. Store refresh token in database
+  // 3. Store refresh token in database
   const refreshTokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
   
@@ -204,21 +295,28 @@ const login = async (email, password) => {
      VALUES ($1, $2, $3)`,
     [user.id, refreshTokenHash, expiresAt]
   );
-  
-  // 8. Update last login
+
+  return { accessToken, refreshToken };
+};
+
+/**
+ * Complete login after successful MFA verification
+ */
+const completeMfaLogin = async (user) => {
+  const tokens = await generateAuthTokens(user);
+
   await query(
     'UPDATE users SET last_login_at = NOW() WHERE id = $1',
     [user.id]
   );
-  
-  // 9. Return user data (without password) and tokens
-  delete user.password_hash;
-  delete user.school_status;
-  
+
+  const safeUser = decryptUserPii({ ...user });
+  delete safeUser.password_hash;
+  delete safeUser.mfa_secret;
+
   return {
-    user,
-    accessToken,
-    refreshToken
+    user: safeUser,
+    ...tokens
   };
 };
 
@@ -257,7 +355,7 @@ const refreshAccessToken = async (refreshToken) => {
       throw new Error('User not found or inactive');
     }
     
-    const user = userResult.rows[0];
+    const user = decryptUserPii(userResult.rows[0]);
     
     // 4. Generate new access token
     const accessToken = jwt.sign(
@@ -332,6 +430,12 @@ const requestPasswordReset = async (email) => {
  * Reset password using reset token
  */
 const resetPassword = async (resetToken, newPassword) => {
+  // 0. Validate new password
+  const passwordCheck = validatePassword(newPassword);
+  if (!passwordCheck.isValid) {
+    throw new Error(passwordCheck.errors.join('. '));
+  }
+
   return await transaction(async (client) => {
     // 1. Find valid token
     const tokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');

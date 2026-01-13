@@ -58,7 +58,7 @@ export default function KNEC() {
 
   const [activeTab, setActiveTab] = useState('registrations')
   const [registrations, setRegistrations] = useState<KNECRegistration[]>([])
-  const [students, setStudents] = useState<any[]>([])
+  const [students, setStudents] = useState<User[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -70,9 +70,9 @@ export default function KNEC() {
 
   useEffect(() => {
     loadData()
-  }, [])
+  }, [loadData])
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setIsLoading(true)
     setError(null)
     try {
@@ -97,7 +97,7 @@ export default function KNEC() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [api])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()

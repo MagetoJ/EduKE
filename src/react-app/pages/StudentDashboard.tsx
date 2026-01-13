@@ -102,7 +102,7 @@ export default function StudentDashboard() {
 
         // Process performance
         const performanceGroups: Record<string, number[]> = {}
-        performanceData.data?.forEach((record: any) => {
+        performanceData.data?.forEach((record: { score?: string | number; grade?: string | number; subject?: string; course_name?: string }) => {
           const numericGrade = Number(record.score || record.grade)
           if (Number.isNaN(numericGrade)) return
           const subject = record.subject || record.course_name || 'General'
@@ -131,7 +131,7 @@ export default function StudentDashboard() {
         }
 
         const attendanceSummary = attendanceData.data?.reduce(
-          (summary: AttendanceSummary, record: any) => {
+          (summary: AttendanceSummary, record: { status: string }) => {
             const status = record.status?.toLowerCase()
             if (status === 'present') summary.present += 1
             else if (status === 'late') summary.late += 1
@@ -147,8 +147,8 @@ export default function StudentDashboard() {
           : 0
 
         // Process fees
-        const totalFees = feesData.data?.reduce((sum: number, fee: any) => sum + (Number(fee.amount_due) || 0), 0) || 0
-        const paidFees = feesData.data?.reduce((sum: number, fee: any) => sum + (Number(fee.amount_paid) || 0), 0) || 0
+        const totalFees = feesData.data?.reduce((sum: number, fee: { amount_due: string | number }) => sum + (Number(fee.amount_due) || 0), 0) || 0
+        const paidFees = feesData.data?.reduce((sum: number, fee: { amount_paid: string | number }) => sum + (Number(fee.amount_paid) || 0), 0) || 0
         const financial: FinancialSummary = {
           feesPaid: paidFees,
           feesDue: totalFees - paidFees,

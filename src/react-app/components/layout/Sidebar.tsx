@@ -17,8 +17,6 @@ import {
   Menu,
   X,
   Zap,
-  FileCheck,
-  Award,
   Bus,
   Home,
   TrendingUp
@@ -136,7 +134,7 @@ const navItems: NavItem[] = [
     icon: Zap,
     roles: ['admin', 'teacher']
   },
-  {
+  /* {
     title: 'NEMIS',
     href: '/dashboard/nemis',
     icon: FileCheck,
@@ -147,7 +145,7 @@ const navItems: NavItem[] = [
     href: '/dashboard/knec',
     icon: Award,
     roles: ['admin']
-  },
+  }, */
   {
     title: 'Transport',
     href: '/dashboard/transport',
@@ -242,7 +240,7 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
 
   return (
     <>
-      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col hidden md:flex shadow-sm">
+      <aside className="w-64 bg-white border-r border-slate-200 flex-col hidden md:flex shadow-sm">
         <NavContent />
       </aside>
 

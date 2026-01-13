@@ -270,6 +270,25 @@ const ensureSchemaUpgrades = async () => {
         await dbRun('ALTER TABLE users ADD COLUMN must_change_password INTEGER DEFAULT 0');
       }
     }
+    if (!userColumnNames.includes('mfa_enabled')) {
+      if (usingPostgres) {
+        await dbRun('ALTER TABLE users ADD COLUMN mfa_enabled BOOLEAN DEFAULT false');
+      } else {
+        await dbRun('ALTER TABLE users ADD COLUMN mfa_enabled INTEGER DEFAULT 0');
+      }
+    }
+    if (!userColumnNames.includes('mfa_secret')) {
+      await dbRun('ALTER TABLE users ADD COLUMN mfa_secret TEXT');
+    }
+    if (!userColumnNames.includes('failed_login_attempts')) {
+      await dbRun('ALTER TABLE users ADD COLUMN failed_login_attempts INTEGER DEFAULT 0');
+    }
+    if (!userColumnNames.includes('last_failed_login_at')) {
+      await dbRun('ALTER TABLE users ADD COLUMN last_failed_login_at TIMESTAMP');
+    }
+    if (!userColumnNames.includes('account_locked_until')) {
+      await dbRun('ALTER TABLE users ADD COLUMN account_locked_until TIMESTAMP');
+    }
 
     if (usingPostgres) {
       await dbRun(

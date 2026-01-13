@@ -7,6 +7,8 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
 const authService = require('../services/authService');
+const emailService = require('../services/emailService');
+const mfaService = require('../services/mfaService');
 const { query } = require('../db/connection');
 const { authenticateToken } = require('../middleware/auth');
 const { tenantContext } = require('../middleware/tenant');
@@ -54,13 +56,17 @@ router.post('/register-school', async (req, res) => {
     // Register school
     const result = await authService.registerSchool(school, admin);
 
+    // Send verification email
+    if (result.verificationToken) {
+      await emailService.sendVerificationEmail(admin.email, result.verificationToken);
+    }
+
     res.status(201).json({
       success: true,
-      message: 'School registered successfully',
+      message: 'School registered successfully. Please check your email to verify your account.',
       data: {
         school: result.school,
         user: result.user
-        // Note: verification token should be sent via email, not returned in response
       }
     });
 
@@ -257,11 +263,16 @@ router.post('/forgot-password', async (req, res) => {
 
     const result = await authService.requestPasswordReset(email);
 
+    // Send password reset email
+    if (result.resetToken) {
+      await emailService.sendPasswordResetEmail(email, result.resetToken);
+    }
+
     // Note: In production, send reset token via email
     // Don't return it in the response
     res.json({
       success: true,
-      message: result.message
+      message: 'If the email exists, a reset link has been sent'
     });
 
   } catch (error) {
@@ -420,6 +431,115 @@ router.post('/change-password', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Error changing password:', err);
     res.status(500).json({ success: false, error: 'Failed to update password' });
+  }
+});
+
+/**
+ * POST /api/auth/mfa/setup
+ * Initialize MFA setup for current user
+ */
+router.post('/mfa/setup', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userEmail = req.user.email;
+    
+    const secret = mfaService.generateSecret();
+    const qrCodeUrl = await mfaService.generateQRCode(userEmail, secret);
+    
+    // Store secret temporarily (not enabled yet)
+    await query('UPDATE users SET mfa_secret = $1, mfa_enabled = false WHERE id = $2', [secret, userId]);
+    
+    res.json({
+      success: true,
+      data: {
+        qrCodeUrl,
+        secret // Provided for manual entry
+      }
+    });
+  } catch (error) {
+    console.error('MFA setup error:', error);
+    res.status(500).json({ success: false, error: 'Failed to initialize MFA setup' });
+  }
+});
+
+/**
+ * POST /api/auth/mfa/verify
+ * Complete MFA setup by verifying the first token
+ */
+router.post('/mfa/verify-setup', authenticateToken, async (req, res) => {
+  try {
+    const { token } = req.body;
+    const userId = req.user.id;
+    
+    const userResult = await query('SELECT mfa_secret FROM users WHERE id = $1', [userId]);
+    const secret = userResult.rows[0]?.mfa_secret;
+    
+    if (!secret) {
+      return res.status(400).json({ success: false, error: 'MFA not initialized' });
+    }
+    
+    const isValid = mfaService.verifyToken(token, secret);
+    
+    if (isValid) {
+      await query('UPDATE users SET mfa_enabled = true WHERE id = $1', [userId]);
+      res.json({ success: true, message: 'MFA enabled successfully' });
+    } else {
+      res.status(400).json({ success: false, error: 'Invalid verification token' });
+    }
+  } catch (error) {
+    console.error('MFA verification error:', error);
+    res.status(500).json({ success: false, error: 'Failed to verify MFA setup' });
+  }
+});
+
+/**
+ * POST /api/auth/mfa/login
+ * Verify MFA token during login
+ */
+router.post('/mfa/login', async (req, res) => {
+  try {
+    const { email, token } = req.body;
+    
+    if (!email || !token) {
+      return res.status(400).json({ success: false, error: 'Email and token are required' });
+    }
+    
+    const userResult = await query('SELECT * FROM users WHERE email = $1', [email]);
+    const user = userResult.rows[0];
+    
+    if (!user || !user.mfa_enabled || !user.mfa_secret) {
+      return res.status(400).json({ success: false, error: 'MFA not enabled for this account' });
+    }
+    
+    const isValid = mfaService.verifyToken(token, user.mfa_secret);
+    
+    if (!isValid) {
+      return res.status(401).json({ success: false, error: 'Invalid MFA token' });
+    }
+    
+    // Complete login by generating tokens
+    // We need to call a service method that generates tokens without re-checking password
+    const result = await authService.completeMfaLogin(user);
+    
+    // Set refresh token as httpOnly cookie
+    res.cookie('refreshToken', result.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    });
+
+    res.json({
+      success: true,
+      message: 'Login successful',
+      data: {
+        user: result.user,
+        accessToken: result.accessToken
+      }
+    });
+  } catch (error) {
+    console.error('MFA login error:', error);
+    res.status(500).json({ success: false, error: 'MFA login failed' });
   }
 });
 

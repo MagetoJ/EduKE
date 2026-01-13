@@ -722,7 +722,7 @@ export default function Timetable() {
                 </Select>
               </div>
 
-              <div className="hidden md:block bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[600px]">
+              <div className=", m md:block bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[600px]">
                 <div className="grid grid-cols-[60px_1fr_1fr_1fr_1fr_1fr] lg:grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] bg-slate-800 text-white font-semibold text-xs lg:text-sm uppercase text-center sticky top-0">
                   <div className="p-2 lg:p-4 border-r border-slate-700"></div>
                   {['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].map(day => (

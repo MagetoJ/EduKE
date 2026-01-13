@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
@@ -57,11 +57,7 @@ export default function Transport() {
     fare_amount: ''
   })
 
-  useEffect(() => {
-    loadData()
-  }, [])
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setIsLoading(true)
     setError(null)
     try {
@@ -84,7 +80,11 @@ export default function Transport() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [apiFetch])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   const handleAddRoute = async () => {
     if (!formData.route_name || !formData.route_code) {

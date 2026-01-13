@@ -89,6 +89,11 @@ const DEFAULT_GRADE_LEVELS = [
   'Grade 12'
 ]
 
+interface SchoolItem {
+  id: string | number;
+  name?: string;
+}
+
 export function Settings() {
   const api = useApi()
   const { user } = useAuth()
@@ -133,7 +138,7 @@ export function Settings() {
         throw new Error(message)
       }
       const options = Array.isArray(data)
-        ? data.map((item: any) => ({
+        ? data.map((item: SchoolItem) => ({
             id: String(item.id),
             name: typeof item.name === 'string' && item.name.trim().length > 0 ? item.name : `School ${item.id}`
           }))
@@ -288,7 +293,7 @@ export function Settings() {
     } finally {
       setUploadingLogo(false)
     }
-  }, [api, isSuperAdmin, selectedSchoolId])
+  }, [isSuperAdmin, selectedSchoolId])
 
   const handleAddGradeLevel = useCallback(() => {
     if (isSuperAdmin && !selectedSchoolId) {

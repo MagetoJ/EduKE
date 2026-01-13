@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Plus, Calendar, Clock, CheckCircle, XCircle, FileText } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
@@ -40,13 +40,7 @@ export default function Leave() {
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin'
   const isTeacher = user?.role === 'teacher'
 
-  // Fetch leave requests and types on mount
-  useEffect(() => {
-    fetchLeaveRequests()
-    fetchLeaveTypes()
-  }, [])
-
-  const fetchLeaveRequests = async () => {
+  const fetchLeaveRequests = useCallback(async () => {
     try {
       setIsLoading(true)
       const response = await api('/api/leave-requests')
@@ -61,9 +55,9 @@ export default function Leave() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [api])
 
-  const fetchLeaveTypes = async () => {
+  const fetchLeaveTypes = useCallback(async () => {
     try {
       const response = await api('/api/leave-types')
       const data = await response.json()
@@ -74,7 +68,13 @@ export default function Leave() {
     } catch (err) {
       console.error('Error fetching leave types:', err)
     }
-  }
+  }, [api])
+
+  // Fetch leave requests and types on mount
+  useEffect(() => {
+    fetchLeaveRequests()
+    fetchLeaveTypes()
+  }, [fetchLeaveRequests, fetchLeaveTypes])
 
   const handleLeaveAction = async (requestId: string, action: 'approve' | 'deny') => {
     try {

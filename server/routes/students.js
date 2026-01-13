@@ -94,7 +94,11 @@ router.post('/', authorizeRole(['admin']), async (req, res) => {
       });
     }
 
-    const student = await studentService.createStudentAndParent(req.body, schoolId);
+    const student = await studentService.createStudentAndParent(req.body, schoolId, {
+      userId: req.user?.id,
+      ip: req.ip,
+      userAgent: req.get('user-agent')
+    });
 
     res.status(201).json({ success: true, data: student, message: 'Student created successfully' });
   } catch (err) {
@@ -126,7 +130,11 @@ router.put('/:id', authorizeRole(['admin']), async (req, res) => {
     const { schoolId } = req;
     const { id } = req.params;
     
-    const student = await studentService.updateStudent(id, schoolId, req.body);
+    const student = await studentService.updateStudent(id, schoolId, req.body, {
+      userId: req.user?.id,
+      ip: req.ip,
+      userAgent: req.get('user-agent')
+    });
     
     if (!student) {
       return res.status(404).json({ success: false, error: 'Student not found or access denied' });
@@ -145,7 +153,11 @@ router.delete('/:id', authorizeRole(['admin']), async (req, res) => {
     const { schoolId } = req;
     const { id } = req.params;
     
-    const student = await studentService.deleteStudent(id, schoolId);
+    const student = await studentService.deleteStudent(id, schoolId, {
+      userId: req.user?.id,
+      ip: req.ip,
+      userAgent: req.get('user-agent')
+    });
     
     if (!student) {
       return res.status(404).json({ success: false, error: 'Student not found' });

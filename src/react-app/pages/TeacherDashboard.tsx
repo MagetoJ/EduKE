@@ -56,6 +56,11 @@ type Exam = {
   course_name?: string
 }
 
+type Course = {
+  id: string
+  name: string
+}
+
 export default function TeacherDashboard() {
   const api = useApi()
   const defaultStatuses = useMemo(() => ['Present', 'Absent', 'Late', 'Excused', 'Not Marked'], [])
@@ -79,7 +84,7 @@ export default function TeacherDashboard() {
   const [disciplineRecords, setDisciplineRecords] = useState<DisciplineRecord[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
-  const [courses, setCourses] = useState<any[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
 
 
 
@@ -87,7 +92,7 @@ export default function TeacherDashboard() {
     if (!Array.isArray(payload)) {
       return []
     }
-    return payload.map((item: any) => {
+    return payload.map((item: { id: string | number; firstName?: string; lastName?: string; name?: string; status?: string; grade?: string; classSection?: string }) => {
       const firstName = typeof item.firstName === 'string' ? item.firstName : ''
       const lastName = typeof item.lastName === 'string' ? item.lastName : ''
       const fallbackName = `${firstName} ${lastName}`.trim()
@@ -200,7 +205,7 @@ export default function TeacherDashboard() {
         const studentRes = await api('/api/students');
         const studentData = await studentRes.json();
         if (studentData.data) {
-          setStudents(studentData.data.map((s: any) => ({
+          setStudents(studentData.data.map((s: { id: number | string; first_name: string; last_name: string; grade: string; class_section?: string }) => ({
             id: s.id.toString(),
             name: `${s.first_name} ${s.last_name}`,
             grade: s.grade,
@@ -212,7 +217,7 @@ export default function TeacherDashboard() {
         const disciplineRes = await api('/api/discipline');
         const disciplineData = await disciplineRes.json();
         if (disciplineData.data) {
-          setDisciplineRecords(disciplineData.data.map((d: any) => ({
+          setDisciplineRecords(disciplineData.data.map((d: { id: number; student_name: string; date: string; incident_type: string; severity: string; description: string; status: string }) => ({
             id: d.id,
             studentName: d.student_name, // Assuming backend provides this
             date: d.date,

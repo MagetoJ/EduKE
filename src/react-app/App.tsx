@@ -32,8 +32,8 @@ import StudentDashboard from "./pages/StudentDashboard";
 import TeacherDashboard from "./pages/TeacherDashboard";
 import Subscriptions from "./pages/Subscriptions";
 import CBC from "./pages/CBC";
-import NEMIS from "./pages/NEMIS";
-import KNEC from "./pages/KNEC";
+// import NEMIS from "./pages/NEMIS";
+// import KNEC from "./pages/KNEC";
 import Transport from "./pages/Transport";
 import Boarding from "./pages/Boarding";
 import CurriculumAssessment from "./pages/CurriculumAssessment";
@@ -109,8 +109,8 @@ function AppRoutes() {
         <Route path="student-dashboard" element={<StudentDashboard />} />
         <Route path="teacher-dashboard" element={<TeacherDashboard />} />
         <Route path="cbc" element={<CBC />} />
-        <Route path="nemis" element={<NEMIS />} />
-        <Route path="knec" element={<KNEC />} />
+        {/* <Route path="nemis" element={<NEMIS />} />
+        <Route path="knec" element={<KNEC />} /> */}
         <Route path="transport" element={<Transport />} />
         <Route path="boarding" element={<Boarding />} />
         <Route path="curriculum-assessment" element={<CurriculumAssessment />} />

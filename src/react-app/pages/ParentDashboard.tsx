@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { User, BookOpen, DollarSign, Calendar, AlertTriangle } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card'
@@ -144,9 +144,9 @@ export default function ParentDashboard() {
     if (selectedChildId) {
       loadStudentData(selectedChildId)
     }
-  }, [selectedChildId])
+  }, [selectedChildId, loadStudentData])
 
-  const loadStudentData = async (childId: string) => {
+  const loadStudentData = useCallback(async (childId: string) => {
     setIsLoading(true)
     setError(null)
 
@@ -167,7 +167,7 @@ export default function ParentDashboard() {
 
       // Process performance
       const performanceGroups: Record<string, number[]> = {}
-      performanceData.data?.forEach((record: any) => {
+      performanceData.data?.forEach((record: { score: string | number; subject?: string }) => {
         const numericGrade = Number(record.score)
         if (Number.isNaN(numericGrade)) return
         const subject = record.subject || 'General'
@@ -196,7 +196,7 @@ export default function ParentDashboard() {
       }
 
       const attendanceSummary = attendanceData.data?.reduce(
-        (summary: AttendanceSummary, record: any) => {
+        (summary: AttendanceSummary, record: { status: string }) => {
           const status = record.status?.toLowerCase()
           if (status === 'present') summary.present += 1
           else if (status === 'late') summary.late += 1
@@ -212,8 +212,8 @@ export default function ParentDashboard() {
         : 0
 
       // Process fees
-      const totalFees = feesData.data?.reduce((sum: number, _fee: any) => sum + (Number(_fee.amount_due) || 0), 0) || 0
-      const paidFees = feesData.data?.reduce((sum: number, _fee: any) => sum + (Number(_fee.amount_paid) || 0), 0) || 0
+      const totalFees = feesData.data?.reduce((sum: number, _fee: { amount_due: string | number }) => sum + (Number(_fee.amount_due) || 0), 0) || 0
+      const paidFees = feesData.data?.reduce((sum: number, _fee: { amount_paid: string | number }) => sum + (Number(_fee.amount_paid) || 0), 0) || 0
       const financial: FinancialSummary = {
         feesPaid: paidFees,
         feesDue: totalFees - paidFees,
@@ -239,7 +239,7 @@ export default function ParentDashboard() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [apiFetch, children])
 
   const handleChildChange = (childId: string) => {
     setSelectedChildId(childId)

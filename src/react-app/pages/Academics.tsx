@@ -8,6 +8,7 @@ import { Label } from '../components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { useAuth, useApi } from '../contexts/AuthContext'
+import type { User as UserType } from '../contexts/AuthContext'
 import { useNavigate } from 'react-router'
 
 // --- Types based on your API routes ---
@@ -120,7 +121,7 @@ export default function Academics() {
           const staffRes = await api('/api/staff')
           if (!staffRes.ok) throw new Error(`Failed to fetch staff: ${staffRes.statusText}`)
           const staffData = await staffRes.json()
-          setStaff(staffData.data ? staffData.data.filter((s: any) => s.role === 'teacher') : [])
+          setStaff(staffData.data ? staffData.data.filter((s: UserType) => s.role === 'teacher') : [])
         }
 
       } catch (err) {

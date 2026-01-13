@@ -115,7 +115,18 @@ export function CourseDetail() {
     if (!Array.isArray(payload)) {
       return []
     }
-    return payload.map((item: any) => {
+    return payload.map((item: { 
+      id: string | number; 
+      title?: string; 
+      description?: string; 
+      type?: string; 
+      resource_type?: string; 
+      url?: string; 
+      createdAt?: string; 
+      created_at?: string;
+      createdBy?: { name?: string };
+      createdByName?: string;
+    }) => {
       // (parsing logic as you had it)
       const title = typeof item.title === 'string' && item.title.trim() !== '' ? item.title.trim() : 'Untitled resource'
       const description = typeof item.description === 'string' && item.description.trim() !== '' ? item.description.trim() : null
@@ -190,14 +201,14 @@ export function CourseDetail() {
       if (assignmentsRes.ok) {
         const assignmentsData = await assignmentsRes.json()
         const courseIdStr = String(id)
-        setAssignments((assignmentsData.data || []).filter((a: any) => String(a.course_id) === courseIdStr))
+        setAssignments((assignmentsData.data || []).filter((a: Assignment) => String(a.course_id) === courseIdStr))
       }
 
       // --- Process Exams ---
       if (examsRes.ok) {
         const examsData = await examsRes.json()
         const courseIdStr = String(id)
-        setExams((examsData.data || []).filter((e: any) => String(e.course_id) === courseIdStr))
+        setExams((examsData.data || []).filter((e: Exam) => String(e.course_id) === courseIdStr))
       }
 
       // --- Process Students ---
@@ -261,7 +272,7 @@ export function CourseDetail() {
     } finally {
       setResourceSaving(false)
     }
-  }, [api, id, parseResources, loadAllData, resourceForm])
+  }, [api, id, loadAllData, resourceForm])
 
   const handleDeleteResource = useCallback(async (resourceId: string) => {
     if (!id || !canManageResources) {

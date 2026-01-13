@@ -1,4 +1,4 @@
-import { useEffect, useState, FormEvent } from 'react'
+import { useEffect, useState, useCallback, FormEvent } from 'react'
 import { Plus, Search, Edit2, Trash2, BookOpen, AlertCircle, Loader2 } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -21,6 +21,18 @@ import {
   AlertDialogTrigger,
 } from '../components/ui/alert-dialog'
 
+type Assessment = {
+  id: string;
+  student_id: string;
+  strand_id: string;
+  strand_name?: string;
+  strand_code?: string;
+  assessment_type: string;
+  grade: number;
+  comments: string;
+  created_at: string;
+}
+
 type CBCStrand = {
   id: string;
   name: string;
@@ -28,6 +40,12 @@ type CBCStrand = {
   description?: string;
   grade_level?: string;
   created_at?: string;
+}
+
+interface CBCStudent {
+  id: string | number;
+  first_name: string;
+  last_name: string;
 }
 
 const initialStrandForm = {
@@ -61,16 +79,12 @@ export default function CBC() {
     grade: '',
     comments: ''
   })
-  const [students, setStudents] = useState<any[]>([])
+  const [students, setStudents] = useState<CBCStudent[]>([])
   const [searchTerm, setSearchTerm] = useState('')
-  const [assessments, setAssessments] = useState<any[]>([])
+  const [assessments, setAssessments] = useState<Assessment[]>([])
   const [selectedStudent, setSelectedStudent] = useState<string | null>(null)
 
-  useEffect(() => {
-    loadData()
-  }, [])
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setIsLoading(true)
     setError(null)
     try {
@@ -92,7 +106,11 @@ export default function CBC() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [api])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   const handleStrandSubmit = async (e: FormEvent) => {
     e.preventDefault()

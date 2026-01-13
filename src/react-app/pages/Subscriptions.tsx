@@ -57,6 +57,37 @@ const STATUS_CLASSES: Record<string, string> = {
   cancelled: 'bg-red-100 text-red-700 border-transparent'
 }
 
+interface ApiPlan {
+  id: string | number
+  name?: string
+  slug?: string
+  description?: string | null
+  studentLimit?: number | null
+  student_limit?: number | null
+  staffLimit?: number | null
+  staff_limit?: number | null
+  isTrial?: boolean
+  is_trial?: boolean
+}
+
+interface ApiSchool {
+  id: string | number
+  name?: string
+  address?: string | null
+  principal?: string | null
+  students?: number | string
+  staff?: number | string
+  revenue?: string | number
+  subscription?: {
+    planName?: string | null
+    planSlug?: string | null
+    status?: string | null
+    trialEndsAt?: string | null
+    studentLimit?: number | null
+    staffLimit?: number | null
+  } | null
+}
+
 const formatDateLabel = (value?: string | null) => {
   if (!value) {
     return null
@@ -68,7 +99,7 @@ const formatDateLabel = (value?: string | null) => {
   return parsed.toLocaleDateString()
 }
 
-const parsePlan = (plan: any): SubscriptionPlan => ({
+const parsePlan = (plan: ApiPlan): SubscriptionPlan => ({
   id: String(plan.id),
   name: plan.name ?? 'Unnamed Plan',
   slug: plan.slug ?? '',
@@ -88,7 +119,7 @@ const parsePlan = (plan: any): SubscriptionPlan => ({
   isTrial: Boolean(plan.isTrial ?? plan.is_trial)
 })
 
-const parseSchool = (school: any): SchoolRecord => ({
+const parseSchool = (school: ApiSchool): SchoolRecord => ({
   id: String(school.id),
   name: school.name ?? 'Unnamed School',
   address: school.address ?? null,
@@ -269,7 +300,7 @@ export default function Subscriptions() {
     } finally {
       setSavingId(null)
     }
-  }, [api, drafts, schools])
+  }, [api, drafts])
 
   if (!user || user.role !== 'super_admin') {
     return (

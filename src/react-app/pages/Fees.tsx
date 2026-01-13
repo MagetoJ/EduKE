@@ -23,6 +23,7 @@ type FeeStructure = {
   frequency: string; // From DB
   term: string; // From Form
   academic_year: string;
+  description?: string;
 }
 
 type StudentFee = {
@@ -107,7 +108,7 @@ export default function Fees() {
         const data = await response.json()
         
         if (data.success && Array.isArray(data.data)) {
-          const years = data.data.map((year: any) => ({
+          const years = data.data.map((year: { id: number | string; start_date?: string; end_date?: string }) => ({
             id: year.id.toString(),
             label: `${year.start_date?.substring(0, 4) || 'Unknown'} - ${year.end_date?.substring(0, 4) || 'Unknown'}`
           }))
@@ -140,12 +141,12 @@ export default function Fees() {
           }
           const structuresData = await structuresRes.json()
           // Map DB names to form names for consistency
-          const mappedStructures = structuresData.data.map((fee: any) => ({
+          const mappedStructures = (structuresData.data || []).map((fee: FeeStructure) => ({
             ...fee,
             fee_type: fee.name, // Map DB 'name' to 'fee_type'
             term: fee.frequency // Map DB 'frequency' to 'term'
           }))
-          setFeeStructures(mappedStructures || [])
+          setFeeStructures(mappedStructures)
 
           if (!collectionRes.ok) {
             const errData = await collectionRes.json()
@@ -240,8 +241,8 @@ export default function Fees() {
       amount: String(fee.amount),
       grade: fee.grade,
       term: fee.term, // This is 'frequency' from the DB
-      academic_year: (fee as any).academic_year || '', // This field doesn't exist yet
-      description: (fee as any).description || ''
+      academic_year: fee.academic_year || '', // This field doesn't exist yet
+      description: fee.description || ''
     });
     setIsEditDialogOpen(true);
   }
