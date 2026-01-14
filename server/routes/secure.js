@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const { query, transaction } = require('../db/connection');
 const multer = require('multer');
@@ -645,14 +646,14 @@ secureRouter.post('/users', authorizeRole(['admin']), async (req, res) => {
     const { schoolId } = req;
     const { email, first_name, last_name, phone, role, class_assigned, subject } = req.body;
     
-    // Create a temporary or random password
-    const tempPassword = "password123"; // TODO: Replace with a secure random password
+    // Create a temporary random password
+    const tempPassword = crypto.randomBytes(16).toString('hex');
     const password_hash = await bcrypt.hash(tempPassword, 10);
     const name = `${first_name} ${last_name}`.trim();
     
     const sql = `
-      INSERT INTO users (school_id, email, password_hash, first_name, last_name, name, phone, role, class_assigned, subject, status, is_verified)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'active', false)
+      INSERT INTO users (school_id, email, password_hash, first_name, last_name, name, phone, role, class_assigned, subject, status, is_verified, must_change_password)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'active', false, true)
       RETURNING id, email, first_name, last_name, name, phone, role, status
     `;
     

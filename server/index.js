@@ -2,6 +2,8 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
+const helmet = require('helmet');
+const hpp = require('hpp');
 require('dotenv').config();
 
 // Import PostgreSQL database connection
@@ -44,10 +46,21 @@ const app = express();
 
 app.set('trust proxy', 1);
 
+// Security Middleware
+app.use(helmet({
+  contentSecurityPolicy: isProduction ? undefined : false, // Disable CSP in dev for easier debugging
+  crossOriginEmbedderPolicy: false
+}));
+app.use(hpp());
+
 // Middleware
 const corsOptions = {
-  origin: isProduction ? process.env.CORS_ORIGIN : 'http://localhost:5173',
-  credentials: true
+  origin: isProduction ? (process.env.CORS_ORIGIN || '').split(',') : 'http://localhost:5173',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  maxAge: 600 // Cache preflight requests for 10 minutes
 };
 
 app.use(cors(corsOptions));

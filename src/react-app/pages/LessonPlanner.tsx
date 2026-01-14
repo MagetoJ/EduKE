@@ -336,7 +336,7 @@ export default function LessonPlanner() {
                   <label className="text-sm font-medium text-slate-700">Status</label>
                   <Select 
                     value={editingLesson.status} 
-                    onValueChange={(v: string) => setEditingLesson({...editingLesson, status: v})}
+                    onValueChange={(v: string) => setEditingLesson({...editingLesson, status: v as 'draft' | 'ready' | 'completed'})}
                   >
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent className="z-[101]">

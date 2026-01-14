@@ -94,7 +94,12 @@ export default function Communications() {
             userOptions.push({ id: s.user_id, name: `${s.first_name} ${s.last_name}`, role: 'student', email: s.email })
             // Add parent (if they exist)
             if (s.parent_id && s.parent_email) {
-              userOptions.push({ id: s.parent_id, name: s.parent_name, role: 'parent', email: s.parent_email })
+              userOptions.push({ 
+                id: s.parent_id, 
+                name: s.parent_name || 'Parent', 
+                role: 'parent', 
+                email: s.parent_email 
+              })
             }
           })
         }

@@ -13,6 +13,13 @@ const { query } = require('../db/connection');
 const { authenticateToken } = require('../middleware/auth');
 const { tenantContext } = require('../middleware/tenant');
 
+const cookieOptions = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'strict',
+  maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+};
+
 // Apply tenant context to all routes
 
 /**
@@ -121,12 +128,7 @@ router.post('/login', async (req, res) => {
     const result = await authService.login(email, password);
 
     // Set refresh token as httpOnly cookie
-    res.cookie('refreshToken', result.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-    });
+    res.cookie('refreshToken', result.refreshToken, cookieOptions);
 
     res.json({
       success: true,
@@ -223,7 +225,7 @@ router.post('/logout', async (req, res) => {
     }
 
     // Clear refresh token cookie
-    res.clearCookie('refreshToken');
+    res.clearCookie('refreshToken', { ...cookieOptions, maxAge: 0 });
 
     res.json({
       success: true,
@@ -522,12 +524,7 @@ router.post('/mfa/login', async (req, res) => {
     const result = await authService.completeMfaLogin(user);
     
     // Set refresh token as httpOnly cookie
-    res.cookie('refreshToken', result.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-    });
+    res.cookie('refreshToken', result.refreshToken, cookieOptions);
 
     res.json({
       success: true,

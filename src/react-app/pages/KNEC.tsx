@@ -1,4 +1,4 @@
-import { useEffect, useState, FormEvent } from 'react'
+import { useEffect, useState, FormEvent, useCallback } from 'react'
 import { Plus, Search, AlertCircle, Loader2, CheckCircle, Clock, Trash2 } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -32,6 +32,13 @@ type KNECRegistration = {
   created_at: string;
 }
 
+type KNECStudent = {
+  id: string | number;
+  first_name: string;
+  last_name: string;
+  student_id_number: string;
+}
+
 const EXAM_SUBJECTS = {
   KCSE: [
     'English', 'Kiswahili', 'Mathematics', 'Physics', 'Chemistry', 'Biology',
@@ -58,7 +65,7 @@ export default function KNEC() {
 
   const [activeTab, setActiveTab] = useState('registrations')
   const [registrations, setRegistrations] = useState<KNECRegistration[]>([])
-  const [students, setStudents] = useState<User[]>([])
+  const [students, setStudents] = useState<KNECStudent[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -67,10 +74,6 @@ export default function KNEC() {
   const [formError, setFormError] = useState<string | null>(null)
   const [form, setForm] = useState(initialForm)
   const [searchTerm, setSearchTerm] = useState('')
-
-  useEffect(() => {
-    loadData()
-  }, [loadData])
 
   const loadData = useCallback(async () => {
     setIsLoading(true)
@@ -98,6 +101,10 @@ export default function KNEC() {
       setIsLoading(false)
     }
   }, [api])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()

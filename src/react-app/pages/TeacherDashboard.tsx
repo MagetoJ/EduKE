@@ -59,6 +59,7 @@ type Exam = {
 type Course = {
   id: string
   name: string
+  grade?: string
 }
 
 export default function TeacherDashboard() {
@@ -92,7 +93,7 @@ export default function TeacherDashboard() {
     if (!Array.isArray(payload)) {
       return []
     }
-    return payload.map((item: { id: string | number; firstName?: string; lastName?: string; name?: string; status?: string; grade?: string; classSection?: string }) => {
+    return payload.map((item: { id: string | number; firstName?: string; lastName?: string; name?: string; status?: string; grade?: string; classSection?: string; recordedAt?: string }) => {
       const firstName = typeof item.firstName === 'string' ? item.firstName : ''
       const lastName = typeof item.lastName === 'string' ? item.lastName : ''
       const fallbackName = `${firstName} ${lastName}`.trim()

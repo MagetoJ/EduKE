@@ -139,12 +139,9 @@ export default function ParentDashboard() {
     loadInitialData()
   }, [apiFetch])
 
-  // Load student data when child is selected
-  useEffect(() => {
-    if (selectedChildId) {
-      loadStudentData(selectedChildId)
-    }
-  }, [selectedChildId, loadStudentData])
+  const handleChildChange = (childId: string) => {
+    setSelectedChildId(childId)
+  }
 
   const loadStudentData = useCallback(async (childId: string) => {
     setIsLoading(true)
@@ -241,9 +238,12 @@ export default function ParentDashboard() {
     }
   }, [apiFetch, children])
 
-  const handleChildChange = (childId: string) => {
-    setSelectedChildId(childId)
-  }
+  // Load student data when child is selected
+  useEffect(() => {
+    if (selectedChildId) {
+      loadStudentData(selectedChildId)
+    }
+  }, [selectedChildId, loadStudentData])
 
   // Check if user is a parent
   if (!user || user.role !== 'parent') {
