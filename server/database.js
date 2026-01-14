@@ -19,26 +19,29 @@ const useSQLite = USE_SQLITE;
 // Database configuration
 const getDbConfig = () => {
   if (process.env.DATABASE_URL) {
-    const connectionString = process.env.DATABASE_URL;
-    const sslConnectionString = connectionString.includes('?') ?
-      connectionString + '&sslmode=require' :
-      connectionString + '?sslmode=require';
-
     return {
-      connectionString: sslConnectionString,
+      connectionString: process.env.DATABASE_URL,
       ssl: {
         rejectUnauthorized: false
       }
     };
   }
 
-  return {
+  const config = {
     host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT || '5432', 10),
     database: process.env.DB_NAME || 'eduke',
     user: process.env.DB_USER || 'postgres',
     password: process.env.DB_PASSWORD || 'postgres'
   };
+
+  if (isProduction) {
+    config.ssl = {
+      rejectUnauthorized: false
+    };
+  }
+
+  return config;
 };
 
 // Database connection

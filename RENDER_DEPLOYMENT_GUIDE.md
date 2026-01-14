@@ -296,7 +296,17 @@ if (useProduction) {
 3. Check database credentials in Environment tab
 4. Verify `sslmode=require` is in connection string
 
-### Issue 2: CORS Error in Frontend
+### Issue 2: Self-Signed Certificate Error (DEPTH_ZERO_SELF_SIGNED_CERT)
+
+**Symptom**: `Error: self-signed certificate` or `DEPTH_ZERO_SELF_SIGNED_CERT`
+
+**Solution**:
+1. This occurs because Render uses self-signed certificates for managed databases.
+2. The application is configured to handle this automatically with `ssl: { rejectUnauthorized: false }` in `server/database.js`.
+3. If you still encounter this, ensure `DATABASE_URL` is used as the primary connection method.
+4. Alternatively, add an environment variable in Render: `PGSSLMODE=no-verify`.
+
+### Issue 3: CORS Error in Frontend
 
 **Symptom**: `Access to XMLHttpRequest blocked by CORS`
 
