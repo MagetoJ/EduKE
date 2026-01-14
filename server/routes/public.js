@@ -169,7 +169,7 @@ router.post('/login', loginRateLimiter, async (req, res) => {
     }
 
     // CHECKING BOOLEAN (is_verified)
-    if (user.role !== 'super_admin' && user.is_verified !== true) {
+    if (user.role !== 'super_admin' && !user.is_verified) {
       return res.status(403).json({ error: 'Email address has not been verified yet.' });
     }
 
@@ -210,7 +210,7 @@ router.post('/login', loginRateLimiter, async (req, res) => {
         schoolId: user.school_id,
         schoolName: school?.name,
         schoolCurriculum: school?.curriculum,
-        emailVerified: user.is_verified === true, // CHECKING BOOLEAN
+        emailVerified: Boolean(user.is_verified), // CHECKING BOOLEAN
         emailVerifiedAt: user.email_verified_at,
         avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face'
       }
@@ -276,7 +276,7 @@ router.post('/reset-password', authRateLimiter, async (req, res) => {
 
     if (
       !resetRecord ||
-      resetRecord.used === true || // UPDATED: 1 -> true
+      resetRecord.used || // UPDATED: 1 -> true
       new Date(resetRecord.expires_at).getTime() < Date.now()
     ) {
       return res.status(400).json({ error: 'Invalid or expired reset token' });
@@ -315,7 +315,7 @@ router.post('/verify-email', authRateLimiter, async (req, res) => {
     }
 
     // UPDATED: 1 -> true
-    if (verificationRecord.used === true) {
+    if (verificationRecord.used) {
       return res.status(400).json({ error: 'Verification token has already been used' });
     }
 
@@ -358,7 +358,7 @@ router.post('/refresh-token', authRateLimiter, async (req, res) => {
 
     if (
       !tokenRecord ||
-      tokenRecord.revoked === true || // UPDATED: 1 -> true
+      tokenRecord.revoked || // UPDATED: 1 -> true
       new Date(tokenRecord.expires_at).getTime() < Date.now()
     ) {
       return res.status(401).json({ error: 'Invalid refresh token' });

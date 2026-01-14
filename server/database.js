@@ -100,8 +100,13 @@ const initializeSchema = async () => {
           try {
             await db.query(statement);
           } catch (err) {
-            // Ignore table/index already exists errors
+            // Ignore table/index already exists errors or column does not exist for index creation
             if (err.code && (err.code === '42P07' || err.code === '42P16' || err.code === '23505' || err.code === '23514')) {
+              continue;
+            }
+            // Also ignore "column does not exist" specifically for index creation if it's likely a mismatch
+            if (err.message && err.message.includes('column') && err.message.includes('does not exist') && statement.toUpperCase().includes('CREATE INDEX')) {
+              console.warn(`Warning: Skipping index creation due to missing column: ${err.message}`);
               continue;
             }
             console.error(`Schema error on statement ${i + 1}:`, err.message);
@@ -308,7 +313,7 @@ const ensureSchemaUpgrades = async () => {
       { col: 'class_assigned', type: 'TEXT' },
       { col: 'subject', type: 'TEXT' },
       { col: 'status', type: 'TEXT', default: "'active'" },
-      { col: 'is_verified', type: 'INTEGER', default: '0' },
+      { col: 'is_verified', type: usingPostgres ? 'BOOLEAN' : 'INTEGER', default: usingPostgres ? 'false' : '0' },
       { col: 'email_verified_at', type: 'TIMESTAMP' },
       { col: 'must_change_password', type: usingPostgres ? 'BOOLEAN' : 'INTEGER', default: usingPostgres ? 'false' : '0' },
       { col: 'mfa_enabled', type: usingPostgres ? 'BOOLEAN' : 'INTEGER', default: usingPostgres ? 'false' : '0' },
@@ -354,14 +359,16 @@ const ensureSuperAdmin = async () => {
     const existing = await dbGet('SELECT id FROM users WHERE email = ?', [email]);
     const hash = await bcrypt.hash(SUPER_ADMIN_PASSWORD, SALT_ROUNDS);
 
+    const isVerified = usingPostgres ? 'true' : 1;
+
     if (existing) {
       await dbRun(
-        `UPDATE users SET password_hash = ?, role = 'super_admin', is_verified = 1, status = 'active' WHERE id = ?`,
+        `UPDATE users SET password_hash = ?, role = 'super_admin', is_verified = ${isVerified}, status = 'active' WHERE id = ?`,
         [hash, existing.id]
       );
     } else {
       await dbRun(
-        `INSERT INTO users (name, email, password_hash, role, is_verified, status, email_verified_at) VALUES (?, ?, ?, ?, 1, 'active', ?)`,
+        `INSERT INTO users (name, email, password_hash, role, is_verified, status, email_verified_at) VALUES (?, ?, ?, ?, ${isVerified}, 'active', ?)`,
         ['Super Admin', email, hash, 'super_admin', nowIso()]
       );
     }
