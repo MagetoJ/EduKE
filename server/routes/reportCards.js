@@ -6,7 +6,7 @@ const { dbGet, dbAll } = require('../database');
 
 reportCardRouter.get(
   '/student/:studentId/term/:termId',
-  authorizeRole(['admin', 'teacher', 'parent', 'student']),
+  authorizeRole(['admin', 'teacher', 'parent', 'student', 'super_admin', 'exam_officer', 'hod']),
   async (req, res) => {
     try {
       const { studentId, termId } = req.params;
@@ -47,7 +47,7 @@ reportCardRouter.get(
 
 reportCardRouter.get(
   '/student/:studentId/term/:termId/pdf',
-  authorizeRole(['admin', 'teacher', 'parent', 'student']),
+  authorizeRole(['admin', 'teacher', 'parent', 'student', 'super_admin', 'exam_officer', 'hod']),
   async (req, res) => {
     try {
       const { studentId, termId } = req.params;
@@ -116,7 +116,7 @@ reportCardRouter.get(
 
 reportCardRouter.post(
   '/bulk-generate',
-  authorizeRole(['admin']),
+  authorizeRole(['admin', 'super_admin', 'exam_officer']),
   async (req, res) => {
     try {
       const { schoolId } = req;
@@ -151,7 +151,7 @@ reportCardRouter.post(
 
 reportCardRouter.post(
   '/comment',
-  authorizeRole(['admin', 'teacher']),
+  authorizeRole(['admin', 'teacher', 'super_admin', 'exam_officer', 'hod']),
   async (req, res) => {
     try {
       const { schoolId, user } = req;
@@ -185,7 +185,7 @@ reportCardRouter.post(
 
 reportCardRouter.get(
   '/grade/:gradeLevel/term/:termId',
-  authorizeRole(['admin']),
+  authorizeRole(['admin', 'super_admin', 'exam_officer', 'hod']),
   async (req, res) => {
     try {
       const { gradeLevel, termId } = req.params;

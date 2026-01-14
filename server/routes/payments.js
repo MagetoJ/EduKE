@@ -6,7 +6,7 @@ const { getPaymentProcessor } = require('../services/paymentService');
 
 paymentRouter.get(
   '/fees/student/:studentId',
-  authorizeRole(['admin', 'parent', 'student']),
+  authorizeRole(['admin', 'parent', 'student', 'super_admin', 'registrar']),
   requireFeature('finance'),
   async (req, res) => {
     try {
@@ -51,7 +51,7 @@ paymentRouter.get(
 
 paymentRouter.get(
   '/summary',
-  authorizeRole(['admin']),
+  authorizeRole(['admin', 'super_admin', 'registrar']),
   requireFeature('finance'),
   async (req, res) => {
     try {
@@ -96,7 +96,7 @@ paymentRouter.get(
 
 paymentRouter.post(
   '/initiate',
-  authorizeRole(['admin', 'student', 'parent']),
+  authorizeRole(['admin', 'student', 'parent', 'super_admin', 'registrar']),
   requireFeature('finance'),
   async (req, res) => {
     try {
@@ -183,7 +183,7 @@ paymentRouter.post(
 
 paymentRouter.post(
   '/record-manual',
-  authorizeRole(['admin']),
+  authorizeRole(['admin', 'super_admin', 'registrar']),
   requireFeature('finance'),
   async (req, res) => {
     try {
@@ -290,7 +290,7 @@ paymentRouter.post(
 
 paymentRouter.get(
   '/transactions/:studentFeeId',
-  authorizeRole(['admin', 'parent']),
+  authorizeRole(['admin', 'parent', 'super_admin', 'registrar']),
   requireFeature('finance'),
   async (req, res) => {
     try {

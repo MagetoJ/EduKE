@@ -4,7 +4,7 @@ const { query } = require('../db/connection');
 const { authorizeRole } = require('../middleware/auth');
 
 // Get all timetable entries for a school
-router.get('/', authorizeRole(['super_admin', 'admin', 'teacher', 'student', 'parent']), async (req, res) => {
+router.get('/', authorizeRole(['super_admin', 'admin', 'teacher', 'student', 'parent', 'timetable_manager', 'registrar', 'hod']), async (req, res) => {
   try {
     const { schoolId, user, isSuperAdmin } = req;
     const { grade, class_section, teacher_id, day_of_week } = req.query;
@@ -116,7 +116,7 @@ router.get('/', authorizeRole(['super_admin', 'admin', 'teacher', 'student', 'pa
 });
 
 // Get timetable periods for a school
-router.get('/periods', authorizeRole(['super_admin', 'admin', 'teacher', 'student', 'parent']), async (req, res) => {
+router.get('/periods', authorizeRole(['super_admin', 'admin', 'teacher', 'student', 'parent', 'timetable_manager', 'registrar', 'hod']), async (req, res) => {
   try {
     const { schoolId, user } = req;
     let sql = `SELECT * FROM timetable_periods`;
@@ -172,7 +172,7 @@ router.get('/periods', authorizeRole(['super_admin', 'admin', 'teacher', 'studen
   }
 });
 
-router.post('/', authorizeRole(['admin', 'super_admin']), async (req, res) => {
+router.post('/', authorizeRole(['admin', 'super_admin', 'timetable_manager', 'registrar', 'hod']), async (req, res) => {
   try {
     const {
       course_id,
@@ -219,7 +219,7 @@ router.post('/', authorizeRole(['admin', 'super_admin']), async (req, res) => {
   }
 });
 
-router.put('/:id', authorizeRole(['admin', 'super_admin']), async (req, res) => {
+router.put('/:id', authorizeRole(['admin', 'super_admin', 'timetable_manager', 'registrar', 'hod']), async (req, res) => {
   try {
     const { id } = req.params;
     const {
@@ -267,7 +267,7 @@ router.put('/:id', authorizeRole(['admin', 'super_admin']), async (req, res) => 
 });
 
 // Delete timetable entry
-router.delete('/:id', authorizeRole(['admin', 'super_admin']), async (req, res) => {
+router.delete('/:id', authorizeRole(['admin', 'super_admin', 'timetable_manager', 'registrar', 'hod']), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -287,7 +287,7 @@ router.delete('/:id', authorizeRole(['admin', 'super_admin']), async (req, res) 
   }
 });
 
-router.post('/periods', authorizeRole(['super_admin', 'admin', 'teacher']), async (req, res) => {
+router.post('/periods', authorizeRole(['super_admin', 'admin', 'teacher', 'timetable_manager', 'registrar', 'hod']), async (req, res) => {
   try {
     const { period_name, start_time, end_time, is_break } = req.body;
 
@@ -315,7 +315,7 @@ router.post('/periods', authorizeRole(['super_admin', 'admin', 'teacher']), asyn
   }
 });
 
-router.put('/periods/:id', authorizeRole(['admin', 'super_admin']), async (req, res) => {
+router.put('/periods/:id', authorizeRole(['admin', 'super_admin', 'timetable_manager', 'registrar', 'hod']), async (req, res) => {
   try {
     const { id } = req.params;
     const { period_name, start_time, end_time, is_break } = req.body;
@@ -340,7 +340,7 @@ router.put('/periods/:id', authorizeRole(['admin', 'super_admin']), async (req, 
 });
 
 // Delete timetable period
-router.delete('/periods/:id', authorizeRole(['admin', 'super_admin']), async (req, res) => {
+router.delete('/periods/:id', authorizeRole(['admin', 'super_admin', 'timetable_manager', 'registrar', 'hod']), async (req, res) => {
   try {
     const { id } = req.params;
 

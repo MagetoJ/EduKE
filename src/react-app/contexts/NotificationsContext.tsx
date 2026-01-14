@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { useApi } from './AuthContext';
+import { useApi, useAuth } from './AuthContext';
 
 export interface Notification {
   id: number;
@@ -33,8 +33,10 @@ const NotificationsProvider = ({ children }: { children: React.ReactNode }) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const api = useApi();
+  const { user } = useAuth();
 
   const fetchNotifications = useCallback(async () => {
+    if (!user) return; // Don't fetch if no user
     try {
       setIsLoading(true);
       const response = await api(`/api/notifications`);
@@ -138,11 +140,17 @@ const NotificationsProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   useEffect(() => {
+    if (!user) {
+      setNotifications([]);
+      setUnreadCount(0);
+      return;
+    }
+
     fetchNotifications();
 
     const interval = setInterval(fetchNotifications, 30000);
     return () => clearInterval(interval);
-  }, [fetchNotifications]);
+  }, [fetchNotifications, user]);
 
   const value: NotificationsContextType = {
     notifications,

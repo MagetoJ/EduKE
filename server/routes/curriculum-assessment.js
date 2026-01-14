@@ -63,7 +63,7 @@ router.get('/844/student/:studentId', requireAuth, async (req, res) => {
 });
 
 // CREATE 8-4-4 assessment
-router.post('/844', requireAuth, requireRole(['admin', 'teacher']), async (req, res) => {
+router.post('/844', requireAuth, requireRole(['admin', 'teacher', 'super_admin', 'exam_officer', 'hod']), async (req, res) => {
   try {
     const { student_id, academic_year_id, term_id, form, stream, subject, marks_obtained, max_marks, grade_letter, points, is_compulsory } = req.body;
     
@@ -107,7 +107,7 @@ router.get('/british/student/:studentId', requireAuth, async (req, res) => {
 });
 
 // CREATE British curriculum assessment
-router.post('/british', requireAuth, requireRole(['admin', 'teacher']), async (req, res) => {
+router.post('/british', requireAuth, requireRole(['admin', 'teacher', 'super_admin', 'exam_officer', 'hod']), async (req, res) => {
   try {
     const { student_id, academic_year_id, term_id, key_stage, subject, attainment_grade, effort_grade, predicted_grade, mock_result, checkpoint_score } = req.body;
     
@@ -151,7 +151,7 @@ router.get('/american/student/:studentId', requireAuth, async (req, res) => {
 });
 
 // CREATE American curriculum assessment
-router.post('/american', requireAuth, requireRole(['admin', 'teacher']), async (req, res) => {
+router.post('/american', requireAuth, requireRole(['admin', 'teacher', 'super_admin', 'exam_officer', 'hod']), async (req, res) => {
   try {
     const { student_id, academic_year_id, course_id, grade_level, subject, letter_grade, gpa_points, credits_earned, map_rit_score, map_percentile } = req.body;
     
@@ -195,7 +195,7 @@ router.get('/ib/student/:studentId', requireAuth, async (req, res) => {
 });
 
 // CREATE IB assessment
-router.post('/ib', requireAuth, requireRole(['admin', 'teacher']), async (req, res) => {
+router.post('/ib', requireAuth, requireRole(['admin', 'teacher', 'super_admin', 'exam_officer', 'hod']), async (req, res) => {
   try {
     const { student_id, academic_year_id, subject, programme, criterion_a, criterion_b, criterion_c, criterion_d, internal_assessment_score, external_assessment_score } = req.body;
     
@@ -306,7 +306,7 @@ router.get('/merit-lists', requireAuth, async (req, res) => {
 });
 
 // GENERATE merit lists
-router.post('/merit-lists/generate', requireAuth, requireRole(['admin']), async (req, res) => {
+router.post('/merit-lists/generate', requireAuth, requireRole(['admin', 'super_admin', 'exam_officer', 'hod']), async (req, res) => {
   try {
     const { academic_year_id, term_id, grade_level } = req.body;
     

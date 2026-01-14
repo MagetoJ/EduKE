@@ -90,7 +90,7 @@ export default function Dashboard() {
           }
           const data = await response.json()
           setSchools(Array.isArray(data) ? data : (data.data || []))
-        } else if (user.role === 'admin') {
+        } else if (['admin', 'registrar', 'exam_officer', 'hod', 'timetable_manager', 'transport_manager', 'boarding_master', 'cbc_coordinator', 'hr_manager', 'admission_officer', 'nurse'].includes(user.role)) {
           const [statsResponse, leaveResponse] = await Promise.all([
             apiFetch('/api/dashboard/stats'),
             apiFetch('/api/leave-requests')
@@ -414,8 +414,19 @@ export default function Dashboard() {
       case 'super_admin':
         return renderSuperAdminDashboard()
       case 'admin':
+      case 'registrar':
+      case 'exam_officer':
+      case 'hod':
+      case 'timetable_manager':
+      case 'transport_manager':
+      case 'boarding_master':
+      case 'cbc_coordinator':
+      case 'hr_manager':
+      case 'admission_officer':
+      case 'nurse':
         return renderAdminDashboard()
       case 'teacher':
+      case 'class_teacher':
         return renderTeacherDashboard()
       case 'parent':
         return renderParentDashboard()

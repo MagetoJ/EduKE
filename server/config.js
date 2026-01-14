@@ -1,6 +1,20 @@
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const APP_ENV = process.env.APP_ENV || NODE_ENV;
-const isProduction = NODE_ENV === 'production' || APP_ENV === 'production';
+
+// Robust production check including platform-specific environment variables
+const isProduction = 
+  NODE_ENV === 'production' || 
+  APP_ENV === 'production' ||
+  process.env.RENDER === 'true' ||
+  process.env.RENDER === '1' ||
+  process.env.RAILWAY_ENVIRONMENT ||
+  process.env.FLY_APP_NAME ||
+  process.env.VERCEL === '1' ||
+  Boolean(process.env.DATABASE_URL);
+
+const DB_TYPE = (process.env.DB_TYPE || (isProduction ? 'postgres' : 'sqlite')).toLowerCase();
+const USE_POSTGRES = DB_TYPE === 'postgres' || DB_TYPE === 'postgresql' || Boolean(process.env.DATABASE_URL);
+const USE_SQLITE = !USE_POSTGRES;
 
 const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'change-me-refresh-in-production';
@@ -106,6 +120,9 @@ module.exports = {
   NODE_ENV,
   APP_ENV,
   isProduction,
+  DB_TYPE,
+  USE_POSTGRES,
+  USE_SQLITE,
   JWT_SECRET,
   JWT_REFRESH_SECRET,
   SALT_ROUNDS,

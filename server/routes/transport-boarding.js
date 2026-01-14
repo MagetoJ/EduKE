@@ -52,7 +52,7 @@ router.get('/routes/:id', requireAuth, async (req, res) => {
 });
 
 // CREATE transport route
-router.post('/routes', requireAuth, requireRole(['admin']), async (req, res) => {
+router.post('/routes', requireAuth, requireRole(['admin', 'super_admin', 'transport_manager']), async (req, res) => {
   try {
     const { route_name, route_code, start_location, end_location, pickup_time, dropoff_time, vehicle_type, capacity, fare_amount } = req.body;
     
@@ -78,7 +78,7 @@ router.post('/routes', requireAuth, requireRole(['admin']), async (req, res) => 
 });
 
 // UPDATE transport route
-router.put('/routes/:id', requireAuth, requireRole(['admin']), async (req, res) => {
+router.put('/routes/:id', requireAuth, requireRole(['admin', 'super_admin', 'transport_manager']), async (req, res) => {
   try {
     const { route_name, start_location, end_location, pickup_time, dropoff_time, vehicle_type, capacity, fare_amount, status } = req.body;
     
@@ -111,7 +111,7 @@ router.put('/routes/:id', requireAuth, requireRole(['admin']), async (req, res) 
 });
 
 // DELETE transport route
-router.delete('/routes/:id', requireAuth, requireRole(['admin']), async (req, res) => {
+router.delete('/routes/:id', requireAuth, requireRole(['admin', 'super_admin', 'transport_manager']), async (req, res) => {
   try {
     const result = await query(
       'DELETE FROM transport_routes WHERE id = $1 AND school_id = $2 RETURNING id',
@@ -153,7 +153,7 @@ router.get('/enrollments', requireAuth, async (req, res) => {
 });
 
 // CREATE transport enrollment
-router.post('/enrollments', requireAuth, requireRole(['admin']), async (req, res) => {
+router.post('/enrollments', requireAuth, requireRole(['admin', 'super_admin', 'transport_manager', 'registrar']), async (req, res) => {
   try {
     const { student_id, route_id, amount_due, start_date, end_date } = req.body;
     
@@ -204,7 +204,7 @@ router.get('/boarding-houses', requireAuth, async (req, res) => {
 });
 
 // CREATE boarding house
-router.post('/boarding-houses', requireAuth, requireRole(['admin']), async (req, res) => {
+router.post('/boarding-houses', requireAuth, requireRole(['admin', 'super_admin', 'registrar']), async (req, res) => {
   try {
     const { house_name, house_code, capacity, gender_type, fee_amount } = req.body;
     
@@ -255,7 +255,7 @@ router.get('/boarding-enrollments', requireAuth, async (req, res) => {
 });
 
 // CREATE boarding enrollment
-router.post('/boarding-enrollments', requireAuth, requireRole(['admin']), async (req, res) => {
+router.post('/boarding-enrollments', requireAuth, requireRole(['admin', 'super_admin', 'registrar']), async (req, res) => {
   try {
     const { student_id, boarding_house_id, room_id, amount_due, academic_year_id } = req.body;
     

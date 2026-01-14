@@ -204,29 +204,29 @@ export default function Staff() {
       return
     }
 
-    if (formData.role === 'teacher') {
+    if (['teacher', 'class_teacher'].includes(formData.role)) {
       if (!formData.password) {
-        setError('Please provide a password for the teacher account.')
+        setError('Please provide a password for the account.')
         setIsSubmitting(false)
         return
       }
 
       if (!formData.classAssigned) {
-        setError('Please assign a class to the teacher.')
+        setError('Please assign a class.')
         setIsSubmitting(false)
         return
       }
     }
 
     try {
-      if (formData.role === 'teacher') {
+      if (['teacher', 'class_teacher', 'registrar', 'exam_officer', 'hod', 'timetable_manager', 'transport_manager', 'boarding_master', 'cbc_coordinator', 'hr_manager', 'admission_officer', 'nurse'].includes(formData.role)) {
         const response = await api('/api/users', {
           method: 'POST',
           body: JSON.stringify({
             name: `${formData.firstName} ${formData.lastName}`.trim(),
             email: formData.email,
-            password: formData.password,
-            role: 'teacher',
+            password: formData.password || 'Temporary123!', // Default password if not provided
+            role: formData.role,
             phone: formData.phone,
             school_id: formData.school_id,
             class_assigned: formData.classAssigned,
@@ -437,6 +437,17 @@ export default function Staff() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="teacher">Teacher</SelectItem>
+                        <SelectItem value="class_teacher">Class Teacher</SelectItem>
+                        <SelectItem value="registrar">Registrar</SelectItem>
+                        <SelectItem value="exam_officer">Exam Officer</SelectItem>
+                        <SelectItem value="hod">Head of Department (HOD)</SelectItem>
+                        <SelectItem value="timetable_manager">Timetable Manager</SelectItem>
+                        <SelectItem value="transport_manager">Transport Manager</SelectItem>
+                        <SelectItem value="boarding_master">Boarding Master</SelectItem>
+                        <SelectItem value="cbc_coordinator">CBC Coordinator</SelectItem>
+                        <SelectItem value="hr_manager">HR Manager</SelectItem>
+                        <SelectItem value="admission_officer">Admission Officer</SelectItem>
+                        <SelectItem value="nurse">Nurse</SelectItem>
                         <SelectItem value="administrator">Administrator</SelectItem>
                         <SelectItem value="counselor">Counselor</SelectItem>
                         <SelectItem value="librarian">Librarian</SelectItem>
@@ -471,7 +482,7 @@ export default function Staff() {
                   </div>
                 </div>
 
-                {formData.role === 'teacher' && (
+                {['teacher', 'class_teacher', 'hod', 'cbc_coordinator'].includes(formData.role) && (
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="classAssigned">Assigned Class</Label>
@@ -575,6 +586,17 @@ export default function Staff() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Teacher">Teacher</SelectItem>
+                        <SelectItem value="Class_teacher">Class Teacher</SelectItem>
+                        <SelectItem value="Registrar">Registrar</SelectItem>
+                        <SelectItem value="Exam_officer">Exam Officer</SelectItem>
+                        <SelectItem value="Hod">HOD</SelectItem>
+                        <SelectItem value="Timetable_manager">Timetable Manager</SelectItem>
+                        <SelectItem value="Transport_manager">Transport Manager</SelectItem>
+                        <SelectItem value="Boarding_master">Boarding Master</SelectItem>
+                        <SelectItem value="Cbc_coordinator">CBC Coordinator</SelectItem>
+                        <SelectItem value="Hr_manager">HR Manager</SelectItem>
+                        <SelectItem value="Admission_officer">Admission Officer</SelectItem>
+                        <SelectItem value="Nurse">Nurse</SelectItem>
                         <SelectItem value="Administrator">Administrator</SelectItem>
                         <SelectItem value="Counselor">Counselor</SelectItem>
                         <SelectItem value="Librarian">Librarian</SelectItem>
@@ -598,7 +620,7 @@ export default function Staff() {
                   </div>
                 </div>
 
-                {editStaffForm.role === 'Teacher' && (
+                {['Teacher', 'Class_teacher', 'Hod', 'Cbc_coordinator'].includes(editStaffForm.role) && (
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="classAssigned">Assigned Class</Label>

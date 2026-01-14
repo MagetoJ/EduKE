@@ -6,7 +6,7 @@ const { dbGet, dbAll } = require('../database');
 
 gradebookRouter.get(
   '/student/:studentId',
-  authorizeRole(['admin', 'teacher', 'parent', 'student']),
+  authorizeRole(['admin', 'teacher', 'parent', 'student', 'super_admin', 'exam_officer', 'hod']),
   async (req, res) => {
     try {
       const { studentId } = req.params;
@@ -31,7 +31,7 @@ gradebookRouter.get(
 
 gradebookRouter.get(
   '/course/:courseId',
-  authorizeRole(['admin', 'teacher']),
+  authorizeRole(['admin', 'teacher', 'super_admin', 'exam_officer', 'hod']),
   async (req, res) => {
     try {
       const { courseId } = req.params;
@@ -74,7 +74,7 @@ gradebookRouter.get(
 
 gradebookRouter.get(
   '/student/:studentId/course/:courseId',
-  authorizeRole(['admin', 'teacher', 'parent', 'student']),
+  authorizeRole(['admin', 'teacher', 'parent', 'student', 'super_admin', 'exam_officer', 'hod']),
   async (req, res) => {
     try {
       const { studentId, courseId } = req.params;
@@ -107,7 +107,7 @@ gradebookRouter.get(
 
 gradebookRouter.post(
   '/record-score',
-  authorizeRole(['admin', 'teacher']),
+  authorizeRole(['admin', 'teacher', 'super_admin', 'exam_officer', 'hod']),
   async (req, res) => {
     try {
       const { schoolId } = req;
@@ -150,7 +150,7 @@ gradebookRouter.post(
 
 gradebookRouter.get(
   '/term/:termId/student/:studentId',
-  authorizeRole(['admin', 'teacher', 'parent', 'student']),
+  authorizeRole(['admin', 'teacher', 'parent', 'student', 'super_admin', 'exam_officer', 'hod']),
   async (req, res) => {
     try {
       const { termId, studentId } = req.params;
@@ -190,7 +190,7 @@ gradebookRouter.get(
 
 gradebookRouter.put(
   '/score/:resultId',
-  authorizeRole(['admin', 'teacher']),
+  authorizeRole(['admin', 'teacher', 'super_admin', 'exam_officer', 'hod']),
   async (req, res) => {
     try {
       const { resultId } = req.params;

@@ -6,7 +6,7 @@ const { dbGet, dbAll, dbRun } = require('../database');
 
 payrollRouter.post(
   '/calculate',
-  authorizeRole(['admin']),
+  authorizeRole(['admin', 'super_admin', 'hr_manager']),
   requireFeature('finance'),
   async (req, res) => {
     try {
@@ -43,7 +43,7 @@ payrollRouter.post(
 
 payrollRouter.post(
   '/save',
-  authorizeRole(['admin']),
+  authorizeRole(['admin', 'super_admin', 'hr_manager']),
   requireFeature('finance'),
   async (req, res) => {
     try {
@@ -79,7 +79,7 @@ payrollRouter.post(
 
 payrollRouter.get(
   '/:staffId/:month/:year',
-  authorizeRole(['admin', 'teacher']),
+  authorizeRole(['admin', 'teacher', 'super_admin', 'hr_manager']),
   async (req, res) => {
     try {
       const { staffId, month, year } = req.params;
@@ -108,7 +108,7 @@ payrollRouter.get(
 
 payrollRouter.get(
   '/:staffId/:month/:year/payslip',
-  authorizeRole(['admin', 'teacher']),
+  authorizeRole(['admin', 'teacher', 'super_admin', 'hr_manager']),
   async (req, res) => {
     try {
       const { staffId, month, year } = req.params;
@@ -169,7 +169,7 @@ payrollRouter.get(
 
 payrollRouter.get(
   '/:staffId/ytd/:month/:year',
-  authorizeRole(['admin', 'teacher']),
+  authorizeRole(['admin', 'teacher', 'super_admin', 'hr_manager']),
   async (req, res) => {
     try {
       const { staffId, month, year } = req.params;
@@ -199,7 +199,7 @@ payrollRouter.get(
 
 payrollRouter.get(
   '/:staffId/history',
-  authorizeRole(['admin', 'teacher']),
+  authorizeRole(['admin', 'teacher', 'super_admin', 'hr_manager']),
   async (req, res) => {
     try {
       const { staffId } = req.params;
@@ -233,7 +233,7 @@ payrollRouter.get(
 
 payrollRouter.post(
   '/deduction/add',
-  authorizeRole(['admin']),
+  authorizeRole(['admin', 'super_admin', 'hr_manager']),
   requireFeature('finance'),
   async (req, res) => {
     try {
@@ -272,7 +272,7 @@ payrollRouter.post(
 
 payrollRouter.get(
   '/summary/:month/:year',
-  authorizeRole(['admin']),
+  authorizeRole(['admin', 'super_admin', 'hr_manager']),
   requireFeature('finance'),
   async (req, res) => {
     try {

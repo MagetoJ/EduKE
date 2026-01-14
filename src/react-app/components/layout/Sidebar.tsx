@@ -36,7 +36,7 @@ const navItems: NavItem[] = [
     title: 'Dashboard',
     href: '/dashboard',
     icon: LayoutDashboard,
-    roles: ['super_admin', 'admin', 'teacher', 'parent', 'student']
+    roles: ['super_admin', 'admin', 'teacher', 'parent', 'student', 'registrar', 'exam_officer', 'hod', 'timetable_manager', 'transport_manager', 'class_teacher', 'boarding_master', 'cbc_coordinator', 'hr_manager', 'admission_officer', 'nurse']
   },
   {
     title: 'Schools',
@@ -60,19 +60,19 @@ const navItems: NavItem[] = [
     title: 'Students',
     href: '/dashboard/students',
     icon: Users,
-    roles: ['admin', 'teacher']
+    roles: ['admin', 'teacher', 'registrar', 'exam_officer', 'hod', 'admission_officer', 'class_teacher']
   },
   {
     title: 'Staff',
     href: '/dashboard/staff',
     icon: UserCheck,
-    roles: ['admin']
+    roles: ['admin', 'registrar', 'hod', 'hr_manager']
   },
   {
     title: 'Academics',
     href: '/dashboard/academics',
     icon: BookOpen,
-    roles: ['admin', 'teacher']
+    roles: ['admin', 'teacher', 'exam_officer', 'hod', 'cbc_coordinator', 'class_teacher']
   },
   {
     title: 'My Progress',
@@ -96,73 +96,61 @@ const navItems: NavItem[] = [
     title: 'Teacher Portal',
     href: '/dashboard/teacher-dashboard',
     icon: BookOpen,
-    roles: ['teacher']
+    roles: ['teacher', 'hod', 'class_teacher']
   },
   {
     title: 'Timetable',
     href: '/dashboard/timetable',
     icon: Calendar,
-    roles: ['admin', 'teacher', 'parent', 'student']
+    roles: ['admin', 'teacher', 'parent', 'student', 'timetable_manager', 'registrar', 'hod']
   },
   {
     title: 'Communications',
     href: '/dashboard/communications',
     icon: MessageSquare,
-    roles: ['admin', 'teacher', 'parent']
+    roles: ['admin', 'teacher', 'parent', 'registrar', 'hod', 'hr_manager', 'admission_officer', 'nurse']
   },
   {
     title: 'Fees',
     href: '/dashboard/fees',
     icon: DollarSign,
-    roles: ['admin', 'parent', 'student']
+    roles: ['admin', 'parent', 'student', 'registrar', 'super_admin']
   },
   {
     title: 'Leave Management',
     href: '/dashboard/leave',
     icon: Clock,
-    roles: ['admin', 'teacher']
+    roles: ['admin', 'teacher', 'hod', 'hr_manager']
   },
   {
     title: 'Reports',
     href: '/dashboard/reports',
     icon: BarChart3,
-    roles: ['admin', 'super_admin']
+    roles: ['admin', 'super_admin', 'registrar', 'exam_officer', 'hod', 'hr_manager']
   },
   {
     title: 'CBC',
     href: '/dashboard/cbc',
     icon: Zap,
-    roles: ['admin', 'teacher']
+    roles: ['admin', 'teacher', 'hod', 'cbc_coordinator']
   },
-  /* {
-    title: 'NEMIS',
-    href: '/dashboard/nemis',
-    icon: FileCheck,
-    roles: ['admin']
-  },
-  {
-    title: 'KNEC',
-    href: '/dashboard/knec',
-    icon: Award,
-    roles: ['admin']
-  }, */
   {
     title: 'Transport',
     href: '/dashboard/transport',
     icon: Bus,
-    roles: ['admin']
+    roles: ['admin', 'transport_manager']
   },
   {
     title: 'Boarding',
     href: '/dashboard/boarding',
     icon: Home,
-    roles: ['admin']
+    roles: ['admin', 'registrar', 'boarding_master']
   },
   {
     title: 'Curriculum Assessment',
     href: '/dashboard/curriculum-assessment',
     icon: TrendingUp,
-    roles: ['admin', 'teacher']
+    roles: ['admin', 'teacher', 'exam_officer', 'hod', 'cbc_coordinator']
   },
   {
     title: 'Settings',

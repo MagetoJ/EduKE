@@ -7,32 +7,14 @@ const { nowIso } = require('./utils');
 const {
   SALT_ROUNDS,
   SUPER_ADMIN_USERNAME,
-  SUPER_ADMIN_PASSWORD
+  SUPER_ADMIN_PASSWORD,
+  isProduction,
+  USE_POSTGRES,
+  USE_SQLITE
 } = require('./config');
 
-const isProductionEnv = process.env.NODE_ENV === 'production'
-  || process.env.RENDER === 'true'
-  || process.env.RENDER === '1'
-  || process.env.RAILWAY_ENVIRONMENT
-  || process.env.FLY_APP_NAME
-  || Boolean(process.env.DATABASE_URL);
-
-const dbType = (process.env.DB_TYPE || '').toLowerCase();
-const prefersSQLite = dbType === 'sqlite' || dbType === 'sqlite3';
-
-const hasPostgresConfig = Boolean(
-  process.env.DATABASE_URL
-    || process.env.DB_HOST
-    || process.env.DB_NAME
-    || process.env.DB_USER
-    || process.env.DB_PASSWORD
-);
-
-const useSQLite = !isProductionEnv && prefersSQLite && !hasPostgresConfig;
-
-if (isProductionEnv && prefersSQLite) {
-  console.warn('SQLite is disabled in production; using PostgreSQL instead.');
-}
+const usingPostgres = USE_POSTGRES;
+const useSQLite = USE_SQLITE;
 
 // Database configuration
 const getDbConfig = () => {
@@ -60,21 +42,18 @@ const getDbConfig = () => {
 };
 
 // Database connection
-if (!useSQLite && !hasPostgresConfig) {
-  throw new Error('PostgreSQL configuration is required. Set DATABASE_URL or DB_HOST/DB_NAME/DB_USER/DB_PASSWORD.');
-}
-
 let db;
 if (useSQLite) {
   const dbPath = path.join(__dirname, 'eduke.db');
   db = new sqlite3.Database(dbPath);
-  console.log('Using SQLite database for local development.');
+  console.log('✓ Using SQLite database for local development.');
 } else {
   db = new Pool(getDbConfig());
+  console.log('✓ Using PostgreSQL database.');
 }
 
 // Test connection
-if (!useSQLite) {
+if (usingPostgres) {
   db.on('connect', () => {
     console.log('Connected to PostgreSQL database.');
   });
@@ -88,7 +67,7 @@ if (!useSQLite) {
 const schemaPath = useSQLite
   ? path.join(__dirname, '..', 'database', 'schema_sqlite.sql')
   : path.join(__dirname, '..', 'database', 'schema.sql');
-const usingPostgres = !useSQLite;
+
 let schemaInitialized = false;
 let schemaInitializationPromise = null;
 
@@ -98,11 +77,18 @@ const initializeSchema = async () => {
   
   schemaInitializationPromise = (async () => {
     try {
+      if (!fs.existsSync(schemaPath)) {
+        console.error(`✗ Schema file not found: ${schemaPath}`);
+        return;
+      }
+      
       const schema = fs.readFileSync(schemaPath, 'utf-8').trim();
       if (usingPostgres) {
-        const statements = schema.split(';')
+        const statements = schema
+          .replace(/--.*$/gm, '') // Remove single-line comments
+          .split(';')
           .map(stmt => stmt.trim())
-          .filter(stmt => stmt.length > 0 && !stmt.match(/^\s*--/));
+          .filter(stmt => stmt.length > 0);
         
         console.log(`Executing ${statements.length} schema statements...`);
         
@@ -111,14 +97,11 @@ const initializeSchema = async () => {
           try {
             await db.query(statement);
           } catch (err) {
-            // Ignore table/index already exists errors (42P07, 42P16)
-            // Ignore duplicate key value errors (23505)
-            // Ignore constraint errors (23514)
+            // Ignore table/index already exists errors
             if (err.code && (err.code === '42P07' || err.code === '42P16' || err.code === '23505' || err.code === '23514')) {
               continue;
             }
             console.error(`Schema error on statement ${i + 1}:`, err.message);
-            console.error('Statement:', statement.substring(0, 150));
             throw err;
           }
         }
@@ -207,457 +190,224 @@ const dbAll = async (sql, params = []) => {
   });
 };
 
+const query = async (text, params = []) => {
+  return new Promise((resolve, reject) => {
+    if (usingPostgres) {
+      const convertedSql = convertPlaceholders(text, true);
+      db.query(convertedSql, params, (err, res) => {
+        if (err) {
+          console.error('Query error:', err);
+          reject(err);
+        } else {
+          resolve(res);
+        }
+      });
+    } else {
+      const sqliteText = text.replace(/\s+RETURNING\s+\*/gi, '').replace(/\$\d+/g, '?');
+      const statement = sqliteText.trim().toUpperCase();
+      
+      if (statement.startsWith('SELECT') || statement.startsWith('PRAGMA')) {
+        db.all(sqliteText, params, (err, rows) => {
+          if (err) {
+            console.error('Query error:', err);
+            reject(err);
+          } else {
+            resolve({ rows, rowCount: rows.length });
+          }
+        });
+      } else {
+        db.run(sqliteText, params, function(err) {
+          if (err) {
+            console.error('Query error:', err);
+            reject(err);
+          } else {
+            resolve({ rowCount: this.changes, lastID: this.lastID, rows: [] });
+          }
+        });
+      }
+    }
+  });
+};
+
+const getClient = async () => {
+  if (usingPostgres) {
+    const client = await db.connect();
+    return client;
+  }
+  return db;
+};
+
+const transaction = async (callback) => {
+  if (usingPostgres) {
+    const client = await getClient();
+    try {
+      await client.query('BEGIN');
+      const result = await callback(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+  return new Promise((resolve, reject) => {
+    db.serialize(async () => {
+      db.run('BEGIN TRANSACTION', async (err) => {
+        if (err) return reject(err);
+        try {
+          const result = await callback(db);
+          db.run('COMMIT', (commitErr) => {
+            if (commitErr) {
+              db.run('ROLLBACK');
+              return reject(commitErr);
+            }
+            resolve(result);
+          });
+        } catch (error) {
+          db.run('ROLLBACK');
+          reject(error);
+        }
+      });
+    });
+  });
+};
+
+const tableExists = async (tableName) => {
+  if (useSQLite) {
+    const result = await dbAll(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`, [tableName]);
+    return result.length > 0;
+  }
+  const result = await query(
+    `SELECT EXISTS (
+      SELECT FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+      AND table_name = $1
+    )`,
+    [tableName]
+  );
+  return result.rows[0].exists;
+};
+
 const ensureSchemaUpgrades = async () => {
   try {
-    // Check if users table exists first
-    let usersTableExists = false;
-    if (usingPostgres) {
-      const result = await dbAll(`
-        SELECT EXISTS (
-          SELECT FROM information_schema.tables 
-          WHERE table_schema = 'public' 
-          AND table_name = 'users'
-        )
-      `);
-      usersTableExists = result && result[0] && result[0].exists === true;
-    } else {
-      const result = await dbAll(`SELECT name FROM sqlite_master WHERE type='table' AND name='users'`);
-      usersTableExists = result && result.length > 0;
-    }
-    
-    if (!usersTableExists) {
-      console.warn('⚠ Users table does not exist yet. Schema initialization may still be in progress. Skipping upgrades.');
-      return;
-    }
-    
-    // Check users table columns
-    let userColumnNames = [];
-    if (usingPostgres) {
-      const userColumns = await dbAll(`
-        SELECT column_name
-        FROM information_schema.columns
-        WHERE table_name = 'users' AND table_schema = 'public'
-      `);
-      userColumnNames = userColumns.map((column) => column.column_name);
-    } else {
-      // For SQLite, use PRAGMA table_info
-      const userColumns = await dbAll(`PRAGMA table_info(users)`);
-      userColumnNames = userColumns.map((column) => column.name);
-    }
+    const usersExist = await tableExists('users');
+    if (!usersExist) return;
 
-    if (!userColumnNames.includes('department')) {
-      await dbRun('ALTER TABLE users ADD COLUMN department TEXT');
-    }
-    if (!userColumnNames.includes('class_assigned')) {
-      await dbRun('ALTER TABLE users ADD COLUMN class_assigned TEXT');
-    }
-    if (!userColumnNames.includes('subject')) {
-      await dbRun('ALTER TABLE users ADD COLUMN subject TEXT');
-    }
-    if (!userColumnNames.includes('status')) {
-      await dbRun("ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'");
-    }
-    if (!userColumnNames.includes('is_verified')) {
-      await dbRun('ALTER TABLE users ADD COLUMN is_verified INTEGER NOT NULL DEFAULT 0');
-    }
-    if (!userColumnNames.includes('email_verified_at')) {
-      await dbRun('ALTER TABLE users ADD COLUMN email_verified_at TIMESTAMP');
-    }
-    if (!userColumnNames.includes('must_change_password')) {
-      if (usingPostgres) {
-        await dbRun('ALTER TABLE users ADD COLUMN must_change_password BOOLEAN DEFAULT false');
-      } else {
-        await dbRun('ALTER TABLE users ADD COLUMN must_change_password INTEGER DEFAULT 0');
-      }
-    }
-    if (!userColumnNames.includes('mfa_enabled')) {
-      if (usingPostgres) {
-        await dbRun('ALTER TABLE users ADD COLUMN mfa_enabled BOOLEAN DEFAULT false');
-      } else {
-        await dbRun('ALTER TABLE users ADD COLUMN mfa_enabled INTEGER DEFAULT 0');
-      }
-    }
-    if (!userColumnNames.includes('mfa_secret')) {
-      await dbRun('ALTER TABLE users ADD COLUMN mfa_secret TEXT');
-    }
-    if (!userColumnNames.includes('failed_login_attempts')) {
-      await dbRun('ALTER TABLE users ADD COLUMN failed_login_attempts INTEGER DEFAULT 0');
-    }
-    if (!userColumnNames.includes('last_failed_login_at')) {
-      await dbRun('ALTER TABLE users ADD COLUMN last_failed_login_at TIMESTAMP');
-    }
-    if (!userColumnNames.includes('account_locked_until')) {
-      await dbRun('ALTER TABLE users ADD COLUMN account_locked_until TIMESTAMP');
-    }
+    // Use query helper for upgrades
+    const userColumns = usingPostgres 
+      ? (await query("SELECT column_name FROM information_schema.columns WHERE table_name = 'users'")).rows.map(c => c.column_name)
+      : (await query("PRAGMA table_info(users)")).rows.map(c => c.name);
 
-    if (usingPostgres) {
-      await dbRun(
-        `UPDATE users
-         SET is_verified = TRUE,
-             email_verified_at = COALESCE(email_verified_at, CURRENT_TIMESTAMP),
-             status = COALESCE(status, 'active')
-         WHERE (is_verified IS NULL OR is_verified = FALSE)
-           AND id NOT IN (SELECT user_id FROM email_verification_tokens)`
-      );
-    } else {
-      await dbRun(
-        `UPDATE users
-         SET is_verified = 1,
-             email_verified_at = COALESCE(email_verified_at, CURRENT_TIMESTAMP),
-             status = COALESCE(status, 'active')
-         WHERE (is_verified IS NULL OR is_verified = 0)
-           AND id NOT IN (SELECT user_id FROM email_verification_tokens)`
-      );
-    }
+    const upgrades = [
+      { col: 'department', type: 'TEXT' },
+      { col: 'class_assigned', type: 'TEXT' },
+      { col: 'subject', type: 'TEXT' },
+      { col: 'status', type: 'TEXT', default: "'active'" },
+      { col: 'is_verified', type: 'INTEGER', default: '0' },
+      { col: 'email_verified_at', type: 'TIMESTAMP' },
+      { col: 'must_change_password', type: usingPostgres ? 'BOOLEAN' : 'INTEGER', default: usingPostgres ? 'false' : '0' },
+      { col: 'mfa_enabled', type: usingPostgres ? 'BOOLEAN' : 'INTEGER', default: usingPostgres ? 'false' : '0' },
+      { col: 'mfa_secret', type: 'TEXT' },
+      { col: 'failed_login_attempts', type: 'INTEGER', default: '0' },
+      { col: 'last_failed_login_at', type: 'TIMESTAMP' },
+      { col: 'account_locked_until', type: 'TIMESTAMP' }
+    ];
 
-    // Check if students table exists
-    let studentsTableExists = false;
-    if (usingPostgres) {
-      const result = await dbAll(`
-        SELECT EXISTS (
-          SELECT FROM information_schema.tables 
-          WHERE table_schema = 'public' 
-          AND table_name = 'students'
-        )
-      `);
-      studentsTableExists = result && result[0] && result[0].exists === true;
-    } else {
-      const result = await dbAll(`SELECT name FROM sqlite_master WHERE type='table' AND name='students'`);
-      studentsTableExists = result && result.length > 0;
-    }
-    
-    if (!studentsTableExists) {
-      console.warn('⚠ Students table does not exist yet. Skipping student column upgrades.');
-    } else {
-      // Check students table columns
-      let studentColumnNames = [];
-      if (usingPostgres) {
-        const studentColumns = await dbAll(`
-          SELECT column_name
-          FROM information_schema.columns
-          WHERE table_name = 'students' AND table_schema = 'public'
-        `);
-        studentColumnNames = studentColumns.map((column) => column.column_name);
-      } else {
-        const studentColumns = await dbAll(`PRAGMA table_info(students)`);
-        studentColumnNames = studentColumns.map((column) => column.name);
-      }
-      if (!studentColumnNames.includes('class_section')) {
-        await dbRun('ALTER TABLE students ADD COLUMN class_section TEXT');
+    for (const up of upgrades) {
+      if (!userColumns.includes(up.col)) {
+        let sql = `ALTER TABLE users ADD COLUMN ${up.col} ${up.type}`;
+        if (up.default !== undefined) sql += ` DEFAULT ${up.default}`;
+        await dbRun(sql);
       }
     }
-
-    // Check schools table columns
-    let schoolsTableExists = false;
-    if (usingPostgres) {
-      const result = await dbAll(`
-        SELECT EXISTS (
-          SELECT FROM information_schema.tables 
-          WHERE table_schema = 'public' 
-          AND table_name = 'schools'
-        )
-      `);
-      schoolsTableExists = result && result[0] && result[0].exists === true;
-    } else {
-      const result = await dbAll(`SELECT name FROM sqlite_master WHERE type='table' AND name='schools'`);
-      schoolsTableExists = result && result.length > 0;
-    }
-    
-    if (schoolsTableExists) {
-      let schoolColumnNames = [];
-      if (usingPostgres) {
-        const schoolColumns = await dbAll(`
-          SELECT column_name
-          FROM information_schema.columns
-          WHERE table_name = 'schools' AND table_schema = 'public'
-        `);
-        schoolColumnNames = schoolColumns.map((column) => column.column_name);
-      } else {
-        const schoolColumns = await dbAll(`PRAGMA table_info(schools)`);
-        schoolColumnNames = schoolColumns.map((column) => column.name);
-      }
-      if (!schoolColumnNames.includes('primary_color')) {
-        await dbRun('ALTER TABLE schools ADD COLUMN primary_color TEXT');
-      }
-      if (!schoolColumnNames.includes('accent_color')) {
-        await dbRun('ALTER TABLE schools ADD COLUMN accent_color TEXT');
-      }
-      if (!schoolColumnNames.includes('grade_levels')) {
-        await dbRun('ALTER TABLE schools ADD COLUMN grade_levels TEXT');
-      }
-    }
-
-    // Check if subscriptions table exists and create trigger (PostgreSQL only)
-    if (usingPostgres) {
-      try {
-        const subscriptionsTable = await dbAll(`
-          SELECT table_name
-          FROM information_schema.tables
-          WHERE table_name = 'subscriptions' AND table_schema = 'public'
-        `);
-        if (subscriptionsTable.length > 0) {
-          // Create function
-          await dbRun(`
-            CREATE OR REPLACE FUNCTION update_subscriptions_updated_at()
-            RETURNS TRIGGER AS $$
-            BEGIN
-              NEW.updated_at = CURRENT_TIMESTAMP;
-              RETURN NEW;
-            END;
-            $$ LANGUAGE plpgsql
-          `);
-          
-          // Create trigger
-          await dbRun(`
-            DROP TRIGGER IF EXISTS subscriptions_updated_at ON subscriptions
-          `);
-          
-          await dbRun(`
-            CREATE TRIGGER subscriptions_updated_at
-              BEFORE UPDATE ON subscriptions
-              FOR EACH ROW EXECUTE FUNCTION update_subscriptions_updated_at()
-          `);
-        }
-      } catch (triggerError) {
-        console.warn('Warning: Could not create subscriptions trigger:', triggerError.message);
-      }
-    }
-  } catch (schemaUpgradeError) {
-    console.error('Failed to ensure schema upgrades', schemaUpgradeError);
+  } catch (err) {
+    console.error('Failed to ensure schema upgrades:', err);
   }
 };
 
 const ensureSubscriptionPlans = async () => {
   const plans = [
-    {
-      name: 'Trial',
-      slug: 'trial',
-      description: 'Full access for evaluation with limited usage.',
-      student_limit: 25,
-      staff_limit: 5,
-      trial_duration_days: 14,
-      include_parent_portal: true,
-      include_student_portal: true,
-      include_messaging: true,
-      include_finance: true,
-      include_advanced_reports: true,
-      include_leave_management: true,
-      include_ai_analytics: true,
-      is_trial: true
-    },
-    {
-      name: 'Basic',
-      slug: 'basic',
-      description: 'Core academic operations for smaller schools.',
-      student_limit: 100,
-      staff_limit: 10,
-      trial_duration_days: null,
-      include_parent_portal: false,
-      include_student_portal: false,
-      include_messaging: false,
-      include_finance: false,
-      include_advanced_reports: false,
-      include_leave_management: false,
-      include_ai_analytics: false,
-      is_trial: false
-    },
-    {
-      name: 'Pro',
-      slug: 'pro',
-      description: 'Comprehensive operations, finance, and engagement suite.',
-      student_limit: null,
-      staff_limit: null,
-      trial_duration_days: null,
-      include_parent_portal: true,
-      include_student_portal: true,
-      include_messaging: true,
-      include_finance: true,
-      include_advanced_reports: true,
-      include_leave_management: true,
-      include_ai_analytics: true,
-      is_trial: false
-    }
+    { name: 'Trial', slug: 'trial', student_limit: 25, staff_limit: 5, trial_duration_days: 14, is_trial: true },
+    { name: 'Basic', slug: 'basic', student_limit: 100, staff_limit: 10, is_trial: false },
+    { name: 'Pro', slug: 'pro', student_limit: null, staff_limit: null, is_trial: false }
   ];
 
   for (const plan of plans) {
-    const existingPlan = await dbGet('SELECT id FROM subscription_plans WHERE slug = ?', [plan.slug]);
-    if (existingPlan) {
+    const existing = await dbGet('SELECT id FROM subscription_plans WHERE slug = ?', [plan.slug]);
+    if (!existing) {
       await dbRun(
-        `UPDATE subscription_plans
-           SET name = ?,
-               description = ?,
-               student_limit = ?,
-               staff_limit = ?,
-               trial_duration_days = ?,
-               include_parent_portal = ?,
-               include_student_portal = ?,
-               include_messaging = ?,
-               include_finance = ?,
-               include_advanced_reports = ?,
-               include_leave_management = ?,
-               include_ai_analytics = ?,
-               is_trial = ?
-         WHERE id = ?`,
-        [
-          plan.name,
-          plan.description,
-          plan.student_limit,
-          plan.staff_limit,
-          plan.trial_duration_days,
-          plan.include_parent_portal,
-          plan.include_student_portal,
-          plan.include_messaging,
-          plan.include_finance,
-          plan.include_advanced_reports,
-          plan.include_leave_management,
-          plan.include_ai_analytics,
-          plan.is_trial,
-          existingPlan.id
-        ]
-      );
-      continue;
-    }
-
-    await dbRun(
-      `INSERT INTO subscription_plans (
-         name,
-         slug,
-         description,
-         student_limit,
-         staff_limit,
-         trial_duration_days,
-         include_parent_portal,
-         include_student_portal,
-         include_messaging,
-         include_finance,
-         include_advanced_reports,
-         include_leave_management,
-         include_ai_analytics,
-         is_trial
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        plan.name,
-        plan.slug,
-        plan.description,
-        plan.student_limit,
-        plan.staff_limit,
-        plan.trial_duration_days,
-        plan.include_parent_portal,
-        plan.include_student_portal,
-        plan.include_messaging,
-        plan.include_finance,
-        plan.include_advanced_reports,
-        plan.include_leave_management,
-        plan.include_ai_analytics,
-        plan.is_trial
-      ]
-    );
-  }
-};
-
-const ensureSchoolSubscriptions = async () => {
-  try {
-    const trialPlan = await dbGet(
-      'SELECT id, trial_duration_days FROM subscription_plans WHERE slug = ? LIMIT 1',
-      ['trial']
-    );
-    if (!trialPlan) {
-      return;
-    }
-
-    const schoolsWithoutSubscriptions = await dbAll(
-      `SELECT s.id, s.created_at
-         FROM schools s
-         LEFT JOIN subscriptions sub ON sub.school_id = s.id
-         WHERE sub.id IS NULL`
-    );
-
-    for (const school of schoolsWithoutSubscriptions) {
-      const startDate = nowIso();
-      const trialEnds =
-        typeof trialPlan.trial_duration_days === 'number'
-          ? new Date(Date.now() + trialPlan.trial_duration_days * 86400000).toISOString()
-          : null;
-
-      await dbRun(
-        `INSERT INTO subscriptions (school_id, plan_id, status, start_date, trial_ends_at)
-         VALUES (?, ?, ?, ?, ?)`
-          ,
-        [school.id, trialPlan.id, 'active', startDate, trialEnds]
+        `INSERT INTO subscription_plans (name, slug, student_limit, staff_limit, trial_duration_days, is_trial) VALUES (?, ?, ?, ?, ?, ?)`,
+        [plan.name, plan.slug, plan.student_limit, plan.staff_limit, plan.trial_duration_days || null, plan.is_trial]
       );
     }
-  } catch (subscriptionError) {
-    console.error('Failed to ensure school subscriptions', subscriptionError);
   }
 };
 
 const ensureSuperAdmin = async () => {
   try {
-    const normalizedEmail = SUPER_ADMIN_USERNAME.trim().toLowerCase();
-    const existingAdmin = await dbGet(
-      'SELECT id FROM users WHERE email = ? LIMIT 1',
-      [normalizedEmail]
-    );
+    const email = SUPER_ADMIN_USERNAME.trim().toLowerCase();
+    const existing = await dbGet('SELECT id FROM users WHERE email = ?', [email]);
+    const hash = await bcrypt.hash(SUPER_ADMIN_PASSWORD, SALT_ROUNDS);
 
-    const passwordHash = await bcrypt.hash(SUPER_ADMIN_PASSWORD, SALT_ROUNDS);
-
-    if (existingAdmin) {
+    if (existing) {
       await dbRun(
-        `UPDATE users
-           SET name = ?,
-               password_hash = ?,
-               role = ?,
-               is_verified = ?,
-               email_verified_at = COALESCE(email_verified_at, CURRENT_TIMESTAMP),
-               status = COALESCE(status, 'active')
-         WHERE id = ?`,
-        ['Super Admin', passwordHash, 'super_admin', true, existingAdmin.id]
+        `UPDATE users SET password_hash = ?, role = 'super_admin', is_verified = 1, status = 'active' WHERE id = ?`,
+        [hash, existing.id]
       );
-      return;
+    } else {
+      await dbRun(
+        `INSERT INTO users (name, email, password_hash, role, is_verified, status, email_verified_at) VALUES (?, ?, ?, ?, 1, 'active', ?)`,
+        ['Super Admin', email, hash, 'super_admin', nowIso()]
+      );
     }
-
-    await dbRun(
-      `INSERT INTO users (name, email, password_hash, role, is_verified, email_verified_at, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      ['Super Admin', normalizedEmail, passwordHash, 'super_admin', true, nowIso(), 'active']
-    );
-  } catch (error) {
-    console.error('Failed to ensure super admin account', error);
+  } catch (err) {
+    console.error('Failed to ensure super admin:', err);
   }
 };
 
-// Run schema upgrades and ensure baseline data
 const initializeDatabase = async () => {
   try {
-    // CRITICAL: Wait for base schema to be fully created first
-    console.log('Waiting for schema initialization...');
     await schemaInitPromise;
-    console.log('Schema initialization complete. Starting data setup...');
-    
-    // Only run upgrades after schema is guaranteed to exist
     await ensureSchemaUpgrades();
-    console.log('✓ Schema upgrades complete');
-    
     await ensureSubscriptionPlans();
-    console.log('✓ Subscription plans configured');
-    
     await ensureSuperAdmin();
-    console.log('✓ Super admin account created');
-    
-    await ensureSchoolSubscriptions();
     console.log('✓ Database initialization complete!');
   } catch (error) {
     console.error('✗ Database initialization error:', error);
-    // Don't exit - allow server to start so we can debug
   }
 };
 
-// Initialize database asynchronously
 initializeDatabase();
 
 module.exports = {
   pool: db,
   dbRun,
   dbGet,
-  dbAll
+  dbAll,
+  query,
+  getClient,
+  transaction,
+  tableExists,
+  initializeDatabase,
+  getDatabaseInfo: async () => {
+    try {
+      let count = 0;
+      if (usingPostgres) {
+        const res = await query("SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema = 'public'");
+        count = parseInt(res.rows[0].count);
+      } else {
+        const res = await query("SELECT count(*) as count FROM sqlite_master WHERE type='table'");
+        count = res.rows[0].count;
+      }
+      return {
+        database: usingPostgres ? 'PostgreSQL' : 'SQLite',
+        tableCount: count,
+        config: usingPostgres ? 'PostgreSQL (Unified)' : 'SQLite (Unified)'
+      };
+    } catch (e) {
+      return { database: 'error', error: e.message };
+    }
+  }
 };

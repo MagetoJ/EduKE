@@ -34,7 +34,7 @@ const upload = multer({
 });
 
 // --- Courses ---
-secureRouter.get('/courses', authorizeRole(['admin', 'teacher', 'student', 'parent']), async (req, res) => {
+secureRouter.get('/courses', authorizeRole(['admin', 'teacher', 'student', 'parent', 'super_admin', 'registrar', 'exam_officer', 'hod', 'timetable_manager']), async (req, res) => {
   try {
     const result = await query('SELECT c.*, u.name as teacher_name FROM courses c LEFT JOIN users u ON c.teacher_id = u.id WHERE c.school_id = $1 ORDER BY c.name', [req.schoolId]);
     res.json({ success: true, data: result.rows });
@@ -44,7 +44,7 @@ secureRouter.get('/courses', authorizeRole(['admin', 'teacher', 'student', 'pare
   }
 });
 
-secureRouter.get('/courses/:id', authorizeRole(['admin', 'teacher', 'student']), async (req, res) => {
+secureRouter.get('/courses/:id', authorizeRole(['admin', 'teacher', 'student', 'super_admin', 'registrar', 'exam_officer', 'hod', 'timetable_manager']), async (req, res) => {
   try {
     const { id } = req.params;
     const result = await query('SELECT c.*, u.name as teacher_name FROM courses c LEFT JOIN users u ON c.teacher_id = u.id WHERE c.id = $1 AND c.school_id = $2', [id, req.schoolId]);
@@ -60,7 +60,7 @@ secureRouter.get('/courses/:id', authorizeRole(['admin', 'teacher', 'student']),
   }
 });
 
-secureRouter.post('/courses', authorizeRole(['admin']), async (req, res) => {
+secureRouter.post('/courses', authorizeRole(['admin', 'super_admin', 'registrar', 'hod']), async (req, res) => {
   try {
     const { schoolId } = req;
     const { name, code, grade, subject_area, teacher_id, description } = req.body;
@@ -81,7 +81,7 @@ secureRouter.post('/courses', authorizeRole(['admin']), async (req, res) => {
   }
 });
 
-secureRouter.put('/courses/:id', authorizeRole(['admin']), async (req, res) => {
+secureRouter.put('/courses/:id', authorizeRole(['admin', 'super_admin', 'registrar', 'hod']), async (req, res) => {
   try {
     const { schoolId } = req;
     const { id } = req.params;
@@ -104,7 +104,7 @@ secureRouter.put('/courses/:id', authorizeRole(['admin']), async (req, res) => {
   }
 });
 
-secureRouter.delete('/courses/:id', authorizeRole(['admin']), async (req, res) => {
+secureRouter.delete('/courses/:id', authorizeRole(['admin', 'super_admin', 'registrar', 'hod']), async (req, res) => {
   try {
     const { schoolId } = req;
     const { id } = req.params;
@@ -117,7 +117,7 @@ secureRouter.delete('/courses/:id', authorizeRole(['admin']), async (req, res) =
   }
 });
 
-secureRouter.get('/courses/:id/students', authorizeRole(['admin', 'teacher']), async (req, res) => {
+secureRouter.get('/courses/:id/students', authorizeRole(['admin', 'teacher', 'super_admin', 'registrar']), async (req, res) => {
   try {
     const { schoolId } = req;
     const { id } = req.params;
@@ -140,7 +140,7 @@ secureRouter.get('/courses/:id/students', authorizeRole(['admin', 'teacher']), a
   }
 });
 
-secureRouter.get('/courses/:id/resources', authorizeRole(['admin', 'teacher', 'student']), async (req, res) => {
+secureRouter.get('/courses/:id/resources', authorizeRole(['admin', 'teacher', 'student', 'super_admin', 'registrar', 'hod']), async (req, res) => {
   try {
     const { schoolId } = req;
     const { id } = req.params;
@@ -164,7 +164,7 @@ secureRouter.get('/courses/:id/resources', authorizeRole(['admin', 'teacher', 's
   }
 });
 
-secureRouter.post('/courses/:id/resources', authorizeRole(['admin', 'teacher']), async (req, res) => {
+secureRouter.post('/courses/:id/resources', authorizeRole(['admin', 'teacher', 'super_admin', 'hod']), async (req, res) => {
   try {
     const { schoolId, user } = req;
     const { id } = req.params;
@@ -189,7 +189,7 @@ secureRouter.post('/courses/:id/resources', authorizeRole(['admin', 'teacher']),
   }
 });
 
-secureRouter.delete('/courses/:id/resources/:resourceId', authorizeRole(['admin', 'teacher']), async (req, res) => {
+secureRouter.delete('/courses/:id/resources/:resourceId', authorizeRole(['admin', 'teacher', 'super_admin', 'hod']), async (req, res) => {
   try {
     const { schoolId } = req;
     const { id, resourceId } = req.params;
@@ -208,7 +208,7 @@ secureRouter.delete('/courses/:id/resources/:resourceId', authorizeRole(['admin'
   }
 });
 
-secureRouter.get('/exams/:id', authorizeRole(['admin', 'teacher', 'student']), async (req, res) => {
+secureRouter.get('/exams/:id', authorizeRole(['admin', 'teacher', 'student', 'super_admin', 'exam_officer', 'hod']), async (req, res) => {
   try {
     const { schoolId } = req;
     const { id } = req.params;
@@ -233,7 +233,7 @@ secureRouter.get('/exams/:id', authorizeRole(['admin', 'teacher', 'student']), a
   }
 });
 
-secureRouter.get('/exams/:id/results', authorizeRole(['admin', 'teacher']), async (req, res) => {
+secureRouter.get('/exams/:id/results', authorizeRole(['admin', 'teacher', 'super_admin', 'exam_officer', 'hod']), async (req, res) => {
   try {
     const { schoolId } = req;
     const { id } = req.params;
@@ -258,7 +258,7 @@ secureRouter.get('/exams/:id/results', authorizeRole(['admin', 'teacher']), asyn
   }
 });
 
-secureRouter.get('/staff/:id', authorizeRole(['admin']), async (req, res) => {
+secureRouter.get('/staff/:id', authorizeRole(['admin', 'super_admin', 'registrar', 'hod']), async (req, res) => {
   try {
     const { schoolId } = req;
     const { id } = req.params;
@@ -282,7 +282,7 @@ secureRouter.get('/staff/:id', authorizeRole(['admin']), async (req, res) => {
   }
 });
 
-secureRouter.put('/staff/:id', authorizeRole(['admin']), async (req, res) => {
+secureRouter.put('/staff/:id', authorizeRole(['admin', 'super_admin', 'registrar', 'hod']), async (req, res) => {
   try {
     const { schoolId } = req;
     const { id } = req.params;
@@ -308,7 +308,7 @@ secureRouter.put('/staff/:id', authorizeRole(['admin']), async (req, res) => {
   }
 });
 
-secureRouter.get('/teacher/attendance/roster', authorizeRole(['teacher']), async (req, res) => {
+secureRouter.get('/teacher/attendance/roster', authorizeRole(['teacher', 'admin', 'super_admin', 'registrar']), async (req, res) => {
   try {
     const { schoolId, user } = req;
     const { date } = req.query;
@@ -340,7 +340,7 @@ secureRouter.get('/teacher/attendance/roster', authorizeRole(['teacher']), async
   }
 });
 
-secureRouter.post('/teacher/attendance', authorizeRole(['teacher']), async (req, res) => {
+secureRouter.post('/teacher/attendance', authorizeRole(['teacher', 'admin', 'super_admin']), async (req, res) => {
   try {
     const { schoolId, user } = req;
     const { date, records } = req.body;
@@ -383,7 +383,7 @@ secureRouter.post('/teacher/attendance', authorizeRole(['teacher']), async (req,
   }
 });
 
-secureRouter.post('/performance', authorizeRole(['teacher']), async (req, res) => {
+secureRouter.post('/performance', authorizeRole(['teacher', 'admin', 'super_admin', 'exam_officer']), async (req, res) => {
   try {
     const { schoolId, user } = req;
     const { student_id, subject, grade, term, comments, assessment_type } = req.body;
@@ -615,7 +615,7 @@ secureRouter.put('/school/settings', authorizeRole(['admin', 'super_admin']), as
 });
 
 // --- Users (Staff, Teachers, Parents) ---
-secureRouter.get('/users', authorizeRole(['admin']), async (req, res) => {
+secureRouter.get('/users', authorizeRole(['admin', 'super_admin']), async (req, res) => {
   try {
     const { schoolId } = req;
     const { role } = req.query; // e.g., /api/users?role=teacher
@@ -638,30 +638,54 @@ secureRouter.get('/users', authorizeRole(['admin']), async (req, res) => {
   }
 });
 
-secureRouter.post('/users', authorizeRole(['admin']), async (req, res) => {
+secureRouter.post('/users', authorizeRole(['admin', 'super_admin']), async (req, res) => {
   // This route is for creating staff, teachers, parents. Student creation is separate.
-  // Note: Password must be set via an invite/setup link, not directly here for security.
-  // This is a simplified version.
   try {
     const { schoolId } = req;
-    const { email, first_name, last_name, phone, role, class_assigned, subject } = req.body;
+    const { email, first_name, last_name, phone, role, class_assigned, subject, employee_id, department } = req.body;
     
-    // Create a temporary random password
-    const tempPassword = crypto.randomBytes(16).toString('hex');
-    const password_hash = await bcrypt.hash(tempPassword, 10);
+    // 1. Determine the initial password
+    let initialPassword;
+    if (role === 'teacher' || role === 'admin') {
+      if (!employee_id) {
+        return res.status(400).json({ success: false, error: 'Employee ID is required for staff/teachers' });
+      }
+      initialPassword = employee_id;
+    } else if (role === 'parent') {
+      // For parents, we'll use a generated short code or their email prefix as a placeholder,
+      // but the requirement is "Initial ID as Password". Since they don't have an employee_id,
+      // we'll generate a unique Parent ID.
+      initialPassword = `P-${Math.floor(100000 + Math.random() * 900000)}`;
+    } else {
+      initialPassword = crypto.randomBytes(8).toString('hex');
+    }
+
+    const password_hash = await bcrypt.hash(initialPassword, 10);
     const name = `${first_name} ${last_name}`.trim();
     
     const sql = `
-      INSERT INTO users (school_id, email, password_hash, first_name, last_name, name, phone, role, class_assigned, subject, status, is_verified, must_change_password)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'active', false, true)
-      RETURNING id, email, first_name, last_name, name, phone, role, status
+      INSERT INTO users (
+        school_id, email, password_hash, first_name, last_name, name, 
+        phone, role, class_assigned, subject, employee_id, department,
+        status, is_verified, must_change_password
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'active', false, true)
+      RETURNING id, email, first_name, last_name, name, phone, role, status, employee_id
     `;
     
-    const result = await query(sql, [schoolId, email, password_hash, first_name, last_name, name, phone, role, class_assigned, subject]);
+    const result = await query(sql, [
+      schoolId, email, password_hash, first_name, last_name, name, 
+      phone, role, class_assigned, subject, employee_id || null, department || null
+    ]);
     
-    // TODO: Send an email invite to this user to set their password
-    
-    res.status(201).json({ success: true, data: result.rows[0], message: 'User created successfully. Invite email sent.' });
+    res.status(201).json({ 
+      success: true, 
+      data: {
+        ...result.rows[0],
+        initial_password: initialPassword // Provide this so admin can give it to the user
+      }, 
+      message: `User created successfully. Initial password is: ${initialPassword}` 
+    });
   } catch (err) {
     console.error('Error creating user:', err);
     res.status(500).json({ success: false, error: 'Failed to create user' });
@@ -669,7 +693,7 @@ secureRouter.post('/users', authorizeRole(['admin']), async (req, res) => {
 });
 
 // --- Staff ---
-secureRouter.get('/staff', authorizeRole(['admin']), async (req, res) => {
+secureRouter.get('/staff', authorizeRole(['admin', 'super_admin', 'registrar', 'hod']), async (req, res) => {
   try {
     const { schoolId } = req;
     const result = await query("SELECT id, email, first_name, last_name, name, phone, role, status, avatar_url, department, employee_id, hire_date FROM users WHERE school_id = $1 AND role IN ('admin', 'teacher')", [schoolId]);
@@ -681,7 +705,7 @@ secureRouter.get('/staff', authorizeRole(['admin']), async (req, res) => {
 });
 
 // --- Students ---
-secureRouter.get('/students', authorizeRole(['admin', 'teacher']), async (req, res) => {
+secureRouter.get('/students', authorizeRole(['admin', 'teacher', 'super_admin', 'registrar', 'exam_officer', 'hod']), async (req, res) => {
   try {
     const { schoolId } = req;
     const result = await query('SELECT * FROM students WHERE school_id = $1 ORDER BY first_name', [schoolId]);
@@ -692,7 +716,7 @@ secureRouter.get('/students', authorizeRole(['admin', 'teacher']), async (req, r
   }
 });
 
-secureRouter.post('/students', authorizeRole(['admin']), async (req, res) => {
+secureRouter.post('/students', authorizeRole(['admin', 'super_admin', 'registrar']), async (req, res) => {
   try {
     const { schoolId } = req;
     const { first_name, last_name, email, grade, parent_id, admission_number, relationship } = req.body;
@@ -730,7 +754,7 @@ secureRouter.post('/students', authorizeRole(['admin']), async (req, res) => {
   }
 });
 
-secureRouter.put('/students/:id', authorizeRole(['admin']), async (req, res) => {
+secureRouter.put('/students/:id', authorizeRole(['admin', 'super_admin', 'registrar']), async (req, res) => {
   try {
     const { id } = req.params;
     const { schoolId } = req;
@@ -757,7 +781,7 @@ secureRouter.put('/students/:id', authorizeRole(['admin']), async (req, res) => 
 });
 
 // --- Assignments ---
-secureRouter.get('/assignments', authorizeRole(['admin', 'teacher', 'student']), async (req, res) => {
+secureRouter.get('/assignments', authorizeRole(['admin', 'teacher', 'student', 'super_admin', 'hod']), async (req, res) => {
   try {
     const { schoolId, user } = req;
     let sql = 'SELECT a.*, c.name as course_name FROM assignments a JOIN courses c ON a.course_id = c.id WHERE c.school_id = $1';
@@ -777,7 +801,7 @@ secureRouter.get('/assignments', authorizeRole(['admin', 'teacher', 'student']),
   }
 });
 
-secureRouter.post('/assignments', authorizeRole(['admin', 'teacher']), async (req, res) => {
+secureRouter.post('/assignments', authorizeRole(['admin', 'teacher', 'super_admin', 'hod']), async (req, res) => {
   try {
     const { schoolId } = req;
     const { course_id, title, description, due_date, max_score, assignment_type } = req.body;
@@ -795,7 +819,7 @@ secureRouter.post('/assignments', authorizeRole(['admin', 'teacher']), async (re
 });
 
 // --- Exams ---
-secureRouter.get('/exams', authorizeRole(['admin', 'teacher', 'student']), async (req, res) => {
+secureRouter.get('/exams', authorizeRole(['admin', 'teacher', 'student', 'super_admin', 'exam_officer', 'hod']), async (req, res) => {
   try {
     const { schoolId } = req;
     const result = await query(
@@ -809,7 +833,7 @@ secureRouter.get('/exams', authorizeRole(['admin', 'teacher', 'student']), async
   }
 });
 
-secureRouter.post('/exams', authorizeRole(['admin', 'teacher']), async (req, res) => {
+secureRouter.post('/exams', authorizeRole(['admin', 'teacher', 'super_admin', 'exam_officer', 'hod']), async (req, res) => {
   try {
     const { schoolId } = req;
     const { course_id, name, exam_date, total_marks, duration_minutes } = req.body;
@@ -827,7 +851,7 @@ secureRouter.post('/exams', authorizeRole(['admin', 'teacher']), async (req, res
 });
 
 // --- Attendance ---
-secureRouter.get('/attendance', authorizeRole(['admin', 'teacher']), async (req, res) => {
+secureRouter.get('/attendance', authorizeRole(['admin', 'teacher', 'super_admin', 'registrar']), async (req, res) => {
   try {
     const { schoolId } = req;
     const { date, course_id } = req.query;
@@ -856,7 +880,7 @@ secureRouter.get('/attendance', authorizeRole(['admin', 'teacher']), async (req,
   }
 });
 
-secureRouter.post('/attendance', authorizeRole(['admin', 'teacher']), async (req, res) => {
+secureRouter.post('/attendance', authorizeRole(['admin', 'teacher', 'super_admin', 'registrar']), async (req, res) => {
   try {
     const { schoolId } = req;
     const { records } = req.body; // Array of {student_id, date, status, course_id}
@@ -878,7 +902,7 @@ secureRouter.post('/attendance', authorizeRole(['admin', 'teacher']), async (req
 });
 
 // --- Fees ---
-secureRouter.get('/fees', authorizeRole(['admin', 'parent']), async (req, res) => {
+secureRouter.get('/fees', authorizeRole(['admin', 'parent', 'super_admin', 'registrar']), async (req, res) => {
   try {
     const { schoolId, user } = req;
     let sql = 'SELECT sf.*, s.first_name, s.last_name, fs.fee_type FROM student_fees sf JOIN students s ON sf.student_id = s.id JOIN fee_structures fs ON sf.fee_structure_id = fs.id WHERE sf.school_id = $1';
@@ -898,7 +922,7 @@ secureRouter.get('/fees', authorizeRole(['admin', 'parent']), async (req, res) =
   }
 });
 
-secureRouter.post('/fees/payment', authorizeRole(['admin']), async (req, res) => {
+secureRouter.post('/fees/payment', authorizeRole(['admin', 'super_admin', 'registrar']), async (req, res) => {
   try {
     const { schoolId } = req;
     const { student_fee_id, amount, payment_method, reference_number } = req.body;
@@ -990,7 +1014,7 @@ secureRouter.post('/messages', authorizeRole(['admin', 'teacher']), async (req, 
 });
 
 // --- Dashboard Stats ---
-secureRouter.get('/dashboard/stats', authorizeRole(['admin', 'teacher', 'student', 'parent']), async (req, res) => {
+secureRouter.get('/dashboard/stats', authorizeRole(['admin', 'teacher', 'student', 'parent', 'super_admin', 'registrar', 'exam_officer', 'hod', 'timetable_manager', 'transport_manager']), async (req, res) => {
   try {
     const { schoolId, user } = req;
     
@@ -1036,7 +1060,7 @@ function getMonthName(monthStr) {
   return new Date(year, month - 1, 1).toLocaleString('default', { month: 'long' });
 }
 
-secureRouter.get('/reports/financial-summary', authorizeRole(['super_admin', 'admin']), async (req, res) => {
+secureRouter.get('/reports/financial-summary', authorizeRole(['super_admin', 'admin', 'registrar']), async (req, res) => {
   try {
     const { schoolId } = req;
     const { rows } = await query(`
@@ -1059,7 +1083,7 @@ secureRouter.get('/reports/financial-summary', authorizeRole(['super_admin', 'ad
   }
 });
 
-secureRouter.get('/reports/performance-summary', authorizeRole(['super_admin', 'admin', 'teacher']), async (req, res) => {
+secureRouter.get('/reports/performance-summary', authorizeRole(['super_admin', 'admin', 'teacher', 'exam_officer', 'hod']), async (req, res) => {
   try {
     const { schoolId } = req;
     const result = await query(`

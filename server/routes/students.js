@@ -5,7 +5,7 @@ const { authorizeRole } = require('../middleware/auth');
 const studentService = require('../services/studentService');
 
 // Get all students
-router.get('/', authorizeRole(['admin', 'teacher', 'super_admin']), async (req, res) => {
+router.get('/', authorizeRole(['admin', 'teacher', 'super_admin', 'registrar', 'admission_officer', 'class_teacher', 'exam_officer', 'hod', 'nurse']), async (req, res) => {
   try {
     const { schoolId } = req;
     const { grade, status, search } = req.query;
@@ -41,7 +41,7 @@ router.get('/me', authorizeRole(['student']), async (req, res) => {
 });
 
 // Get student by ID
-router.get('/:id', authorizeRole(['admin', 'teacher', 'parent']), async (req, res) => {
+router.get('/:id', authorizeRole(['admin', 'teacher', 'parent', 'super_admin', 'registrar', 'admission_officer', 'class_teacher', 'exam_officer', 'hod', 'nurse']), async (req, res) => {
   try {
     const { schoolId } = req;
     const { id } = req.params;
@@ -59,7 +59,7 @@ router.get('/:id', authorizeRole(['admin', 'teacher', 'parent']), async (req, re
   }
 });
 
-router.post('/', authorizeRole(['admin']), async (req, res) => {
+router.post('/', authorizeRole(['admin', 'super_admin', 'registrar', 'admission_officer']), async (req, res) => {
   try {
     const { schoolId } = req;
 
@@ -125,7 +125,7 @@ router.post('/', authorizeRole(['admin']), async (req, res) => {
 });
 
 // Update student
-router.put('/:id', authorizeRole(['admin']), async (req, res) => {
+router.put('/:id', authorizeRole(['admin', 'super_admin', 'registrar']), async (req, res) => {
   try {
     const { schoolId } = req;
     const { id } = req.params;
@@ -148,7 +148,7 @@ router.put('/:id', authorizeRole(['admin']), async (req, res) => {
 });
 
 // Delete student (soft delete)
-router.delete('/:id', authorizeRole(['admin']), async (req, res) => {
+router.delete('/:id', authorizeRole(['admin', 'super_admin', 'registrar']), async (req, res) => {
   try {
     const { schoolId } = req;
     const { id } = req.params;
@@ -171,7 +171,7 @@ router.delete('/:id', authorizeRole(['admin']), async (req, res) => {
 });
 
 // Get courses for a specific student
-router.get('/:id/courses', authorizeRole(['admin', 'teacher', 'student', 'parent']), async (req, res) => {
+router.get('/:id/courses', authorizeRole(['admin', 'teacher', 'student', 'parent', 'super_admin', 'registrar']), async (req, res) => {
   try {
     const { schoolId, user } = req;
     const { id } = req.params;
@@ -193,7 +193,7 @@ router.get('/:id/courses', authorizeRole(['admin', 'teacher', 'student', 'parent
 });
 
 // Get student performance
-router.get('/:id/performance', authorizeRole(['admin', 'teacher', 'parent']), async (req, res) => {
+router.get('/:id/performance', authorizeRole(['admin', 'teacher', 'parent', 'super_admin', 'registrar', 'exam_officer']), async (req, res) => {
   try {
     const { schoolId } = req;
     const { id } = req.params;
@@ -215,7 +215,7 @@ router.get('/:id/performance', authorizeRole(['admin', 'teacher', 'parent']), as
 });
 
 // Get student attendance
-router.get('/:id/attendance', authorizeRole(['admin', 'teacher', 'parent']), async (req, res) => {
+router.get('/:id/attendance', authorizeRole(['admin', 'teacher', 'parent', 'super_admin', 'registrar']), async (req, res) => {
   try {
     const { schoolId } = req;
     const { id } = req.params;
@@ -236,7 +236,7 @@ router.get('/:id/attendance', authorizeRole(['admin', 'teacher', 'parent']), asy
 });
 
 // Get student fees
-router.get('/:id/fees', authorizeRole(['admin', 'teacher', 'parent']), async (req, res) => {
+router.get('/:id/fees', authorizeRole(['admin', 'teacher', 'parent', 'super_admin', 'registrar']), async (req, res) => {
   try {
     const { schoolId } = req;
     const { id } = req.params;

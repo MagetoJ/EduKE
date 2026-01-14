@@ -126,7 +126,7 @@ CREATE TABLE IF NOT EXISTS users (
     avatar_url TEXT,
     
     -- Role & Access
-    role VARCHAR(20) NOT NULL CHECK (role IN ('super_admin', 'admin', 'teacher', 'parent', 'student')),
+    role VARCHAR(50) NOT NULL CHECK (role IN ('super_admin', 'admin', 'teacher', 'parent', 'student', 'registrar', 'timetable_manager', 'class_teacher', 'boarding_master', 'transport_manager', 'exam_officer', 'cbc_coordinator', 'hod', 'hr_manager', 'admission_officer', 'nurse')),
     department VARCHAR(100),
     subject VARCHAR(255),
     class_assigned VARCHAR(50),

@@ -72,9 +72,19 @@ function AppRoutes() {
     );
   }
 
+  // Force password change if required
+  if (user.must_change_password) {
+    return (
+      <Routes>
+        <Route path="/change-password" element={<ForcePasswordChange />} />
+        <Route path="*" element={<Navigate to="/change-password" />} />
+      </Routes>
+    );
+  }
+
   return (
     <Routes>
-      <Route path="/change-password" element={<ProtectedRoute><ForcePasswordChange /></ProtectedRoute>} />
+      <Route path="/change-password" element={<ForcePasswordChange />} />
       <Route path="/login" element={<Navigate to="/dashboard" />} />
       <Route path="/" element={<Navigate to="/dashboard" />} />
       <Route
