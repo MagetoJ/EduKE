@@ -49,6 +49,12 @@ let db;
 if (useSQLite) {
   const dbPath = path.join(__dirname, 'eduke.db');
   db = new sqlite3.Database(dbPath);
+  
+  // Augment sqlite3 Database instance with a .query method for compatibility with pg
+  db.query = async (text, params = []) => {
+    return query(text, params);
+  };
+  
   console.log('✓ Using SQLite database for local development.');
 } else {
   db = new Pool(getDbConfig());
@@ -211,7 +217,14 @@ const query = async (text, params = []) => {
         }
       });
     } else {
-      const sqliteText = text.replace(/\s+RETURNING\s+\*/gi, '').replace(/\$\d+/g, '?');
+      // Basic Postgres to SQLite conversion
+      const sqliteText = text
+        .replace(/\s+RETURNING\s+[\s\S]+$/gi, '')
+        .replace(/\$\d+/g, '?')
+        .replace(/\bNOW\(\)/gi, "CURRENT_TIMESTAMP")
+        .replace(/\bTRUE\b/gi, '1')
+        .replace(/\bFALSE\b/gi, '0');
+        
       const statement = sqliteText.trim().toUpperCase();
       
       if (statement.startsWith('SELECT') || statement.startsWith('PRAGMA')) {
@@ -229,7 +242,8 @@ const query = async (text, params = []) => {
             console.error('Query error:', err);
             reject(err);
           } else {
-            resolve({ rowCount: this.changes, lastID: this.lastID, rows: [] });
+            const rows = statement.startsWith('INSERT') ? [{ id: this.lastID }] : [];
+            resolve({ rowCount: this.changes, lastID: this.lastID, rows });
           }
         });
       }

@@ -177,12 +177,12 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
 
   const NavContent = () => (
     <>
-      <div className="h-16 flex items-center px-6 border-b border-slate-100 bg-white">
-        <div className="h-8 w-8 bg-slate-900 rounded-md flex items-center justify-center mr-3 shadow-sm">
-          <GraduationCap className="w-5 h-5 text-white" />
+      <div className="h-16 flex items-center px-6 border-b border-border bg-card">
+        <div className="h-8 w-8 bg-primary rounded-md flex items-center justify-center mr-3 shadow-sm">
+          <GraduationCap className="w-5 h-5 text-primary-foreground" />
         </div>
         <div>
-          <span className="font-bold text-slate-800 text-lg tracking-tight">EduKE</span>
+          <span className="font-bold text-foreground text-lg tracking-tight">EduKE</span>
         </div>
       </div>
 
@@ -199,15 +199,15 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
               to={item.href}
               onClick={onClose}
               className={cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-md transition-all duration-200 text-sm font-medium group',
+                'flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 text-sm font-medium group',
                 isActive 
-                  ? 'bg-teal-50 text-teal-700 shadow-sm border border-teal-100' 
-                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+                  ? 'bg-primary/10 text-primary shadow-sm border border-primary/20' 
+                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
               )}
             >
               <Icon className={cn(
                 'w-5 h-5 transition-colors',
-                isActive ? 'text-teal-600' : 'text-slate-400 group-hover:text-slate-600'
+                isActive ? 'text-primary' : 'text-muted-foreground/70 group-hover:text-foreground'
               )} />
               {item.title}
             </Link>
@@ -215,9 +215,9 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
         })}
       </nav>
 
-      <div className="p-4 border-t border-slate-100 bg-slate-50/50">
+      <div className="p-4 border-t border-border bg-muted/30">
         {user.schoolName && (
-          <div className="flex items-center gap-2 text-xs text-slate-500">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <School className="w-3 h-3" />
             <span className="truncate font-medium">{user.schoolName}</span>
           </div>
@@ -228,14 +228,14 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
 
   return (
     <>
-      <aside className="w-64 bg-white border-r border-slate-200 flex-col hidden md:flex shadow-sm">
+      <aside className="w-64 bg-card border-r border-border flex-col hidden md:flex shadow-sm">
         <NavContent />
       </aside>
 
       {isOpen && (
         <div className="fixed inset-0 z-40 md:hidden">
           <div 
-            className="absolute inset-0 bg-black/50 transition-opacity duration-300"
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300"
             onClick={onClose}
           />
         </div>
@@ -243,7 +243,7 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
 
       <div 
         className={cn(
-          'fixed left-0 top-0 h-full w-64 bg-white flex flex-col shadow-lg z-50 md:hidden transition-transform duration-300 ease-in-out',
+          'fixed left-0 top-0 h-full w-64 bg-card flex flex-col shadow-lg z-50 md:hidden transition-transform duration-300 ease-in-out',
           isOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
@@ -257,7 +257,7 @@ export function MobileMenuButton({ onClick }: { onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="md:hidden inline-flex items-center justify-center p-2 rounded-md text-slate-700 hover:bg-slate-100 transition-colors"
+      className="md:hidden inline-flex items-center justify-center p-2 rounded-md text-foreground hover:bg-accent transition-colors"
       aria-label="Toggle menu"
     >
       <Menu className="w-6 h-6" />
@@ -269,7 +269,7 @@ export function MobileMenuClose({ onClick }: { onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="inline-flex items-center justify-center p-2 rounded-md text-slate-700 hover:bg-slate-100 transition-colors"
+      className="inline-flex items-center justify-center p-2 rounded-md text-foreground hover:bg-accent transition-colors"
       aria-label="Close menu"
     >
       <X className="w-6 h-6" />
