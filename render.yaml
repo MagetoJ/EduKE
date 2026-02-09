@@ -13,8 +13,8 @@ services:
     name: eduke
     env: node
     rootDir: .
-    buildCommand: npm install --include=dev && npm run build && cd server && npm install
-    startCommand: cd server && npm start
+    buildCommand: npm install --include=dev && npm run build && pip install -r server/requirements.txt
+    startCommand: npm start
     healthCheckPath: /health
     healthCheckTimeout: 30
     numInstances: 1

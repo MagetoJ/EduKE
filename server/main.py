@@ -15,8 +15,11 @@ from auth import (
     get_current_user,
     get_current_school,
     get_current_super_admin,
-    ACCESS_TOKEN_EXPIRE_MINUTES
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+    SECRET_KEY,
+    ALGORITHM
 )
+from jose import jwt
 from pydantic import BaseModel
 from students import router as students_router
 from payments import router as payments_router
@@ -260,6 +263,16 @@ async def list_schools_compatibility(
         "revenue": "0",
         "status": s.status
     } for s in schools]
+
+@app.get("/notifications")
+async def get_notifications_stub():
+    """Stub to prevent 404 in frontend background refresh"""
+    return {"success": True, "data": []}
+
+@app.get("/leave-requests")
+async def get_leave_requests_stub():
+    """Stub to prevent 404 in dashboard"""
+    return {"success": True, "data": []}
 
 @app.get("/")
 async def root():
