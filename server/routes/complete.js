@@ -1124,7 +1124,7 @@ router.post('/leave-types', authorizeRole(['admin']), async (req, res) => {
     
     const result = await query(
       'INSERT INTO leave_types (school_id, name, description, max_days_per_year, requires_approval, is_active) VALUES ($1, $2, $3, $4, $5, true) RETURNING *',
-      [schoolId, name, description || null, max_days_per_year || null, requires_approval !== false]
+      [schoolId, name, description || null, max_days_per_year || null, requires_approval ?? true]
     );
     
     res.status(201).json({ success: true, data: result.rows[0], message: 'Leave type created successfully' });

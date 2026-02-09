@@ -76,7 +76,7 @@ router.post('/844', requireAuth, requireRole(['admin', 'teacher', 'super_admin',
        (school_id, student_id, academic_year_id, term_id, form, stream, subject, marks_obtained, max_marks, grade_letter, points, is_compulsory)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING *`,
-      [req.user.school_id, student_id, academic_year_id, term_id, form, stream, subject, marks_obtained, max_marks || 100, grade_letter, points, is_compulsory !== false]
+      [req.user.school_id, student_id, academic_year_id, term_id, form, stream, subject, marks_obtained, max_marks || 100, grade_letter, points, is_compulsory ?? true]
     );
     
     res.status(201).json({ data: result.rows[0], message: 'Assessment recorded successfully' });

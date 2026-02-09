@@ -228,7 +228,7 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
 
   return (
     <>
-      <aside className="w-64 bg-card border-r border-border flex-col hidden md:flex shadow-sm">
+      <aside className="w-64 bg-card border-r border-border flex-col hidden md:flex shrink-0 shadow-sm">
         <NavContent />
       </aside>
 

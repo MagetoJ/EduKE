@@ -36,53 +36,20 @@ const decryptStudentPii = (student) => {
   return decrypted;
 };
 
-const execQuery = async (client, sql, params, isPostgres) => {
-  if (isPostgres) {
-    return await client.query(sql, params);
-  }
-  return new Promise((resolve, reject) => {
-    const statement = sql.trim().toUpperCase();
-    if (statement.startsWith('INSERT')) {
-      client.run(sql, params, function(err) {
-        if (err) reject(err);
-        else {
-          const lastID = this.lastID;
-          resolve({ rows: [{ id: lastID }], rowCount: this.changes, lastID });
-        }
-      });
-    } else if (statement.startsWith('UPDATE') || statement.startsWith('DELETE')) {
-      client.run(sql, params, function(err) {
-        if (err) reject(err);
-        else resolve({ rows: [], rowCount: this.changes });
-      });
-    } else {
-      client.all(sql, params, (err, rows) => {
-        if (err) reject(err);
-        else resolve({ rows: rows || [], rowCount: rows ? rows.length : 0 });
-      });
-    }
-  });
-};
-
-const createStudent = async (client, studentData, school_id, admissionNumber, passwordHash, isPostgres) => {
+const createStudent = async (client, studentData, school_id, admissionNumber, passwordHash) => {
   const { 
-    first_name, last_name, email, phone, date_of_birth, gender, 
+    first_name, last_name, email, date_of_birth, gender, 
     address, grade, enrollment_date, national_id, student_id_number,
     emergency_contact_phone, medical_conditions, allergies
   } = studentData;
   const encryptedStudent = encryptStudentPii(studentData);
 
   try {
-    const userResult = await execQuery(
-      client,
-      isPostgres
-        ? `INSERT INTO users (school_id, email, password_hash, name, role, status, must_change_password)
-           VALUES ($1, $2, $3, $4, 'student', 'active', true)
-           RETURNING id`
-        : `INSERT INTO users (school_id, email, password_hash, name, role, status, must_change_password)
-           VALUES (?, ?, ?, ?, 'student', 'active', 1)`,
-      [school_id, email, passwordHash, `${first_name} ${last_name}`],
-      isPostgres
+    const userResult = await client.query(
+      `INSERT INTO users (school_id, email, password_hash, name, role, status, must_change_password)
+       VALUES ($1, $2, $3, $4, 'student', 'active', TRUE)
+       RETURNING id`,
+      [school_id, email, passwordHash, `${first_name} ${last_name}`]
     );
     
     if (!userResult.rows || userResult.rows.length === 0) {
@@ -91,58 +58,28 @@ const createStudent = async (client, studentData, school_id, admissionNumber, pa
     
     const studentUserId = userResult.rows[0].id;
 
-    const insertResult = await execQuery(
-      client,
-      isPostgres
-        ? `INSERT INTO students (
-             school_id, user_id, first_name, last_name, email, phone, 
-             date_of_birth, gender, address, admission_number, grade, 
-             enrollment_date, status, national_id, student_id_number,
-             emergency_contact_phone, medical_conditions, allergies
-           )
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'active', $13, $14, $15, $16, $17)
-           RETURNING *`
-        : `INSERT INTO students (
-             school_id, user_id, first_name, last_name, email, phone, 
-             date_of_birth, gender, address, admission_number, grade, 
-             enrollment_date, status, national_id, student_id_number,
-             emergency_contact_phone, medical_conditions, allergies
-           )
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)`,
+    const insertResult = await client.query(
+      `INSERT INTO students (
+         school_id, user_id, first_name, last_name, email, phone, 
+         date_of_birth, gender, address, admission_number, grade, 
+         enrollment_date, status, national_id, student_id_number,
+         emergency_contact_phone, medical_conditions, allergies
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'active', $13, $14, $15, $16, $17)
+       RETURNING *`,
       [
         school_id, studentUserId, first_name, last_name, email, encryptedStudent.phone, 
         date_of_birth, gender, encryptedStudent.address, admissionNumber, grade, 
         enrollment_date, encryptedStudent.national_id, encryptedStudent.student_id_number,
         encryptedStudent.emergency_contact_phone, encryptedStudent.medical_conditions, encryptedStudent.allergies
-      ],
-      isPostgres
+      ]
     );
 
-    if (isPostgres && (!insertResult.rows || insertResult.rows.length === 0)) {
+    if (!insertResult.rows || insertResult.rows.length === 0) {
       throw new Error('Failed to create student record');
     }
 
-    if (!isPostgres && insertResult.rowCount === 0) {
-      throw new Error('Failed to create student record');
-    }
-
-    if (isPostgres) {
-      return decryptStudentPii(insertResult.rows[0]);
-    }
-
-    const studentId = insertResult.lastID;
-    const studentDataResult = await execQuery(
-      client,
-      `SELECT * FROM students WHERE id = ?`,
-      [studentId],
-      isPostgres
-    );
-
-    if (!studentDataResult.rows || studentDataResult.rows.length === 0) {
-      throw new Error('Failed to retrieve created student record');
-    }
-
-    return decryptStudentPii(studentDataResult.rows[0]);
+    return decryptStudentPii(insertResult.rows[0]);
   } catch (error) {
     if (error.code === '23505' || error.message.includes('UNIQUE constraint failed')) {
       throw new Error(`Email address already exists: ${email}`);
@@ -151,7 +88,7 @@ const createStudent = async (client, studentData, school_id, admissionNumber, pa
   }
 };
 
-const createOrLinkParent = async (client, parentData, studentId, school_id, passwordHash, isPostgres) => {
+const createOrLinkParent = async (client, parentData, studentId, school_id, passwordHash) => {
   const { parent_email, parent_name, parent_phone, relationship } = parentData;
 
   const validRelationTypes = ['father', 'mother', 'guardian', 'other'];
@@ -160,13 +97,9 @@ const createOrLinkParent = async (client, parentData, studentId, school_id, pass
     : 'guardian';
 
   try {
-    const existingParent = await execQuery(
-      client,
-      isPostgres 
-        ? 'SELECT * FROM users WHERE email = $1'
-        : 'SELECT * FROM users WHERE email = ?',
-      [parent_email],
-      isPostgres
+    const existingParent = await client.query(
+      'SELECT * FROM users WHERE email = $1',
+      [parent_email]
     );
 
     let parentUserId;
@@ -174,25 +107,16 @@ const createOrLinkParent = async (client, parentData, studentId, school_id, pass
     if (existingParent.rows && existingParent.rows.length > 0) {
       parentUserId = existingParent.rows[0].id;
 
-      await execQuery(
-        client,
-        isPostgres
-          ? 'UPDATE users SET password_hash = $1, must_change_password = true WHERE id = $2'
-          : 'UPDATE users SET password_hash = ?, must_change_password = 1 WHERE id = ?',
-        [passwordHash, parentUserId],
-        isPostgres
+      await client.query(
+        'UPDATE users SET password_hash = $1, must_change_password = TRUE WHERE id = $2',
+        [passwordHash, parentUserId]
       );
     } else {
-      const parentUserResult = await execQuery(
-        client,
-        isPostgres
-          ? `INSERT INTO users (school_id, email, password_hash, name, phone, role, status, must_change_password)
-             VALUES ($1, $2, $3, $4, $5, 'parent', 'active', true)
-             RETURNING id`
-          : `INSERT INTO users (school_id, email, password_hash, name, phone, role, status, must_change_password)
-             VALUES (?, ?, ?, ?, ?, 'parent', 'active', 1)`,
-        [school_id, parent_email, passwordHash, parent_name, encrypt(parent_phone)],
-        isPostgres
+      const parentUserResult = await client.query(
+        `INSERT INTO users (school_id, email, password_hash, name, phone, role, status, must_change_password)
+         VALUES ($1, $2, $3, $4, $5, 'parent', 'active', TRUE)
+         RETURNING id`,
+        [school_id, parent_email, passwordHash, parent_name, encrypt(parent_phone)]
       );
       
       if (!parentUserResult.rows || parentUserResult.rows.length === 0) {
@@ -202,26 +126,31 @@ const createOrLinkParent = async (client, parentData, studentId, school_id, pass
       parentUserId = parentUserResult.rows[0].id;
     }
 
-    await execQuery(
-      client,
-      isPostgres
-        ? 'UPDATE students SET parent_id = $1 WHERE id = $2'
-        : 'UPDATE students SET parent_id = ? WHERE id = ?',
-      [parentUserId, studentId],
-      isPostgres
+    await client.query(
+      'UPDATE students SET parent_id = $1 WHERE id = $2',
+      [parentUserId, studentId]
     );
 
-    await execQuery(
-      client,
-      isPostgres
-        ? `INSERT INTO parent_student_relations (parent_id, student_id, relation_type, is_primary_contact, is_financial_responsible)
-           VALUES ($1, $2, $3, true, true)
-           ON CONFLICT (parent_id, student_id) DO NOTHING`
-        : `INSERT OR IGNORE INTO parent_student_relations (parent_id, student_id, relation_type, is_primary_contact, is_financial_responsible)
-           VALUES (?, ?, ?, 1, 1)`,
-      [parentUserId, studentId, relationType],
-      isPostgres
-    );
+    // Using COALESCE/ON CONFLICT logic that works in PG, and we'll check for SQLite
+    try {
+      await client.query(
+        `INSERT INTO parent_student_relations (parent_id, student_id, relation_type, is_primary_contact, is_financial_responsible)
+         VALUES ($1, $2, $3, TRUE, TRUE)
+         ON CONFLICT (parent_id, student_id) DO NOTHING`,
+        [parentUserId, studentId, relationType]
+      );
+    } catch (err) {
+      // Fallback for SQLite which uses INSERT OR IGNORE
+      if (err.message.includes('syntax error') || err.message.includes('near "ON"')) {
+        await client.query(
+          `INSERT OR IGNORE INTO parent_student_relations (parent_id, student_id, relation_type, is_primary_contact, is_financial_responsible)
+           VALUES ($1, $2, $3, TRUE, TRUE)`,
+          [parentUserId, studentId, relationType]
+        );
+      } else {
+        throw err;
+      }
+    }
 
     return parentUserId;
   } catch (error) {
@@ -246,14 +175,12 @@ const createStudentAndParent = async (studentData, school_id, userContext = {}) 
   }
 
   const result = await transaction(async (client) => {
-    const isPostgres = client.query !== undefined;
-    
     const admissionNumber = generateAdmissionNumber(studentData.grade);
     const passwordHash = await bcrypt.hash(admissionNumber, 10);
 
-    const student = await createStudent(client, studentData, school_id, admissionNumber, passwordHash, isPostgres);
+    const student = await createStudent(client, studentData, school_id, admissionNumber, passwordHash);
 
-    const parentUserId = await createOrLinkParent(client, studentData, student.id, school_id, passwordHash, isPostgres);
+    const parentUserId = await createOrLinkParent(client, studentData, student.id, school_id, passwordHash);
 
     return {
       ...student,

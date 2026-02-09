@@ -101,7 +101,7 @@ const checkTables = async () => {
           )`,
           [tableName]
         );
-        exists = result.rows[0]?.exists === true;
+        exists = !!result.rows[0]?.exists;
       }
 
       if (exists) {

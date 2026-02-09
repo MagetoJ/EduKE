@@ -40,3 +40,7 @@ server/uploads/
 # OS
 Thumbs.db
 .env.example.production
+server/venv/
+venv/
+*.pyc
+__pycache__/

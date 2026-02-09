@@ -154,54 +154,19 @@ const convertPlaceholders = (sql, isPostgres) => {
 };
 
 const dbRun = async (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    if (usingPostgres) {
-      const convertedSql = convertPlaceholders(sql, true);
-      db.query(convertedSql, params, (err, result) => {
-        if (err) reject(err);
-        else resolve({ lastID: result.rows.length > 0 ? result.rows[0].id : null, changes: result.rowCount });
-      });
-    } else {
-      db.run(sql, params, function(err) {
-        if (err) reject(err);
-        else resolve({ lastID: this.lastID, changes: this.changes });
-      });
-    }
-  });
+  const res = await query(sql, params);
+  const lastID = (res.rows && res.rows.length > 0) ? (res.rows[0].id || res.lastID) : res.lastID;
+  return { lastID: lastID || null, changes: res.rowCount };
 };
 
 const dbGet = async (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    if (usingPostgres) {
-      const convertedSql = convertPlaceholders(sql, true);
-      db.query(convertedSql, params, (err, result) => {
-        if (err) reject(err);
-        else resolve(result.rows[0] || null);
-      });
-    } else {
-      db.get(sql, params, (err, row) => {
-        if (err) reject(err);
-        else resolve(row || null);
-      });
-    }
-  });
+  const res = await query(sql, params);
+  return res.rows[0] || null;
 };
 
 const dbAll = async (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    if (usingPostgres) {
-      const convertedSql = convertPlaceholders(sql, true);
-      db.query(convertedSql, params, (err, result) => {
-        if (err) reject(err);
-        else resolve(result.rows);
-      });
-    } else {
-      db.all(sql, params, (err, rows) => {
-        if (err) reject(err);
-        else resolve(rows);
-      });
-    }
-  });
+  const res = await query(sql, params);
+  return res.rows;
 };
 
 const query = async (text, params = []) => {
@@ -218,8 +183,8 @@ const query = async (text, params = []) => {
       });
     } else {
       // Basic Postgres to SQLite conversion
+      const hasReturning = /\s+RETURNING\s+/i.test(text);
       const sqliteText = text
-        .replace(/\s+RETURNING\s+[\s\S]+$/gi, '')
         .replace(/\$\d+/g, '?')
         .replace(/\bNOW\(\)/gi, "CURRENT_TIMESTAMP")
         .replace(/\bTRUE\b/gi, '1')
@@ -227,7 +192,8 @@ const query = async (text, params = []) => {
         
       const statement = sqliteText.trim().toUpperCase();
       
-      if (statement.startsWith('SELECT') || statement.startsWith('PRAGMA')) {
+      // Use db.all for SELECT or if RETURNING is present
+      if (statement.startsWith('SELECT') || statement.startsWith('PRAGMA') || hasReturning) {
         db.all(sqliteText, params, (err, rows) => {
           if (err) {
             console.error('Query error:', err);
