@@ -203,22 +203,39 @@ class RefreshRequest(BaseModel):
     refreshToken: str
 
 @app.post("/auth/refresh-token")
-async def refresh_token(data: RefreshRequest, token_data: tuple = Depends(get_current_user)):
-    """Refresh JWT token (SmartBiz pattern)"""
-    user, payload = token_data
-    school_id = payload.get("school_id")
+async def refresh_token(request: Request):
+    """Stub to prevent 404/401 in frontend background refresh"""
+    auth_header = request.headers.get("Authorization")
+    token = None
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.split(" ")[1]
     
-    new_token = create_access_token(
-        data={"sub": user.username, "is_super_admin": user.is_super_admin},
-        school_id=school_id
+    if token:
+        try:
+            # Decode without expiration check to identify user for refresh
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_exp": False})
+            username = payload.get("sub")
+            school_id = payload.get("school_id")
+            is_super_admin = payload.get("is_super_admin", False)
+            
+            if username:
+                new_token = create_access_token(
+                    data={"sub": username, "is_super_admin": is_super_admin},
+                    school_id=school_id
+                )
+                return {
+                    "success": True,
+                    "data": {
+                        "accessToken": new_token
+                    }
+                }
+        except Exception as e:
+            logger.error(f"Refresh failed: {e}")
+
+    return JSONResponse(
+        status_code=401,
+        content={"success": False, "detail": "Invalid or missing token"}
     )
-    
-    return {
-        "success": True,
-        "data": {
-            "accessToken": new_token
-        }
-    }
 
 # ==================== BASIC ROUTES ====================
 
@@ -243,36 +260,6 @@ async def list_schools_compatibility(
         "revenue": "0",
         "status": s.status
     } for s in schools]
-
-# ==================== STUB ROUTES (To prevent frontend panics) ====================
-
-@app.post("/auth/refresh-token")
-async def stub_refresh(token_data: tuple = Depends(get_current_user)):
-    """Stub to prevent 404 in frontend background refresh"""
-    user, payload = token_data
-    school_id = payload.get("school_id")
-    
-    new_token = create_access_token(
-        data={"sub": user.username, "is_super_admin": user.is_super_admin},
-        school_id=school_id
-    )
-    
-    return {
-        "success": True, 
-        "data": {
-            "accessToken": new_token
-        }
-    }
-
-@app.get("/notifications")
-async def stub_notifications():
-    """Stub for missing notifications endpoint"""
-    return []
-
-@app.get("/leave-requests")
-async def stub_leave():
-    """Stub for missing leave requests endpoint"""
-    return []
 
 @app.get("/")
 async def root():

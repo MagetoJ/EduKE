@@ -74,7 +74,6 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const initialRefreshToken = getStoredItem('refreshToken');
   const initialUser = getStoredItem('user');
   const initialOriginalToken = getStoredItem('originalToken');
-  const initialOriginalUser = getStoredItem('originalUser');
 
   const initialStoragePreference: StorageType = initialToken.value
     ? initialToken.storage

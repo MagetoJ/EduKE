@@ -8,15 +8,13 @@ import {
   Users, 
   GraduationCap, 
   Activity, 
-  AlertTriangle,
   Lock,
   Unlock,
   Trash2,
   ExternalLink,
   History,
   ShieldCheck,
-  UserCheck,
-  Ban
+  UserCheck
 } from 'lucide-react';
 
 interface Stats {
@@ -47,7 +45,7 @@ interface AuditLog {
   admin_id: number;
   action: string;
   target_school_id?: number;
-  details: any;
+  details: unknown;
   ip_address: string;
   created_at: string;
 }
