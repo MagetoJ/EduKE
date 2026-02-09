@@ -1,4 +1,4 @@
-import { Search, LogOut, User as UserIcon, Menu } from 'lucide-react'
+import { Search, LogOut, User as UserIcon, Menu, ArrowLeftCircle } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { useAuth } from '../../contexts/AuthContext'
@@ -10,7 +10,7 @@ interface HeaderProps {
 }
 
 export default function Header({ onMenuClick }: HeaderProps) {
-  const { user, logout } = useAuth()
+  const { user, logout, isImpersonating, exitImpersonation } = useAuth()
 
   if (!user) return null
 
@@ -35,9 +35,33 @@ export default function Header({ onMenuClick }: HeaderProps) {
       </div>
 
       <div className="flex items-center space-x-2 sm:space-x-4">
+        {isImpersonating && (
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={exitImpersonation}
+            className="bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100 hidden sm:flex items-center"
+          >
+            <ArrowLeftCircle className="w-4 h-4 mr-2" />
+            Exit Impersonation
+          </Button>
+        )}
+
         <NotificationsDropdown />
 
         <ThemeToggle />
+
+        {isImpersonating && (
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={exitImpersonation}
+            className="sm:hidden text-orange-600 hover:bg-orange-50"
+            title="Exit Impersonation"
+          >
+            <ArrowLeftCircle className="w-5 h-5" />
+          </Button>
+        )}
 
         <div className="hidden sm:block h-8 w-[1px] bg-border mx-2" />
 

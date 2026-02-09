@@ -69,6 +69,16 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession
         raise credentials_exception
     return user, payload
 
+async def get_current_super_admin(token_data: tuple = Depends(get_current_user)):
+    """SmartBiz Pattern: Verifies user has platform-wide superadmin privileges"""
+    user, payload = token_data
+    if not user.is_super_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail="Super Admin privileges required"
+        )
+    return user
+
 from models import school_users, School, UserRole, Permission
 
 # ... existing code ...

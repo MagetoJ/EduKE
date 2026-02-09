@@ -22,7 +22,10 @@ interface AuthContextType {
   isLoading: boolean;
   token: string | null;
   refreshToken: string | null;
+  isImpersonating: boolean;
   refreshSession: () => Promise<string | null>;
+  impersonate: (token: string, user: User) => void;
+  exitImpersonation: () => void;
 }
 
 type StorageType = 'local' | 'session';
@@ -70,6 +73,8 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const initialToken = getStoredItem('token');
   const initialRefreshToken = getStoredItem('refreshToken');
   const initialUser = getStoredItem('user');
+  const initialOriginalToken = getStoredItem('originalToken');
+  const initialOriginalUser = getStoredItem('originalUser');
 
   const initialStoragePreference: StorageType = initialToken.value
     ? initialToken.storage
@@ -92,6 +97,7 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   });
   const [token, setToken] = useState<string | null>(initialToken.value);
   const [refreshToken, setRefreshToken] = useState<string | null>(initialRefreshToken.value);
+  const [isImpersonating, setIsImpersonating] = useState<boolean>(!!initialOriginalToken.value);
   const [isLoading, setIsLoading] = useState(true);
   const [storagePreference, setStoragePreference] = useState<StorageType>(initialStoragePreference);
 
@@ -147,10 +153,55 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const logout = useCallback(() => {
     clearAuthStorage();
+    window.localStorage.removeItem('originalToken');
+    window.localStorage.removeItem('originalUser');
+    window.sessionStorage.removeItem('originalToken');
+    window.sessionStorage.removeItem('originalUser');
     setToken(null);
     setRefreshToken(null);
     setUserState(null);
+    setIsImpersonating(false);
   }, []);
+
+  const impersonate = useCallback((newToken: string, newUser: User) => {
+    const storage = storagePreferenceRef.current === 'local' ? window.localStorage : window.sessionStorage;
+    
+    // Save current state as original
+    storage.setItem('originalToken', token || '');
+    storage.setItem('originalUser', JSON.stringify(user));
+    
+    // Set new state
+    setToken(newToken);
+    setUserState(newUser);
+    setIsImpersonating(true);
+    
+    // Persist to storage
+    storage.setItem('token', newToken);
+    storage.setItem('user', JSON.stringify(newUser));
+  }, [token, user]);
+
+  const exitImpersonation = useCallback(() => {
+    const storage = storagePreferenceRef.current === 'local' ? window.localStorage : window.sessionStorage;
+    
+    const originalToken = storage.getItem('originalToken');
+    const originalUserJson = storage.getItem('originalUser');
+    
+    if (originalToken && originalUserJson) {
+      const originalUser = JSON.parse(originalUserJson);
+      
+      setToken(originalToken);
+      setUserState(originalUser);
+      setIsImpersonating(false);
+      
+      storage.setItem('token', originalToken);
+      storage.setItem('user', originalUserJson);
+      
+      storage.removeItem('originalToken');
+      storage.removeItem('originalUser');
+    } else {
+      logout();
+    }
+  }, [logout]);
 
   const refreshSession = useCallback(async () => {
     if (!refreshToken) {
@@ -248,7 +299,10 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     isLoading,
     token,
     refreshToken,
-    refreshSession
+    isImpersonating,
+    refreshSession,
+    impersonate,
+    exitImpersonation
   };
 
   return <AuthContext.Provider value={value}>{!isLoading && children}</AuthContext.Provider>;

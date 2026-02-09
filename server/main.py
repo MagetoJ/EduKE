@@ -12,7 +12,9 @@ from auth import (
     get_password_hash, 
     verify_password, 
     create_access_token, 
+    get_current_user,
     get_current_school,
+    get_current_super_admin,
     ACCESS_TOKEN_EXPIRE_MINUTES
 )
 from pydantic import BaseModel
@@ -23,6 +25,10 @@ from users import router as users_router
 from exams import router as exams_router
 from timetables import router as timetables_router
 from attendance import router as attendance_router
+from platform_admin import router as platform_router
+from dashboard import router as dashboard_router
+from leave_requests import router as leave_router
+from notifications import router as notifications_router
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -36,6 +42,10 @@ app.include_router(users_router)
 app.include_router(exams_router)
 app.include_router(timetables_router)
 app.include_router(attendance_router)
+app.include_router(platform_router)
+app.include_router(dashboard_router)
+app.include_router(leave_router)
+app.include_router(notifications_router)
 
 # CORS configuration - Borrowed from SmartBiz main.py
 app.add_middleware(
@@ -69,16 +79,16 @@ async def startup_event():
     await init_db()
     logger.info("EduKE Backend Started Successfully")
 
-# ============= SCHEMAS (Borrowed from SmartBiz patterns) =============
+# ============= SCHEMAS (Aligned with Frontend) =============
 class SchoolRegister(BaseModel):
-    school_name: str
-    admin_full_name: str
-    username: str
+    schoolName: str
+    curriculum: str
+    adminName: str
     email: str
     password: str
 
 class LoginRequest(BaseModel):
-    username: str
+    email: str
     password: str
 
 # ==================== AUTH ROUTES ====================
@@ -86,17 +96,22 @@ class LoginRequest(BaseModel):
 @app.post("/auth/register-school")
 @app.post("/register-school") # Compatibility with frontend
 async def register_school(data: SchoolRegister, db: AsyncSession = Depends(get_db)):
-    """Registers a new School and its first Admin user (SmartBiz Pattern)"""
+    """Registers a new School and its first Admin user (Aligned with Frontend)"""
     
     # 1. Check if user or school slug already exists
-    slug = data.school_name.lower().replace(" ", "-")
+    slug = data.schoolName.lower().replace(" ", "-")
     existing_school = await db.execute(select(School).where(School.slug == slug))
     if existing_school.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="School name already registered")
 
+    # Check if email exists
+    existing_user = await db.execute(select(User).where(User.email == data.email))
+    if existing_user.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Email already registered")
+
     # 2. Create the School
     new_school = School(
-        name=data.school_name,
+        name=data.schoolName,
         slug=slug,
         email=data.email
     )
@@ -106,9 +121,9 @@ async def register_school(data: SchoolRegister, db: AsyncSession = Depends(get_d
     # 3. Create the Admin User
     hashed_password = get_password_hash(data.password)
     new_user = User(
-        username=data.username,
+        username=data.email, # Using email as username for simplicity
         email=data.email,
-        full_name=data.admin_full_name,
+        full_name=data.adminName,
         hashed_password=hashed_password
     )
     db.add(new_user)
@@ -125,43 +140,84 @@ async def register_school(data: SchoolRegister, db: AsyncSession = Depends(get_d
     )
     
     await db.commit()
-    return {"message": f"School {data.school_name} registered successfully", "school_id": new_school.id}
+    return {"message": f"School {data.schoolName} registered successfully", "school_id": new_school.id}
 
 @app.post("/auth/login")
 @app.post("/login") # Compatibility with frontend
 async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
-    """Login and return a token scoped to the user's school (SmartBiz logic)"""
+    """Login and return a token scoped to the user's school (Aligned with Frontend)"""
     
-    # 1. Find user
-    result = await db.execute(select(User).where(User.username == data.username))
+    # 1. Find user by email
+    result = await db.execute(select(User).where(User.email == data.email))
     user = result.scalar_one_or_none()
 
     if not user or not verify_password(data.password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Incorrect username or password")
+        raise HTTPException(status_code=401, detail="Incorrect email or password")
 
     # 2. Get user's school assignment (SmartBiz Multi-tenancy)
-    # For simplicity, we fetch the first active school the user belongs to
-    membership_query = select(school_users.c.school_id).where(
+    membership_query = select(school_users.c.school_id, school_users.c.role).where(
         school_users.c.user_id == user.id,
         school_users.c.is_active == True
     )
-    membership = await db.execute(membership_query)
-    school_id = membership.scalar_one_or_none()
+    membership_result = await db.execute(membership_query)
+    membership = membership_result.first()
 
-    if not school_id:
+    if not membership and not user.is_super_admin:
         raise HTTPException(status_code=403, detail="User is not assigned to an active school")
+
+    school_id = membership[0] if membership else None
+    role = membership[1] if membership else "superadmin"
+    school_name = None
+
+    if school_id:
+        # Fetch school name for the response
+        school_result = await db.execute(select(School.name).where(School.id == school_id))
+        school_name = school_result.scalar()
 
     # 3. Create Scoped Access Token
     access_token = create_access_token(
-        data={"sub": user.username},
+        data={"sub": user.username, "is_super_admin": user.is_super_admin},
         school_id=school_id,
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     )
 
+    # 4. Return response in format expected by Frontend AuthContext
     return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "school_id": school_id
+        "success": True,
+        "data": {
+            "accessToken": access_token,
+            "user": {
+                "id": str(user.id),
+                "email": user.email,
+                "name": user.full_name,
+                "role": role,
+                "is_super_admin": user.is_super_admin,
+                "school_id": str(school_id) if school_id else None,
+                "school_name": school_name,
+                "must_change_password": False
+            }
+        }
+    }
+
+class RefreshRequest(BaseModel):
+    refreshToken: str
+
+@app.post("/auth/refresh-token")
+async def refresh_token(data: RefreshRequest, token_data: tuple = Depends(get_current_user)):
+    """Refresh JWT token (SmartBiz pattern)"""
+    user, payload = token_data
+    school_id = payload.get("school_id")
+    
+    new_token = create_access_token(
+        data={"sub": user.username, "is_super_admin": user.is_super_admin},
+        school_id=school_id
+    )
+    
+    return {
+        "success": True,
+        "data": {
+            "accessToken": new_token
+        }
     }
 
 # ==================== BASIC ROUTES ====================
@@ -170,6 +226,53 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
 async def health_check():
     """Platform health check"""
     return {"status": "healthy", "service": "EduKE API"}
+
+@app.get("/schools")
+async def list_schools_compatibility(
+    db: AsyncSession = Depends(get_db), 
+    _ = Depends(get_current_super_admin)
+):
+    """Compatibility for Dashboard.tsx which calls /api/schools"""
+    result = await db.execute(select(School))
+    schools = result.scalars().all()
+    return [{
+        "id": str(s.id),
+        "name": s.name,
+        "students": 0,
+        "staff": 0,
+        "revenue": "0",
+        "status": s.status
+    } for s in schools]
+
+# ==================== STUB ROUTES (To prevent frontend panics) ====================
+
+@app.post("/auth/refresh-token")
+async def stub_refresh(token_data: tuple = Depends(get_current_user)):
+    """Stub to prevent 404 in frontend background refresh"""
+    user, payload = token_data
+    school_id = payload.get("school_id")
+    
+    new_token = create_access_token(
+        data={"sub": user.username, "is_super_admin": user.is_super_admin},
+        school_id=school_id
+    )
+    
+    return {
+        "success": True, 
+        "data": {
+            "accessToken": new_token
+        }
+    }
+
+@app.get("/notifications")
+async def stub_notifications():
+    """Stub for missing notifications endpoint"""
+    return []
+
+@app.get("/leave-requests")
+async def stub_leave():
+    """Stub for missing leave requests endpoint"""
+    return []
 
 @app.get("/")
 async def root():

@@ -37,6 +37,7 @@ import CBC from "./pages/CBC";
 import Transport from "./pages/Transport";
 import Boarding from "./pages/Boarding";
 import CurriculumAssessment from "./pages/CurriculumAssessment";
+import SuperAdminDashboard from "./pages/SuperAdminDashboard";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -124,6 +125,7 @@ function AppRoutes() {
         <Route path="transport" element={<Transport />} />
         <Route path="boarding" element={<Boarding />} />
         <Route path="curriculum-assessment" element={<CurriculumAssessment />} />
+        <Route path="platform-admin" element={<SuperAdminDashboard />} />
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" />} />
     </Routes>

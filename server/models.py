@@ -53,7 +53,14 @@ class School(Base):
     email = Column(String(100))
     phone = Column(String(20))
     address = Column(Text)
-    status = Column(String(20), default='active')
+    status = Column(String(20), default='active') # active, suspended, pending
+    is_manually_blocked = Column(Boolean, default=False)
+    
+    # Subscription fields (SmartBiz pattern)
+    subscription_plan = Column(String(20), default='trial') # trial, basic, professional
+    trial_ends_at = Column(DateTime, default=lambda: datetime.utcnow() + timedelta(days=14))
+    subscription_expires_at = Column(DateTime, nullable=True)
+    
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
@@ -280,6 +287,26 @@ class Attendance(Base):
     # Relationships
     student = relationship("Student")
 
+class LeaveRequest(Base):
+    """Staff leave requests (SmartBiz pattern)"""
+    __tablename__ = "leave_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    school_id = Column(Integer, ForeignKey("schools.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    
+    leave_type = Column(String(50), nullable=False) # e.g., "Sick", "Annual"
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
+    reason = Column(Text)
+    status = Column(String(20), default="pending") # pending, approved, rejected
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User")
+    school = relationship("School")
+
 class AuditLog(Base):
     """Activity Log for school operations (Borrowed from SmartBiz)"""
     __tablename__ = "audit_logs"
@@ -298,3 +325,19 @@ class AuditLog(Base):
     # Relationships
     school = relationship("School", back_populates="audit_logs")
     user = relationship("User")
+
+class AdminActivityLog(Base):
+    """Platform-wide audit logs for Super Admin actions (SmartBiz pattern)"""
+    __tablename__ = "admin_activity_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    admin_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    action = Column(String(100), nullable=False) # e.g., "block_school", "delete_school", "change_plan"
+    target_school_id = Column(Integer, ForeignKey("schools.id"), nullable=True)
+    details = Column(JSON)
+    ip_address = Column(String(45))
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    admin = relationship("User")
+    target_school = relationship("School")

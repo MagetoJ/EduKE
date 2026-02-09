@@ -19,7 +19,8 @@ import {
   Zap,
   Bus,
   Home,
-  TrendingUp
+  TrendingUp,
+  Shield
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { useAuth } from '../../contexts/AuthContext'
@@ -151,6 +152,12 @@ const navItems: NavItem[] = [
     href: '/dashboard/curriculum-assessment',
     icon: TrendingUp,
     roles: ['admin', 'teacher', 'exam_officer', 'hod', 'cbc_coordinator']
+  },
+  {
+    title: 'Platform Admin',
+    href: '/dashboard/platform-admin',
+    icon: Shield,
+    roles: ['super_admin']
   },
   {
     title: 'Settings',
